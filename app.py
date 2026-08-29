@@ -273,6 +273,7 @@ def exam():
                 "correct": display_answer_value(correct_answer),
                 "is_correct": is_correct,
                 "options": option_map,
+                "image_url": get_question_image_url(get_row_value(row, "image_link")),
             })
 
         sorted_topic_scores = {
@@ -312,6 +313,7 @@ def exam():
             "topic": row["topic"],
             "options": option_map,
             "is_yes_no": level == "A",
+            "image_url": get_question_image_url(get_row_value(row, "image_link")),
         })
 
     return render_template(
@@ -321,6 +323,47 @@ def exam():
         started_at=session.get("started_at", time.time()),
         level=level,
     )
+
+def get_row_value(row, key, default=None):
+    if row is None:
+        return default
+    try:
+        return row[key]
+    except (KeyError, TypeError, IndexError):
+        return default
+
+def get_question_image_url(image_link):
+    if image_link is None:
+        return None
+
+    image_path = str(image_link).strip()
+    if not image_path:
+        return None
+
+    normalized = image_path.replace("\\", "/")
+    lower = normalized.lower()
+
+    if not (lower.endswith(".jpg") or lower.endswith(".jpeg") or lower.endswith(".png")):
+        return None
+
+    if normalized.startswith(("http://", "https://")):
+        return normalized
+
+    if normalized.startswith("/"):
+        if normalized.startswith("/static/"):
+            return normalized
+        return url_for("static", filename=normalized.lstrip("/"))
+
+    if normalized.startswith("static/"):
+        return url_for("static", filename=normalized.replace("static/", "", 1))
+
+    if normalized.startswith("./"):
+        return url_for("static", filename=normalized.lstrip("./"))
+
+    if normalized.startswith("images/") or normalized.startswith("question_images/"):
+        return url_for("static", filename=normalized)
+
+    return None
 
 if __name__ == "__main__":
     app.run(debug=True)

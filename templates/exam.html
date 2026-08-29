@@ -26,21 +26,27 @@
             </div>
 
             <form method="post" action="/exam" id="exam-form">
-                {% for q in questions %}
-                    <div class="question-block">
-                        <p class="question-text"><strong>{{ loop.index }}.</strong> {{ q.question }}</p>
+                {% for question in questions %}
+                    <div class="question-card">
+                        <h3>{{ question.question }}</h3>
 
-                        {% if q.is_yes_no %}
-                            {% for value in q.options.values() %}
+                        {% if question.image_url %}
+                            <div class="question-image">
+                                <img src="{{ question.image_url }}" alt="Vraagafbeelding" style="max-width: 100%; height: auto; margin: 10px 0;">
+                            </div>
+                        {% endif %}
+
+                        {% if question.is_yes_no %}
+                            {% for value in question.options.values() %}
                                 <label class="option-label">
-                                    <input type="radio" name="answer_{{ q.id }}" value="{{ value }}">
+                                    <input type="radio" name="answer_{{ question.id }}" value="{{ value }}">
                                     <span>{{ value }}</span>
                                 </label>
                             {% endfor %}
                         {% else %}
-                            {% for label, value in q.options.items() %}
+                            {% for label, value in question.options.items() %}
                                 <label class="option-label">
-                                    <input type="radio" name="answer_{{ q.id }}" value="{{ value }}">
+                                    <input type="radio" name="answer_{{ question.id }}" value="{{ value }}">
                                     <span>{{ label }}: {{ value }}</span>
                                 </label>
                             {% endfor %}

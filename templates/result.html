@@ -47,17 +47,22 @@
                 {% endfor %}
             </div>
 
-            {% for item in results %}
+            {% for result in results %}
                 <div class="result-item">
-                    <p><strong>Vraag:</strong> {{ item.question }}</p>
-                    <p><strong>Onderwerp:</strong> {{ item.topic }}</p>
-                    <p><strong>Jouw antwoord:</strong> {{ item.selected or "geen keuze" }}</p>
-                    <p><strong>Goed antwoord:</strong> {{ item.correct }}</p>
+                    <h3>{{ result.question }}</h3>
 
-                    {% if item.is_correct %}
-                        <p class="success">Goed gedaan!</p>
+                    {% if result.image_url %}
+                      <div class="result-image">
+                        <img src="{{ result.image_url }}" alt="Vraagafbeelding" style="max-width: 100%; height: auto; margin: 10px 0;">
+                      </div>
+                    {% endif %}
+
+                    <p>Jouw antwoord: {{ result.selected }}</p>
+                    <p>Goed antwoord: {{ result.correct }}</p>
+                    {% if result.is_correct %}
+                      <p>Correct</p>
                     {% else %}
-                        <p class="error">Helaas, fout.</p>
+                      <p>Niet correct</p>
                     {% endif %}
                 </div>
             {% endfor %}
