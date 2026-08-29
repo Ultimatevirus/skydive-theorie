@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    <title>Contact</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <div class="brand">Skydive-theorie.nl</div>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}">Home</a>
+                <a href="{{ url_for('practice') }}">Oefenexamen</a>
+                <a href="{{ url_for('contact') }}">Contact</a>
+                <button class="theme-toggle" type="button" aria-label="Wissel tussen licht en donker thema">
+                    <span class="theme-icon" aria-hidden="true">💡</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="container">
+            <div class="card contact-card">
+                <p class="eyebrow">Contact</p>
+                <h1>Neem contact op</h1>
+
+                {% if success %}
+                    <div class="success-box">
+                        Bedankt, {{ name }}! Je bericht is verzonden.
+                    </div>
+                {% endif %}
+
+                {% if error %}
+                    <div class="error-box">
+                        {{ error }}
+                    </div>
+                {% endif %}
+
+                <form method="POST" class="contact-form">
+                    <div class="field-group">
+                        <label for="name">Naam</label>
+                        <input id="name" name="name" type="text" required>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="email">E-mail</label>
+                        <input id="email" name="email" type="email" required>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="message">Bericht</label>
+                        <textarea id="message" name="message" rows="6" required></textarea>
+                    </div>
+
+                    <div class="button-row">
+                        <button type="submit" class="primary-btn">Verstuur</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <span>gemaakt door Alex Brittmann</span>
+        </div>
+    </footer>
+
+    <script>
+        const root = document.documentElement;
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+
+        function applyTheme(theme) {
+            const isDark = theme === 'dark';
+            root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            if (themeIcon) {
+                themeIcon.textContent = isDark ? '🔆' : '💡';
+            }
+            if (themeToggle) {
+                themeToggle.setAttribute('aria-label', isDark ? 'Schakel naar licht thema' : 'Schakel naar donker thema');
+            }
+        }
+
+        const savedTheme = localStorage.getItem('theme-preference');
+        const preferredTheme = savedTheme || 'light';
+        applyTheme(preferredTheme);
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('theme-preference', nextTheme);
+                applyTheme(nextTheme);
+            });
+        }
+    </script>
+</body>
+</html>

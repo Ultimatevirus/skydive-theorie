@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    <title>Oefenexamen</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <div class="brand">Skydive-theorie.nl</div>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}">Home</a>
+                <a href="{{ url_for('practice') }}">Oefenexamen</a>
+                <a href="{{ url_for('contact') }}">Contact</a>
+                <button class="theme-toggle" type="button" aria-label="Wissel tussen licht en donker thema">
+                    <span class="theme-icon" aria-hidden="true">💡</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="container">
+            <div class="card exam-card">
+                <p class="eyebrow">Oefenexamen</p>
+                <h1>Kies je niveau</h1>
+
+                <form method="POST" action="{{ url_for('start') }}" class="start-form">
+                    <div class="field-group">
+                        <label for="level">Niveau</label>
+                        <select id="level" name="level" required>
+                            <option value="A">A</option>
+                            <option value="B">B</option>
+                        </select>
+                    </div>
+
+                    <div class="field-group">
+                        <label for="question_amount">Aantal vragen</label>
+                        <input
+                            id="question_amount"
+                            name="question_amount"
+                            type="number"
+                            min="1"
+                            max="10"
+                            value="5"
+                            required
+                        >
+                    </div>
+
+                    <div class="button-row">
+                        <button type="submit" class="primary-btn">Start examen</button>
+                        <a href="{{ url_for('index') }}" class="secondary-btn">Terug naar home</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <span>gemaakt door Alex Brittmann</span>
+        </div>
+    </footer>
+
+    <script>
+        const root = document.documentElement;
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+
+        function applyTheme(theme) {
+            const isDark = theme === 'dark';
+            root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            if (themeIcon) {
+                themeIcon.textContent = isDark ? '🔆' : '💡';
+            }
+            if (themeToggle) {
+                themeToggle.setAttribute('aria-label', isDark ? 'Schakel naar licht thema' : 'Schakel naar donker thema');
+            }
+        }
+
+        const savedTheme = localStorage.getItem('theme-preference');
+        const preferredTheme = savedTheme || 'light';
+        applyTheme(preferredTheme);
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('theme-preference', nextTheme);
+                applyTheme(nextTheme);
+            });
+        }
+    </script>
+</body>
+</html>

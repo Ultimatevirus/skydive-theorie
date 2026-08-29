@@ -211,6 +211,34 @@ def topic_passed(correct, total):
 def index():
     return render_template("index.html")
 
+@app.route("/practice")
+def practice():
+    return render_template("practice.html")
+
+@app.route("/contact", methods=["GET", "POST"])
+def contact():
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip()
+        message = request.form.get("message", "").strip()
+
+        if not name or not email or not message:
+            return render_template(
+                "contact.html",
+                success=False,
+                error="Vul alle velden in om contact op te nemen.",
+                name=name,
+            )
+
+        return render_template(
+            "contact.html",
+            success=True,
+            error=None,
+            name=name,
+        )
+
+    return render_template("contact.html", success=False, error=None, name="")
+
 @app.route("/start", methods=["POST"])
 def start():
     level = request.form.get("level", "").strip().upper()
