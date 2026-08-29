@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="nl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Examen</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="card exam-card">
+            <div class="topbar">
+                <div>
+                    <strong>Vragen</strong>
+                    <span id="progress-text">0 / {{ total_questions }}</span>
+                </div>
+
+                <div class="timer-box">
+                    <span>Verstreken tijd</span>
+                    <strong id="timer">00:00</strong>
+                </div>
+            </div>
+
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+
+            <form method="post" action="/exam" id="exam-form">
+                {% for q in questions %}
+                    <div class="question-block">
+                        <p class="question-text"><strong>{{ loop.index }}.</strong> {{ q.question }}</p>
+
+                        {% if q.is_yes_no %}
+                            {% for value in q.options.values() %}
+                                <label class="option-label">
+                                    <input type="radio" name="answer_{{ q.id }}" value="{{ value }}">
+                                    <span>{{ value }}</span>
+                                </label>
+                            {% endfor %}
+                        {% else %}
+                            {% for label, value in q.options.items() %}
+                                <label class="option-label">
+                                    <input type="radio" name="answer_{{ q.id }}" value="{{ value }}">
+                                    <span>{{ label }}: {{ value }}</span>
+                                </label>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <button type="submit" class="primary-button">Controleer antwoorden</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const totalQuestions = Number("{{ total_questions }}");
+        const startedAt = Number("{{ started_at }}");
+        const timerEl = document.getElementById("timer");
+        const progressFill = document.getElementById("progress-fill");
+        const progressText = document.getElementById("progress-text");
+
+        function formatTime(totalSeconds) {
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+        }
+
+        function updateProgress() {
+            const answered = document.querySelectorAll('input[type="radio"]:checked').length;
+            const progress = (answered / totalQuestions) * 100;
+            progressFill.style.width = progress + "%";
+            progressText.textContent = answered + " / " + totalQuestions;
+        }
+
+        document.querySelectorAll('input[type="radio"]').forEach(input => {
+            input.addEventListener("change", updateProgress);
+        });
+
+        updateProgress();
+
+        setInterval(() => {
+            const elapsed = Math.floor((Date.now() / 1000) - startedAt);
+            timerEl.textContent = formatTime(elapsed);
+        }, 1000);
+    </script>
+</body>
+</html>

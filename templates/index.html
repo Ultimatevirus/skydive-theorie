@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="nl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Skydive Theorie</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Skydive theorie examen</h1>
+
+            <form method="post" action="/start" class="form">
+                <label for="level">Kies niveau</label>
+                <select name="level" id="level">
+                    <option value="A">A</option>
+                    <option value="B">B</option>
+                </select>
+
+                <label for="question_amount">Aantal vragen</label>
+                <input type="number" name="question_amount" id="question_amount" min="1" max="10" value="5">
+
+                <button type="submit">Start examen</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

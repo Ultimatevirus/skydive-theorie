@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="nl">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Resultaat</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>Resultaat</h1>
+
+            <div class="overall-summary {{ 'passed' if passed else 'failed' }}">
+                <p class="score">Je score: {{ score }} / {{ total }}</p>
+                <p class="grade">Cijfer: {{ grade }} / 10</p>
+                <p class="pass-status">
+                    {% if passed %}
+                        Geslaagd
+                    {% else %}
+                        Niet geslaagd
+                    {% endif %}
+                </p>
+                <p class="elapsed">Tijd: {{ elapsed_time }}</p>
+            </div>
+
+            <div class="topic-summary">
+                <h2>Onderwerp score</h2>
+
+                {% for topic, stats in topic_scores.items() %}
+                    <div class="topic-row">
+                        <div class="topic-label-row">
+                            <span>{{ topic }}</span>
+                            <span>{{ stats.correct }} / {{ stats.total }}</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: {{ stats.percent }}%;"></div>
+                        </div>
+                        <div class="topic-status">
+                            {% if stats.passed %}
+                                <span class="status-pass">Voldoende (60%+)</span>
+                            {% else %}
+                                <span class="status-fail">Onvoldoende</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% for item in results %}
+                <div class="result-item">
+                    <p><strong>Vraag:</strong> {{ item.question }}</p>
+                    <p><strong>Onderwerp:</strong> {{ item.topic }}</p>
+                    <p><strong>Jouw antwoord:</strong> {{ item.selected or "geen keuze" }}</p>
+                    <p><strong>Goed antwoord:</strong> {{ item.correct }}</p>
+
+                    {% if item.is_correct %}
+                        <p class="success">Goed gedaan!</p>
+                    {% else %}
+                        <p class="error">Helaas, fout.</p>
+                    {% endif %}
+                </div>
+            {% endfor %}
+
+            <a href="/" class="link-button">Terug naar start</a>
+        </div>
+    </div>
+</body>
+</html>
