@@ -184,6 +184,27 @@ def fetch_questions(level, amount):
     random.shuffle(rows)
     return rows
 
+
+def fetch_questions_by_ids(level, question_ids):
+    normalized_ids = [int(question_id) for question_id in question_ids if str(question_id).strip()]
+    if not normalized_ids:
+        return []
+
+    placeholders = ", ".join("?" for _ in normalized_ids)
+    conn = get_db_connection()
+    rows = conn.execute(
+        f"""
+        SELECT rowid AS id, *
+        FROM questions
+        WHERE level = ? AND rowid IN ({placeholders}) AND is_active = 1
+        """,
+        (level, *normalized_ids)
+    ).fetchall()
+    conn.close()
+
+    row_map = {int(row["id"]): row for row in rows}
+    return [row_map[question_id] for question_id in normalized_ids if question_id in row_map]
+
 def format_elapsed(seconds):
     total_seconds = int(seconds)
     minutes, secs = divmod(total_seconds, 60)
@@ -214,6 +235,10 @@ def index():
 @app.route("/practice")
 def practice():
     return render_template("practice.html")
+
+@app.route("/leren")
+def learn():
+    return render_template("learn.html")
 
 @app.route("/contact", methods=["GET", "POST"])
 def contact():
@@ -250,12 +275,13 @@ def start():
     if level not in ("A", "B"):
         return "Ongeldige keuze. Kies A of B.", 400
 
-    if not 1 <= question_amount <= 10:
-        return "Kies een getal tussen 1 en 10.", 400
+    if not 1 <= question_amount <= 40:
+        return "Kies een getal tussen 1 en 40.", 400
 
     session["level"] = level
     session["question_amount"] = question_amount
     session["started_at"] = time.time()
+    session["exam_question_ids"] = []
     return redirect(url_for("exam"))
 
 @app.route("/exam", methods=["GET", "POST"])
@@ -266,9 +292,51 @@ def exam():
     if not level:
         return redirect(url_for("index"))
 
-    questions = fetch_questions(level, amount)
+    if request.method == "POST":
+        stored_ids = session.get("exam_question_ids", [])
+        questions = fetch_questions_by_ids(level, stored_ids) if stored_ids else fetch_questions(level, amount)
+    else:
+        questions = fetch_questions(level, amount)
+
+    if request.method == "GET" and questions:
+        session["exam_question_ids"] = [row["id"] for row in questions]
 
     if request.method == "POST":
+        rendered_questions = []
+        for row in questions:
+            correct_answer = normalize_answer_value(row["true_answer"])
+            option_map = build_option_list(row["false_answers"], correct_answer, level=level)
+            rendered_questions.append({
+                "id": row["id"],
+                "question": row["question"],
+                "topic": row["topic"],
+                "options": option_map,
+                "is_yes_no": level == "A",
+                "image_url": get_question_image_url(get_row_value(row, "image_link")),
+            })
+
+        submitted_ids = {
+            key.split("_", 1)[1]
+            for key, value in request.form.items()
+            if key.startswith("answer_") and str(value).strip()
+        }
+
+        missing_answers = [
+            str(row["id"])
+            for row in questions
+            if str(row["id"]) not in submitted_ids
+        ]
+
+        if missing_answers:
+            return render_template(
+                "exam.html",
+                questions=rendered_questions,
+                total_questions=len(rendered_questions),
+                started_at=session.get("started_at", time.time()),
+                level=level,
+                error="Niet alle vragen zijn ingevuld. Kies voor elke vraag een antwoord voordat je verder gaat.",
+            )
+
         started_at = session.get("started_at")
         elapsed_seconds = time.time() - started_at if started_at else 0
 
