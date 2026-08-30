@@ -124,16 +124,27 @@ img {
     margin-left: auto;
     min-height: 44px;
     width: auto;
+    line-height: 1;
+}
+
+.site-header .main-nav > * {
+    display: inline-flex;
+    align-items: center;
 }
 
 .theme-toggle {
     margin-left: 6px;
     flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
 }
 
 .main-nav a {
     display: inline-flex;
     align-items: center;
+    gap: 8px;
     color: rgba(255, 255, 255, 0.9);
     text-decoration: none;
     font-weight: 600;
@@ -146,6 +157,65 @@ img {
 .main-nav a:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #fff;
+}
+
+.nav-icon,
+.page-icon svg,
+.feature-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    stroke: #fff;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vertical-align: middle;
+}
+
+.nav-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-icon {
+    width: 48px;
+    height: 48px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    flex-shrink: 0;
+}
+
+.page-icon svg {
+    width: 24px;
+    height: 24px;
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+}
+
+.page-header > div:last-child {
+    min-width: 0;
+    flex: 1;
+}
+
+.page-header p.eyebrow,
+.page-header h1 {
+    margin: 0;
+}
+
+.page-header h1 {
+    line-height: 1.15;
 }
 
 .theme-toggle {
@@ -163,15 +233,51 @@ img {
     flex-shrink: 0;
     justify-self: end;
     padding: 0;
+    line-height: 0;
+    margin: 0 0 0 6px;
+    align-self: center;
+    vertical-align: middle;
+}
+
+button.theme-toggle {
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    margin-left: 6px !important;
+    margin-right: 0 !important;
 }
 
 .theme-toggle:hover {
     transform: translateY(-1px);
 }
 
-.theme-icon {
-    font-size: 1.2rem;
-    line-height: 1;
+.theme-toggle .theme-icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    vertical-align: middle;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: opacity 0.2s ease;
+}
+
+.theme-toggle svg {
+    display: block;
+    line-height: 0;
+}
+
+.theme-toggle .theme-icon.is-dark {
+    display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .theme-icon.is-light {
+    display: none;
+}
+
+:root[data-theme="dark"] .theme-toggle .theme-icon.is-dark {
+    display: block;
 }
 
 .page-shell {
@@ -291,7 +397,7 @@ button,
 .primary-btn,
 button {
     background: linear-gradient(135deg, var(--primary) 0%, #0f9a9c 100%);
-    color: #fff;
+    color: #ffffff !important;
     padding: 13px 22px;
     box-shadow: 0 10px 20px rgba(15, 118, 110, 0.2);
 }
@@ -306,7 +412,7 @@ button:hover,
 .secondary-btn,
 .link-button {
     background: #edf5ff;
-    color: var(--text);
+    color: var(--text) !important;
     padding: 13px 22px;
     border: 1px solid var(--border);
 }
@@ -414,10 +520,10 @@ textarea {
     min-height: 180px;
     padding: 26px 18px;
     border-radius: 20px;
-    border: 1px solid var(--border);
-    background: linear-gradient(135deg, rgba(239, 246, 255, 0.9), rgba(221, 244, 255, 0.9));
-    color: var(--text);
-    box-shadow: 0 14px 26px rgba(15, 23, 42, 0.08);
+    border: 1px solid rgba(15, 118, 110, 0.2);
+    background: linear-gradient(135deg, var(--primary) 0%, #0f9a9c 100%);
+    color: #ffffff;
+    box-shadow: 0 14px 26px rgba(15, 118, 110, 0.18);
     font-size: 1.5rem;
     font-weight: 800;
     letter-spacing: 0.04em;
@@ -428,7 +534,7 @@ textarea {
 }
 
 .choice-card:hover {
-    background: linear-gradient(135deg, rgba(219, 239, 255, 0.95), rgba(206, 243, 247, 0.95));
+    background: linear-gradient(135deg, #0d6d69 0%, #0e8b8d 100%);
 }
 
 .choice-label {
@@ -694,11 +800,11 @@ textarea {
 }
 
 .feature-card {
-    background: rgba(255, 255, 255, 0.82);
-    border: 1px solid var(--border);
+    background: linear-gradient(135deg, rgba(15, 118, 110, 0.08), rgba(15, 118, 110, 0.14));
+    border: 1px solid rgba(15, 118, 110, 0.16);
     border-radius: 18px;
     padding: 24px 20px;
-    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+    box-shadow: 0 12px 28px rgba(15, 118, 110, 0.06);
     text-align: left;
 }
 
@@ -709,11 +815,22 @@ textarea {
     align-items: center;
     justify-content: center;
     border-radius: 12px;
-    background: linear-gradient(135deg, var(--primary-soft), #eaf7ff);
-    color: var(--primary-dark);
+    background: linear-gradient(135deg, var(--primary) 0%, #0f9a9c 100%);
+    color: #fff;
     font-size: 1.35rem;
     font-weight: 700;
     margin-bottom: 16px;
+    box-shadow: 0 10px 20px rgba(15, 118, 110, 0.18);
+}
+
+.feature-icon svg {
+    width: 24px;
+    height: 24px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
 }
 
 .feature-card h3 {

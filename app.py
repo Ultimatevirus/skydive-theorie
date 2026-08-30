@@ -10,6 +10,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -310,6 +311,16 @@ def topic_passed(correct, total):
     if total == 0:
         return False
     return (correct / total) * 100 >= 60
+
+
+@app.route("/favicon.svg")
+@app.route("/favicon.ico")
+def favicon():
+    """Serve a high-contrast favicon for the browser tab."""
+    icon_path = os.path.join(app.root_path, "static", "icons", "plane-favicon.svg")
+    response = send_file(icon_path, mimetype="image/svg+xml")
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
 
 
 @app.route("/")

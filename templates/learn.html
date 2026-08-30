@@ -6,6 +6,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
+    <link rel="shortcut icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
     <title>Leren voor het examen</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
@@ -14,12 +16,34 @@
         <div class="container header-inner">
             <div class="brand">Skydive-theorie.nl</div>
             <nav class="main-nav">
-                <a href="{{ url_for('index') }}">Home</a>
-                <a href="{{ url_for('practice') }}">Oefenexamen</a>
-                <a href="{{ url_for('learn') }}">Leren voor het examen</a>
-                <a href="{{ url_for('contact') }}">Contact</a>
+                <a href="{{ url_for('index') }}" class="nav-link">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/></svg>
+                    <span>Home</span>
+                </a>
+                <a href="{{ url_for('practice') }}" class="nav-link">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
+                    <span>Oefenexamen</span>
+                </a>
+                <a href="{{ url_for('learn') }}" class="nav-link">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
+                    <span>Leren voor het examen</span>
+                </a>
+                <a href="{{ url_for('contact') }}" class="nav-link">
+                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/><path d="M3 7l9 6l9 -6"/></svg>
+                    <span>Contact</span>
+                </a>
                 <button class="theme-toggle" type="button" aria-label="Wissel tussen licht en donker thema">
-                    <span class="theme-icon" aria-hidden="true">💡</span>
+                    <svg class="theme-icon is-light" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
+                        <path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3"/>
+                        <path d="M9.7 17h4.6"/>
+                    </svg>
+                    <svg class="theme-icon is-dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
+                        <path d="M11.089 7.083a5 5 0 0 1 5.826 5.84m-1.378 2.611a5.012 5.012 0 0 1 -.537 .466a3.5 3.5 0 0 0 -1 3a2 2 0 1 1 -4 0a3.5 3.5 0 0 0 -1 -3a5 5 0 0 1 -.528 -7.544"/>
+                        <path d="M9.7 17h4.6"/>
+                        <path d="M3 3l18 18"/>
+                    </svg>
                 </button>
             </nav>
         </div>
@@ -28,52 +52,59 @@
     <main class="page-shell">
         <div class="container">
             <div class="card exam-card">
-                <p class="eyebrow">Studiepagina</p>
-                <h1>Leren voor het examen</h1>
+                <div class="page-header">
+                    <div>
+                        <p class="eyebrow">Studiepagina</p>
+                        <h1>Leren voor het examen</h1>
+                    </div>
+                </div>
 
                 <p>
-                    Voor je skydive theorie-examen is het belangrijk om niet alleen vragen te oefenen,
-                    maar ook de basisprincipes goed door te nemen. Gebruik deze pagina als overzicht van
-                    de belangrijkste leerpunten en als startpunt voor verdere verdieping.
+                    Voor je KNVVL theorie-examen is het belangrijk om niet alleen vragen te oefenen,
+                    maar ook de achterliggende documentatie goed door te nemen. Gebruik deze pagina als overzicht van
+                    mogelijke leerpunten, voorproef op het examen en als startpunt voor verdere verdieping.
                 </p>
 
                 <p>
-                    Focus op de onderwerpen die vaak terugkomen in de examens: luchtstroom, parachutesystemen,
-                    veiligheidsprocedures, weers- en windinvloeden, vluchtregels en medische/technische basiskennis.
+                   Houd er rekening mee dat het theorie examen bestaat uit een 4 tal onderwerpen: algemeen, voorschriften, materiaal en meteo 
                     Door regelmatig te herhalen en de theorie ook in verband te brengen met praktische situaties,
-                    word je beter voorbereid op het examen.
+                    word je beter voorbereid op het examen. 
                 </p>
 
                 <div class="topic-summary">
-                    <h2>Belangrijke leeronderwerpen</h2>
+                    <h2>De vakkenn</h2>
                     <div class="topic-row">
                         <div class="topic-label-row">
-                            <span>Parachutesystemen</span>
+                            <span>Algemeen</span>
                         </div>
-                        <p>Herhaal de onderdelen van het systeem, de werking van de reserve en de veiligheidsprocedures.</p>
+                        <p>Gaat over algemene kennis bijbehorend aan het niveau van het examen</p>
                     </div>
 
                     <div class="topic-row">
                         <div class="topic-label-row">
-                            <span>Wind, weersomstandigheden en vluchtregels</span>
+                            <span>Materiaal</span>
                         </div>
-                        <p>Maak je vertrouwd met de invloed van wind, zicht en weer op de vlucht en de bijbehorende regels.</p>
+                        <p>Gaat over springmateraal, zoals rigs, openingsystemen, hoogtemeters etc</p>
                     </div>
 
                     <div class="topic-row">
                         <div class="topic-label-row">
-                            <span>Veiligheid en noodprocedures</span>
+                            <span>Meteo</span>
                         </div>
-                        <p>Bestudeer de basis van veilig gedrag, problem-solving en de juiste acties in kritieke situaties.</p>
+                        <p>Gaat over het weer en de invloed die dit kan hebben op para activiteiten.</p>
                     </div>
+                    <div class="topic-row">
+                        <div class="topic-label-row">
+                            <span>Voorschriften</span>
+                        </div>
+                        <p>Gaat over de regels en voorschriften die gelden voor parachutespringen in Nederland.</p>
                 </div>
 
                 <div class="topic-summary">
                     <h2>Externe documentatie</h2>
                     <ul>
-                        <li><a href="https://www.knvvl.nl/" target="_blank" rel="noopener noreferrer">KNVVL</a> – officiële informatie over de Nederlandse skydive organisatie en de examenstructuur.</li>
-                        <li><a href="https://www.skydivingmuseum.org/" target="_blank" rel="noopener noreferrer">Skydiving Museum</a> – aanvullende theorie over parachutesport en veiligheid.</li>
-                        <li><a href="https://www.parachutist.info/" target="_blank" rel="noopener noreferrer">Parachutist Info</a> – algemene informatie over parachutesport en veiligheidsaspecten.</li>
+                        <li><a href="https://www.parachute.nl/" target="_blank" rel="noopener noreferrer">Parachute.nl</a> – officiële KNVVL informatie over skydiven in Nederland (BVR, BBR etc.).</li>
+                        <li><a href="https://www.skydivesupplies.nl/brevet/" target="_blank" rel="noopener noreferrer">Skydive Supplies</a> – Externe informatie over het halen van het KNVVL brevet. & theorie avonden</li>
                     </ul>
                 </div>
 
@@ -94,18 +125,40 @@
     <script>
         const root = document.documentElement;
         const themeToggle = document.querySelector('.theme-toggle');
-        const themeIcon = document.querySelector('.theme-icon');
+
+        function makeThemeButtonMarkup() {
+            return `
+                <svg class="theme-icon is-light" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
+                    <path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3"/>
+                    <path d="M9.7 17h4.6"/>
+                </svg>
+                <svg class="theme-icon is-dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
+                    <path d="M11.089 7.083a5 5 0 0 1 5.826 5.84m-1.378 2.611a5.012 5.012 0 0 1 -.537 .466a3.5 3.5 0 0 0 -1 3a2 2 0 1 1 -4 0a3.5 3.5 0 0 0 -1 -3a5 5 0 0 1 -.528 -7.544"/>
+                    <path d="M9.7 17h4.6"/>
+                    <path d="M3 3l18 18"/>
+                </svg>
+            `;
+        }
+
+        function ensureThemeIcon() {
+            if (!themeToggle) return;
+            const hasSvg = themeToggle.querySelector('svg');
+            if (!hasSvg || themeToggle.textContent.includes('💡')) {
+                themeToggle.innerHTML = makeThemeButtonMarkup();
+            }
+        }
 
         function applyTheme(theme) {
             const isDark = theme === 'dark';
             root.setAttribute('data-theme', isDark ? 'dark' : 'light');
-            if (themeIcon) {
-                themeIcon.textContent = isDark ? '🔆' : '💡';
-            }
             if (themeToggle) {
                 themeToggle.setAttribute('aria-label', isDark ? 'Schakel naar licht thema' : 'Schakel naar donker thema');
             }
         }
+
+        ensureThemeIcon();
 
         const savedTheme = localStorage.getItem('theme-preference');
         const preferredTheme = savedTheme || 'light';
