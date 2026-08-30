@@ -1,7 +1,9 @@
 import ast
+import os
 import random
 import sqlite3
 import time
+from pathlib import Path
 
 from flask import (
     Flask,
@@ -15,10 +17,37 @@ from flask import (
 app = Flask(__name__)
 app.secret_key = "skydive-secret"
 
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_LOCAL_DB = BASE_DIR / "vragen.db"
+PRODUCTION_DB = Path("/data/vragen.db")
+
+
+def get_db_path():
+    """Resolve a stable SQLite database path for local and container use."""
+    configured_path = os.getenv("DB_PATH")
+    if configured_path:
+        db_path = Path(configured_path)
+    elif PRODUCTION_DB.exists():
+        db_path = PRODUCTION_DB
+    elif DEFAULT_LOCAL_DB.exists():
+        db_path = DEFAULT_LOCAL_DB
+        if not PRODUCTION_DB.exists():
+            PRODUCTION_DB.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                PRODUCTION_DB.write_bytes(DEFAULT_LOCAL_DB.read_bytes())
+            except OSError:
+                pass
+        db_path = PRODUCTION_DB
+    else:
+        db_path = PRODUCTION_DB
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return str(db_path)
+
 
 def get_db_connection():
     """Create and return a SQLite database connection for the quiz data."""
-    conn = sqlite3.connect("vragen.db")
+    conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -663,4 +692,4 @@ def get_question_image_url(image_link):
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

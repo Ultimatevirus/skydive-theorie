@@ -1,13 +1,20 @@
-FROM alpine:3.14
+FROM python:3.12-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 py3-pip
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DB_PATH=/data/vragen.db
 
-COPY . .
+RUN mkdir -p /data
 
-RUN pip3 install --no-cache-dir flask
+COPY app.py ./
+COPY static ./static
+COPY templates ./templates
+COPY vragen.db /data/vragen.db
+
+RUN pip install --no-cache-dir flask
 
 EXPOSE 5000
 
-CMD ["python3", "app.py"]
+CMD ["python", "app.py"]
