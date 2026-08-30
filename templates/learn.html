@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
+    <title>Leren voor het examen</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="site-header">
+        <div class="container header-inner">
+            <div class="brand">Skydive-theorie.nl</div>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}">Home</a>
+                <a href="{{ url_for('practice') }}">Oefenexamen</a>
+                <a href="{{ url_for('learn') }}">Leren voor het examen</a>
+                <a href="{{ url_for('contact') }}">Contact</a>
+                <button class="theme-toggle" type="button" aria-label="Wissel tussen licht en donker thema">
+                    <span class="theme-icon" aria-hidden="true">💡</span>
+                </button>
+            </nav>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <div class="container">
+            <div class="card exam-card">
+                <p class="eyebrow">Studiepagina</p>
+                <h1>Leren voor het examen</h1>
+
+                <p>
+                    Voor je skydive theorie-examen is het belangrijk om niet alleen vragen te oefenen,
+                    maar ook de basisprincipes goed door te nemen. Gebruik deze pagina als overzicht van
+                    de belangrijkste leerpunten en als startpunt voor verdere verdieping.
+                </p>
+
+                <p>
+                    Focus op de onderwerpen die vaak terugkomen in de examens: luchtstroom, parachutesystemen,
+                    veiligheidsprocedures, weers- en windinvloeden, vluchtregels en medische/technische basiskennis.
+                    Door regelmatig te herhalen en de theorie ook in verband te brengen met praktische situaties,
+                    word je beter voorbereid op het examen.
+                </p>
+
+                <div class="topic-summary">
+                    <h2>Belangrijke leeronderwerpen</h2>
+                    <div class="topic-row">
+                        <div class="topic-label-row">
+                            <span>Parachutesystemen</span>
+                        </div>
+                        <p>Herhaal de onderdelen van het systeem, de werking van de reserve en de veiligheidsprocedures.</p>
+                    </div>
+
+                    <div class="topic-row">
+                        <div class="topic-label-row">
+                            <span>Wind, weersomstandigheden en vluchtregels</span>
+                        </div>
+                        <p>Maak je vertrouwd met de invloed van wind, zicht en weer op de vlucht en de bijbehorende regels.</p>
+                    </div>
+
+                    <div class="topic-row">
+                        <div class="topic-label-row">
+                            <span>Veiligheid en noodprocedures</span>
+                        </div>
+                        <p>Bestudeer de basis van veilig gedrag, problem-solving en de juiste acties in kritieke situaties.</p>
+                    </div>
+                </div>
+
+                <div class="topic-summary">
+                    <h2>Externe documentatie</h2>
+                    <ul>
+                        <li><a href="https://www.knvvl.nl/" target="_blank" rel="noopener noreferrer">KNVVL</a> – officiële informatie over de Nederlandse skydive organisatie en de examenstructuur.</li>
+                        <li><a href="https://www.skydivingmuseum.org/" target="_blank" rel="noopener noreferrer">Skydiving Museum</a> – aanvullende theorie over parachutesport en veiligheid.</li>
+                        <li><a href="https://www.parachutist.info/" target="_blank" rel="noopener noreferrer">Parachutist Info</a> – algemene informatie over parachutesport en veiligheidsaspecten.</li>
+                    </ul>
+                </div>
+
+                <div class="button-row">
+                    <a href="{{ url_for('practice') }}" class="primary-btn">Naar oefenexamen</a>
+                    <a href="{{ url_for('index') }}" class="secondary-btn">Home</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <span>gemaakt door Alex Brittmann</span>
+        </div>
+    </footer>
+
+    <script>
+        const root = document.documentElement;
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+
+        function applyTheme(theme) {
+            const isDark = theme === 'dark';
+            root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            if (themeIcon) {
+                themeIcon.textContent = isDark ? '🔆' : '💡';
+            }
+            if (themeToggle) {
+                themeToggle.setAttribute('aria-label', isDark ? 'Schakel naar licht thema' : 'Schakel naar donker thema');
+            }
+        }
+
+        const savedTheme = localStorage.getItem('theme-preference');
+        const preferredTheme = savedTheme || 'light';
+        applyTheme(preferredTheme);
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('theme-preference', nextTheme);
+                applyTheme(nextTheme);
+            });
+        }
+    </script>
+</body>
+</html>

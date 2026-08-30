@@ -3,72 +3,135 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
     <title>Resultaat</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <div class="card">
-            <h1>Resultaat</h1>
+    <header class="site-header">
+        <div class="container header-inner">
+            <div class="brand">Skydive-theorie.nl</div>
+            <nav class="main-nav">
+                <a href="{{ url_for('index') }}">Home</a>
+                <a href="{{ url_for('practice') }}">Oefenexamen</a>
+                <a href="{{ url_for('learn') }}">Leren voor het examen</a>
+                <a href="{{ url_for('contact') }}">Contact</a>
+                <button class="theme-toggle" type="button" aria-label="Wissel tussen licht en donker thema">
+                    <span class="theme-icon" aria-hidden="true">💡</span>
+                </button>
+            </nav>
+        </div>
+    </header>
 
-            <div class="overall-summary {{ 'passed' if passed else 'failed' }}">
-                <p class="score">Je score: {{ score }} / {{ total }}</p>
-                <p class="grade">Cijfer: {{ grade }} / 10</p>
-                <p class="pass-status">
-                    {% if passed %}
-                        Geslaagd
-                    {% else %}
-                        Niet geslaagd
-                    {% endif %}
-                </p>
-                <p class="elapsed">Tijd: {{ elapsed_time }}</p>
-            </div>
+    <main class="page-shell">
+        <div class="container">
+            <div class="card exam-card result-card">
+                <h1>Resultaat</h1>
 
-            <div class="topic-summary">
-                <h2>Onderwerp score</h2>
+                <div class="overall-summary {{ 'passed' if passed else 'failed' }}">
+                    <p class="score">Je score: {{ score }} / {{ total }}</p>
+                    <p class="grade">Cijfer: {{ grade }} / 10</p>
+                    <p class="pass-status">
+                        {% if passed %}
+                            Geslaagd
+                        {% else %}
+                            Niet geslaagd
+                        {% endif %}
+                    </p>
+                    <p class="elapsed">Tijd: {{ elapsed_time }}</p>
+                </div>
 
-                {% for topic, stats in topic_scores.items() %}
-                    <div class="topic-row">
-                        <div class="topic-label-row">
-                            <span>{{ topic }}</span>
-                            <span>{{ stats.correct }} / {{ stats.total }}</span>
+                <div class="topic-summary">
+                    <h2>Onderwerp score</h2>
+
+                    {% for topic, stats in topic_scores.items() %}
+                        <div class="topic-row">
+                            <div class="topic-label-row">
+                                <span>{{ topic }}</span>
+                                <span>{{ stats.correct }} / {{ stats.total }}</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: {{ stats.percent }}%;"></div>
+                            </div>
+                            <div class="topic-status">
+                                {% if stats.passed %}
+                                    <span class="status-pass">Voldoende (60%+)</span>
+                                {% else %}
+                                    <span class="status-fail">Onvoldoende</span>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: {{ stats.percent }}%;"></div>
+                    {% endfor %}
+                </div>
+
+                {% for result in results %}
+                    <div class="result-item {% if result.is_correct %}result-correct{% else %}result-wrong{% endif %}">
+                        <h3>{{ result.question }}</h3>
+
+                        {% if result.image_url %}
+                          <div class="result-image">
+                            <img src="{{ result.image_url }}" alt="Vraagafbeelding" style="max-width: 100%; height: auto; margin: 10px 0;">
+                          </div>
+                        {% endif %}
+
+                        <div class="answer-row">
+                            <p class="answer-line {% if result.is_correct %}answer-correct{% else %}answer-wrong{% endif %}">
+                                Jouw antwoord: {{ result.selected }}
+                            </p>
+                            <p class="answer-line answer-correct">Goed antwoord: {{ result.correct }}</p>
                         </div>
-                        <div class="topic-status">
-                            {% if stats.passed %}
-                                <span class="status-pass">Voldoende (60%+)</span>
-                            {% else %}
-                                <span class="status-fail">Onvoldoende</span>
-                            {% endif %}
-                        </div>
+
+                        {% if result.is_correct %}
+                            <p class="result-status status-pass">Correct</p>
+                        {% else %}
+                            <p class="result-status status-fail">Niet correct</p>
+                        {% endif %}
                     </div>
                 {% endfor %}
-            </div>
 
-            {% for result in results %}
-                <div class="result-item">
-                    <h3>{{ result.question }}</h3>
-
-                    {% if result.image_url %}
-                      <div class="result-image">
-                        <img src="{{ result.image_url }}" alt="Vraagafbeelding" style="max-width: 100%; height: auto; margin: 10px 0;">
-                      </div>
-                    {% endif %}
-
-                    <p>Jouw antwoord: {{ result.selected }}</p>
-                    <p>Goed antwoord: {{ result.correct }}</p>
-                    {% if result.is_correct %}
-                      <p>Correct</p>
-                    {% else %}
-                      <p>Niet correct</p>
-                    {% endif %}
+                <div class="button-row">
+                    <a href="{{ url_for('index') }}" class="primary-btn">Terug naar start</a>
                 </div>
-            {% endfor %}
-
-            <a href="/" class="link-button">Terug naar start</a>
+            </div>
         </div>
-    </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-inner">
+            <span>gemaakt door Alex Brittmann</span>
+        </div>
+    </footer>
+
+    <script>
+        const root = document.documentElement;
+        const themeToggle = document.querySelector('.theme-toggle');
+        const themeIcon = document.querySelector('.theme-icon');
+
+        function applyTheme(theme) {
+            const isDark = theme === 'dark';
+            root.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            if (themeIcon) {
+                themeIcon.textContent = isDark ? '🔆' : '💡';
+            }
+            if (themeToggle) {
+                themeToggle.setAttribute('aria-label', isDark ? 'Schakel naar licht thema' : 'Schakel naar donker thema');
+            }
+        }
+
+        const savedTheme = localStorage.getItem('theme-preference');
+        const preferredTheme = savedTheme || 'light';
+        applyTheme(preferredTheme);
+
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                localStorage.setItem('theme-preference', nextTheme);
+                applyTheme(nextTheme);
+            });
+        }
+    </script>
 </body>
 </html>
