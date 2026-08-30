@@ -443,6 +443,51 @@ textarea {
     background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
 
+.result-item {
+    border-left: 6px solid var(--border);
+}
+
+.result-item.result-correct {
+    background: linear-gradient(180deg, #f0fff5, #f7fffb);
+    border-color: rgba(19, 138, 93, 0.24);
+    border-left-color: #22c55e;
+}
+
+.result-item.result-wrong {
+    background: linear-gradient(180deg, #fff5f5, #fffafb);
+    border-color: rgba(214, 59, 80, 0.18);
+    border-left-color: #ef4444;
+}
+
+.answer-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.answer-line {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-weight: 700;
+}
+
+.answer-correct {
+    background: rgba(19, 138, 93, 0.08);
+    color: var(--success);
+}
+
+.answer-wrong {
+    background: rgba(214, 59, 80, 0.08);
+    color: var(--error);
+}
+
+.result-status {
+    margin: 14px 0 0;
+    font-weight: 800;
+}
+
 .question-text {
     margin-top: 0;
     margin-bottom: 14px;
@@ -462,12 +507,22 @@ textarea {
 
 .option-label:hover {
     background: #f4f9ff;
+    color: #0f172a;
 }
 
 .option-label input {
     accent-color: var(--primary);
     width: 18px;
     height: 18px;
+}
+
+:root[data-theme="dark"] .option-label {
+    color: var(--text);
+}
+
+:root[data-theme="dark"] .option-label:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: #f8fbff;
 }
 
 .primary-button {
