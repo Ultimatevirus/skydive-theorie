@@ -289,10 +289,95 @@ def index():
     return render_template("index.html")
 
 
+def start_exam(level, question_amount):
+    """Set the selected level and question count for the exam session."""
+    session["level"] = str(level).strip().upper()
+    session["question_amount"] = int(question_amount)
+    session["started_at"] = time.time()
+    session["exam_question_ids"] = []
+
+
 @app.route("/practice")
 def practice():
-    """Render the practice page."""
-    return render_template("practice.html")
+    """Render the first practice selection step: choose the brevet level."""
+    return render_template(
+        "practice.html",
+        stage="level",
+        question_text="Welk brevet wil je voor oefenen?",
+        level=None,
+        error=None,
+    )
+
+
+@app.route("/practice/select", methods=["POST"])
+def practice_select():
+    """Store the chosen brevet and continue to the mode selection step."""
+    level = request.form.get("level", "").strip().upper()
+    if level not in ("A", "B"):
+        return "Ongeldige keuze. Kies A of B.", 400
+
+    session["selected_level"] = level
+    return redirect(url_for("practice_mode", level=level))
+
+
+@app.route("/practice/mode/<level>", methods=["GET", "POST"])
+def practice_mode(level):
+    """Choose whether to create a full practice exam or do free practice."""
+    normalized_level = str(level).strip().upper()
+    if normalized_level not in ("A", "B"):
+        return "Ongeldige keuze. Kies A of B.", 400
+
+    if request.method == "POST":
+        practice_type = request.form.get("practice_type", "").strip().lower()
+        if practice_type == "exam":
+            start_exam(normalized_level, 40)
+            return redirect(url_for("exam"))
+        if practice_type == "free":
+            return redirect(url_for("practice_free", level=normalized_level))
+        return "Ongeldige keuze. Kies een oefenmodus.", 400
+
+    session["selected_level"] = normalized_level
+    return render_template(
+        "practice.html",
+        stage="mode",
+        level=normalized_level,
+        question_text="Wil je vrij oefenen, of een oefenexamen maken?",
+        error=None,
+    )
+
+
+@app.route("/practice/free/<level>", methods=["GET", "POST"])
+def practice_free(level):
+    """Prompt for a custom question count and start free practice."""
+    normalized_level = str(level).strip().upper()
+    if normalized_level not in ("A", "B"):
+        return "Ongeldige keuze. Kies A of B.", 400
+
+    if request.method == "POST":
+        try:
+            question_amount = int(request.form.get("question_amount", "1"))
+        except ValueError:
+            question_amount = 1
+
+        if not 1 <= question_amount <= 40:
+            return render_template(
+                "practice.html",
+                stage="free",
+                level=normalized_level,
+                question_text="Hoeveel vragen wil je laden?",
+                error="Kies een getal tussen 1 en 40.",
+            )
+
+        start_exam(normalized_level, question_amount)
+        return redirect(url_for("exam"))
+
+    return render_template(
+        "practice.html",
+        stage="free",
+        level=normalized_level,
+        question_text="Hoeveel vragen wil je laden?",
+        error=None,
+    )
 
 
 @app.route("/leren")
@@ -350,10 +435,7 @@ def start():
     if not 1 <= question_amount <= 40:
         return "Kies een getal tussen 1 en 40.", 400
 
-    session["level"] = level
-    session["question_amount"] = question_amount
-    session["started_at"] = time.time()
-    session["exam_question_ids"] = []
+    start_exam(level, question_amount)
     return redirect(url_for("exam"))
 
 

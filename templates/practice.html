@@ -27,37 +27,65 @@
 
     <main class="page-shell">
         <div class="container">
-            <div class="card exam-card">
+            <div class="card exam-card practice-card">
                 <p class="eyebrow">Oefenexamen</p>
-                <h1>Kies je niveau</h1>
+                <h1>{{ question_text }}</h1>
 
-                <form method="POST" action="{{ url_for('start') }}" class="start-form">
-                    <div class="field-group">
-                        <label for="level">Niveau</label>
-                        <select id="level" name="level" required>
-                            <option value="A">A</option>
-                            <option value="B">B</option>
-                        </select>
-                    </div>
+                {% if error %}
+                    <div class="error-box">{{ error }}</div>
+                {% endif %}
 
-                    <div class="field-group">
-                        <label for="question_amount">Aantal vragen</label>
-                        <input
-                            id="question_amount"
-                            name="question_amount"
-                            type="number"
-                            min="1"
-                            max="40"
-                            value="5"
-                            required
-                        >
+                {% if stage == 'level' %}
+                    <div class="choice-grid" aria-label="Kies een brevet">
+                        <form method="POST" action="{{ url_for('practice_select') }}" class="choice-form">
+                            <button type="submit" name="level" value="A" class="choice-card option-card">
+                                <span class="choice-label">A</span>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('practice_select') }}" class="choice-form">
+                            <button type="submit" name="level" value="B" class="choice-card option-card">
+                                <span class="choice-label">B</span>
+                            </button>
+                        </form>
                     </div>
+                {% elif stage == 'mode' %}
+                    <div class="choice-grid" aria-label="Kies oefenmodus">
+                        <form method="POST" action="{{ url_for('practice_mode', level=level) }}" class="choice-form">
+                            <button type="submit" name="practice_type" value="exam" class="choice-card option-card">
+                                <span class="choice-label">Oefenexamen maken</span>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('practice_mode', level=level) }}" class="choice-form">
+                            <button type="submit" name="practice_type" value="free" class="choice-card option-card">
+                                <span class="choice-label">Vrij oefenen</span>
+                            </button>
+                        </form>
+                    </div>
+                {% elif stage == 'free' %}
+                    <form method="POST" action="{{ url_for('practice_free', level=level) }}" class="start-form">
+                        <div class="field-group">
+                            <label for="question_amount">Hoeveel vragen wil je laden?</label>
+                            <input
+                                id="question_amount"
+                                name="question_amount"
+                                type="number"
+                                min="1"
+                                max="40"
+                                value="10"
+                                required
+                            >
+                        </div>
 
-                    <div class="button-row">
-                        <button type="submit" class="primary-btn">Start examen</button>
-                        <a href="{{ url_for('index') }}" class="secondary-btn">Terug naar home</a>
-                    </div>
-                </form>
+                        <div class="button-row">
+                            <button type="submit" class="primary-btn">Start oefenen</button>
+                            <a href="{{ url_for('practice_mode', level=level) }}" class="secondary-btn">Terug</a>
+                        </div>
+                    </form>
+                {% endif %}
+
+                <div class="button-row practice-footer">
+                    <a href="{{ url_for('index') }}" class="secondary-btn">Terug naar home</a>
+                </div>
             </div>
         </div>
     </main>
