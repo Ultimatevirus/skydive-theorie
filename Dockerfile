@@ -9,12 +9,15 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN mkdir -p /data
 
 COPY app.py ./
+COPY gunicorn_config.py ./
 COPY static ./static
 COPY templates ./templates
 COPY vragen.db /data/vragen.db
 
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir flask
+RUN pip install --no-cache-dir gunicorn
 
 EXPOSE 5000
 
-CMD ["python", "app.py"]
+CMD ["gunicorn", "-c", "gunicorn_config.py", "app:app"]

@@ -701,6 +701,6 @@ def get_question_image_url(image_link):
 
     return None
 
-
+#purely for local development, gunicorn will be used in production
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
