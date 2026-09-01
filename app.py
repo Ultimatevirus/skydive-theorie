@@ -165,65 +165,159 @@ def build_option_list(false_options, correct_answer, level="B"):
     return option_map
 
 
-def get_topic_counts_for_level(level, amount):
-    """Return per-topic counts and the total selected questions for a level."""
+def normalize_selected_topics(raw_topics):
+    """Return a deduplicated list of selected topic names."""
+    if raw_topics is None:
+        return []
+
+    if isinstance(raw_topics, str):
+        raw_values = [raw_topics]
+    else:
+        raw_values = list(raw_topics)
+
+    cleaned = []
+    for value in raw_values:
+        if value is None:
+            continue
+        name = str(value).strip()
+        if name and name not in cleaned:
+            cleaned.append(name)
+
+    return cleaned
+
+
+def get_available_topics(level):
+    """Return all active topics for the selected exam level."""
     conn = get_db_connection()
-    topics = conn.execute(
-        "SELECT DISTINCT topic FROM questions "
-        "WHERE level = ? AND is_active = 1 ORDER BY topic",
+    rows = conn.execute(
+        """
+        SELECT DISTINCT topic
+        FROM questions
+        WHERE level = ? AND is_active = 1
+        ORDER BY topic ASC
+        """,
         (level,),
     ).fetchall()
     conn.close()
+    return [row["topic"] for row in rows]
 
-    if not topics:
-        return {}, 0
 
-    topic_names = [row["topic"] for row in topics]
-
+def get_topic_counts_for_level(level, amount, selected_topics=None):
+    """Return per-topic, per-subtopic counts and the total selected questions."""
+    selected_topics = normalize_selected_topics(selected_topics)
     conn = get_db_connection()
-    available_by_topic = {}
-    for topic in topic_names:
-        count = conn.execute(
-            "SELECT COUNT(*) AS c FROM questions "
-            "WHERE level = ? AND topic = ? AND is_active = 1",
-            (level, topic),
-        ).fetchone()["c"]
-        available_by_topic[topic] = count
+
+    if selected_topics:
+        placeholders = ", ".join("?" for _ in selected_topics)
+        topic_rows = conn.execute(
+            f"""
+            SELECT topic, subtopic, COUNT(*) AS c
+            FROM questions
+            WHERE level = ? AND topic IN ({placeholders}) AND is_active = 1
+            GROUP BY topic, subtopic
+            ORDER BY topic, subtopic
+            """,
+            (level, *selected_topics),
+        ).fetchall()
+    else:
+        topic_rows = conn.execute(
+            """
+            SELECT topic, subtopic, COUNT(*) AS c
+            FROM questions
+            WHERE level = ? AND is_active = 1
+            GROUP BY topic, subtopic
+            ORDER BY topic, subtopic
+            """,
+            (level,),
+        ).fetchall()
     conn.close()
 
-    total_available = sum(available_by_topic.values())
+    if not topic_rows:
+        return {}, 0
+
+    available_by_topic = {}
+    for row in topic_rows:
+        topic = row["topic"]
+        subtopic = row["subtopic"]
+        available_by_topic.setdefault(topic, {})
+        available_by_topic[topic][subtopic] = row["c"]
+
+    topic_names = sorted(available_by_topic)
+    total_available = sum(
+        sum(subtopic_counts.values())
+        for subtopic_counts in available_by_topic.values()
+    )
     selected_total = min(amount, total_available)
 
     if selected_total <= 0:
-        return {topic: 0 for topic in topic_names}, 0
+        empty_counts = {
+            topic: {subtopic: 0 for subtopic in sorted(subtopics)}
+            for topic, subtopics in available_by_topic.items()
+        }
+        return empty_counts, 0
 
-    counts = {topic: 0 for topic in topic_names}
+    counts = {
+        topic: {subtopic: 0 for subtopic in sorted(subtopics)}
+        for topic, subtopics in available_by_topic.items()
+    }
+
+    topic_targets = {topic: 0 for topic in topic_names}
     base = selected_total // len(topic_names)
     remainder = selected_total % len(topic_names)
-
     for index, topic in enumerate(topic_names):
-        counts[topic] = min(
+        topic_total = sum(available_by_topic[topic].values())
+        topic_targets[topic] = min(
             base + (1 if index < remainder else 0),
-            available_by_topic.get(topic, 0),
+            topic_total,
         )
 
-    used = sum(counts.values())
+    used = sum(topic_targets.values())
     if used < selected_total:
         for topic in topic_names:
-            free_space = available_by_topic.get(topic, 0) - counts.get(topic, 0)
+            free_space = sum(available_by_topic[topic].values()) - sum(
+                counts[topic].values()
+            )
             if free_space > 0:
                 extra = min(selected_total - used, free_space)
-                counts[topic] += extra
+                topic_targets[topic] += extra
                 used += extra
                 if used >= selected_total:
                     break
 
+    for topic in topic_names:
+        target = topic_targets.get(topic, 0)
+        if target <= 0:
+            continue
+
+        subtopics = sorted(available_by_topic[topic])
+        subtopic_base = target // len(subtopics)
+        subtopic_remainder = target % len(subtopics)
+
+        for index, subtopic in enumerate(subtopics):
+            available = available_by_topic[topic].get(subtopic, 0)
+            counts[topic][subtopic] = min(
+                subtopic_base + (1 if index < subtopic_remainder else 0),
+                available,
+            )
+
+        topic_used = sum(counts[topic].values())
+        if topic_used < target:
+            for subtopic in subtopics:
+                free_space = available_by_topic[topic].get(subtopic, 0) - counts[topic].get(subtopic, 0)
+                if free_space > 0:
+                    extra = min(target - topic_used, free_space)
+                    counts[topic][subtopic] += extra
+                    topic_used += extra
+                    if topic_used >= target:
+                        break
+
     return counts, selected_total
 
 
-def fetch_questions(level, amount):
-    """Fetch a random set of active questions for a level and amount."""
-    topic_counts, selected_total = get_topic_counts_for_level(level, amount)
+def fetch_questions(level, amount, selected_topics=None):
+    """Fetch a random set of active questions for a level and optional topic filter."""
+    selected_topics = normalize_selected_topics(selected_topics)
+    topic_counts, selected_total = get_topic_counts_for_level(level, amount, selected_topics)
 
     if selected_total == 0:
         return []
@@ -231,22 +325,23 @@ def fetch_questions(level, amount):
     conn = get_db_connection()
     rows = []
 
-    for topic, count in topic_counts.items():
-        if count <= 0:
-            continue
+    for topic, subtopic_counts in topic_counts.items():
+        for subtopic, count in subtopic_counts.items():
+            if count <= 0:
+                continue
 
-        topic_rows = conn.execute(
-            """
-            SELECT rowid AS id, *
-            FROM questions
-            WHERE level = ? AND topic = ? AND is_active = 1
-            ORDER BY RANDOM()
-            LIMIT ?
-            """,
-            (level, topic, count),
-        ).fetchall()
+            subtopic_rows = conn.execute(
+                """
+                SELECT rowid AS id, *
+                FROM questions
+                WHERE level = ? AND topic = ? AND subtopic = ? AND is_active = 1
+                ORDER BY RANDOM()
+                LIMIT ?
+                """,
+                (level, topic, subtopic, count),
+            ).fetchall()
 
-        rows.extend(topic_rows)
+            rows.extend(subtopic_rows)
 
     conn.close()
 
@@ -329,10 +424,11 @@ def index():
     return render_template("index.html")
 
 
-def start_exam(level, question_amount):
-    """Set the selected level and question count for the exam session."""
+def start_exam(level, question_amount, selected_topics=None):
+    """Set the selected level, question count, and retained topic filters."""
     session["level"] = str(level).strip().upper()
     session["question_amount"] = int(question_amount)
+    session["selected_topics"] = normalize_selected_topics(selected_topics)
     session["started_at"] = time.time()
     session["exam_question_ids"] = []
 
@@ -393,11 +489,17 @@ def practice_free(level):
     if normalized_level not in ("A", "B"):
         return "Ongeldige keuze. Kies A of B.", 400
 
+    available_topics = get_available_topics(normalized_level)
+
     if request.method == "POST":
         try:
             question_amount = int(request.form.get("question_amount", "1"))
         except ValueError:
             question_amount = 1
+
+        selected_topics = normalize_selected_topics(request.form.getlist("selected_topics"))
+        if not selected_topics:
+            selected_topics = available_topics
 
         if not 1 <= question_amount <= 40:
             return render_template(
@@ -406,17 +508,33 @@ def practice_free(level):
                 level=normalized_level,
                 question_text="Hoeveel vragen wil je laden?",
                 error="Kies een getal tussen 1 en 40.",
+                available_topics=available_topics,
+                selected_topics=selected_topics,
             )
 
-        start_exam(normalized_level, question_amount)
+        if not available_topics:
+            return render_template(
+                "practice.html",
+                stage="free",
+                level=normalized_level,
+                question_text="Hoeveel vragen wil je laden?",
+                error="Er zijn nog geen vragen beschikbaar voor dit brevet.",
+                available_topics=[],
+                selected_topics=[],
+            )
+
+        start_exam(normalized_level, question_amount, selected_topics)
         return redirect(url_for("exam"))
 
+    default_selected_topics = available_topics
     return render_template(
         "practice.html",
         stage="free",
         level=normalized_level,
         question_text="Hoeveel vragen wil je laden?",
         error=None,
+        available_topics=available_topics,
+        selected_topics=default_selected_topics,
     )
 
 
@@ -479,11 +597,25 @@ def start():
     return redirect(url_for("exam"))
 
 
+def build_question_groups(questions):
+    """Group rendered questions by topic for topic-based exam UI."""
+    grouped = {}
+    for question in questions:
+        topic = question.get("topic") or "Onbekend"
+        grouped.setdefault(topic, []).append(question)
+
+    return [
+        {"topic": topic, "questions": topic_questions}
+        for topic, topic_questions in sorted(grouped.items())
+    ]
+
+
 @app.route("/exam", methods=["GET", "POST"])
 def exam():
     """Render exam questions, handle submissions, and show the results."""
     level = session.get("level")
     amount = session.get("question_amount", 1)
+    selected_topics = session.get("selected_topics")
 
     if not level:
         return redirect(url_for("index"))
@@ -493,10 +625,10 @@ def exam():
         questions = (
             fetch_questions_by_ids(level, stored_ids)
             if stored_ids
-            else fetch_questions(level, amount)
+            else fetch_questions(level, amount, selected_topics=selected_topics)
         )
     else:
-        questions = fetch_questions(level, amount)
+        questions = fetch_questions(level, amount, selected_topics=selected_topics)
 
     if request.method == "GET" and questions:
         session["exam_question_ids"] = [row["id"] for row in questions]
@@ -539,6 +671,7 @@ def exam():
             # Template context shown when the learner has not answered every exam.
             exam_context = {
                 "questions": rendered_questions,
+                "question_groups": build_question_groups(rendered_questions),
                 "total_questions": len(rendered_questions),
                 "started_at": session.get("started_at", time.time()),
                 "level": level,
@@ -646,6 +779,7 @@ def exam():
     # Template context used to render the exam page with the selected questions.
     exam_context = {
         "questions": rendered_questions,
+        "question_groups": build_question_groups(rendered_questions),
         "total_questions": len(rendered_questions),
         "started_at": session.get("started_at", time.time()),
         "level": level,

@@ -104,6 +104,25 @@
                             >
                         </div>
 
+                        <div class="field-group topic-picker-group">
+                            <label>Onderwerpen</label>
+                            <div class="topic-dropdown-wrapper">
+                                <button type="button" class="topic-dropdown-trigger" aria-expanded="false" aria-label="Onderwerpen kiezen">
+                                    <span class="topic-dropdown-label">Alle onderwerpen geselecteerd</span>
+                                    <span class="topic-dropdown-caret">▾</span>
+                                </button>
+                                <div class="topic-dropdown-panel">
+                                    {% for topic in available_topics %}
+                                        <label class="topic-check">
+                                            <input type="checkbox" name="selected_topics" value="{{ topic }}" {% if topic in selected_topics %}checked{% endif %}>
+                                            <span>{{ topic }}</span>
+                                        </label>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <small class="helper-text">Klik om onderwerpen in of uit te sluiten.</small>
+                        </div>
+
                         <div class="button-row">
                             <button type="submit" class="primary-btn">Start oefenen</button>
                             <a href="{{ url_for('practice_mode', level=level) }}" class="secondary-btn">Terug</a>
@@ -173,6 +192,46 @@
                 localStorage.setItem('theme-preference', nextTheme);
                 applyTheme(nextTheme);
             });
+        }
+
+        const topicWrapper = document.querySelector('.topic-dropdown-wrapper');
+        if (topicWrapper) {
+            const topicTrigger = topicWrapper.querySelector('.topic-dropdown-trigger');
+            const topicPanel = topicWrapper.querySelector('.topic-dropdown-panel');
+            const topicInputs = Array.from(topicPanel.querySelectorAll('input[name="selected_topics"]'));
+            const topicLabel = topicWrapper.querySelector('.topic-dropdown-label');
+
+            function setTopicDropdownOpen(isOpen) {
+                topicWrapper.classList.toggle('is-open', isOpen);
+                topicTrigger.setAttribute('aria-expanded', String(isOpen));
+            }
+
+            function updateTopicLabel() {
+                const selected = topicInputs.filter((input) => input.checked);
+                if (!selected.length || selected.length === topicInputs.length) {
+                    topicLabel.textContent = 'Alle onderwerpen geselecteerd';
+                    return;
+                }
+                topicLabel.textContent = `${selected.length} onderwerp${selected.length === 1 ? '' : 'en'} geselecteerd`;
+            }
+
+            topicTrigger.addEventListener('click', (event) => {
+                event.stopPropagation();
+                setTopicDropdownOpen(!topicWrapper.classList.contains('is-open'));
+            });
+
+            topicInputs.forEach((input) => {
+                input.addEventListener('change', updateTopicLabel);
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!topicWrapper.contains(event.target)) {
+                    setTopicDropdownOpen(false);
+                }
+            });
+
+            setTopicDropdownOpen(false);
+            updateTopicLabel();
         }
     </script>
 </body>
