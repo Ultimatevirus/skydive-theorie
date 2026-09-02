@@ -53,9 +53,11 @@
         <div class="container">
             <div class="card exam-card metar-card">
                 <div class="page-header">
-                    <p class="eyebrow">{{ t('Dagelijkse uitdaging') }}</p>
-                    <h1>{{ t('Lees de METAR') }}</h1>
-                    <p>{{ t('Kies een luchthaven en decodeer de actuele METAR. De oefening blijft vandaag hetzelfde.') }}</p>
+                    <div>
+                        <p class="eyebrow">{{ t('Dagelijkse uitdaging') }}</p>
+                        <h1>{{ t('METAR mode') }}</h1>
+                        <p class="metar-subheader">{{ t('Kies een luchthaven en decodeer de actuele METAR. De oefening blijft vandaag hetzelfde.') }}</p>
+                    </div>
                 </div>
 
                 {% if error %}<div class="error-box" role="alert">{{ t(error) }}</div>{% endif %}

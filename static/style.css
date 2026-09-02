@@ -326,6 +326,13 @@ img {
     line-height: 1.15;
 }
 
+.metar-subheader {
+    max-width: 680px;
+    margin: 6px 0 0;
+    color: var(--muted);
+    font-size: 1rem;
+}
+
 .theme-toggle {
     display: inline-flex;
     align-items: center;
@@ -496,7 +503,7 @@ button,
     justify-content: center;
     border-radius: 12px;
     text-decoration: none;
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     font-weight: 700;
     border: none;
     cursor: pointer;
@@ -848,7 +855,7 @@ button.topic-dropdown-trigger {
     justify-content: space-between;
     gap: 12px;
     cursor: pointer;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 button.topic-dropdown-trigger .topic-dropdown-label,
@@ -908,7 +915,6 @@ button.topic-dropdown-trigger .topic-dropdown-caret {
     padding: 10px 12px;
     border-radius: 10px;
     cursor: pointer;
-    transition: background 0.2s ease;
 }
 
 .topic-check:hover {
@@ -946,6 +952,15 @@ button.topic-dropdown-trigger .topic-dropdown-caret {
     background: rgba(15, 23, 34, 0.9);
     color: var(--text);
     border-color: rgba(148, 163, 184, 0.2);
+}
+
+:root[data-theme="dark"] .topic-dropdown-trigger .topic-dropdown-label,
+:root[data-theme="dark"] .topic-dropdown-trigger .topic-dropdown-caret {
+    color: #ffffff !important;
+}
+
+:root[data-theme="dark"] .topic-picker-group > label {
+    color: #ffffff;
 }
 
 :root[data-theme="dark"] .topic-check:hover {
