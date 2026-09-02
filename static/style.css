@@ -69,7 +69,7 @@ img {
 }
 
 .site-header {
-    background: linear-gradient(135deg, #0e1c2f 0%, #18314f 100%);
+    background: linear-gradient(135deg, #243c5e 0%, #58708d 100%);
     color: #fff;
     box-shadow: 0 10px 26px rgba(8, 18, 36, 0.15);
     position: sticky;
@@ -113,6 +113,11 @@ img {
     min-height: 44px;
     margin: 0;
     align-self: center;
+}
+
+.site-header .brand img {
+    width: min(230px, 30vw);
+    height: auto;
 }
 
 .site-header .main-nav {

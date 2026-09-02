@@ -21,6 +21,8 @@ app.secret_key = "skydive-secret"
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_LOCAL_DB = BASE_DIR / "vragen.db"
 PRODUCTION_DB = Path("/data/vragen.db")
+ALLOWED_LEVELS = ("A", "B")
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 
 
 def get_db_path():
@@ -126,16 +128,14 @@ def normalize_options(raw_options):
 def build_option_list(false_options, correct_answer, level="B"):
     """Build a shuffled multiple-choice answer map for a given exam level."""
     correct_answer = normalize_answer_value(correct_answer)
+    wrong_answers = []
 
-    wrong_answers = normalize_options(false_options)
-    wrong_answers = [
-        normalize_answer_value(item)
-        for item in wrong_answers
-        if normalize_answer_value(item)
-        and normalize_answer_value(item) != correct_answer
-    ]
+    for item in normalize_options(false_options):
+        normalized = normalize_answer_value(item)
+        if normalized and normalized != correct_answer:
+            wrong_answers.append(normalized)
+
     wrong_answers = list(dict.fromkeys(wrong_answers))
-
     if len(wrong_answers) > 3:
         wrong_answers = random.sample(wrong_answers, 3)
 
@@ -303,7 +303,10 @@ def get_topic_counts_for_level(level, amount, selected_topics=None):
         topic_used = sum(counts[topic].values())
         if topic_used < target:
             for subtopic in subtopics:
-                free_space = available_by_topic[topic].get(subtopic, 0) - counts[topic].get(subtopic, 0)
+                free_space = (
+                    available_by_topic[topic].get(subtopic, 0)
+                    - counts[topic].get(subtopic, 0)
+                )
                 if free_space > 0:
                     extra = min(target - topic_used, free_space)
                     counts[topic][subtopic] += extra
@@ -408,6 +411,61 @@ def topic_passed(correct, total):
     return (correct / total) * 100 >= 60
 
 
+def build_question_groups(questions):
+    """Group rendered questions by topic for topic-based exam UI."""
+    grouped = {}
+    for question in questions:
+        topic = question.get("topic") or "Onbekend"
+        grouped.setdefault(topic, []).append(question)
+
+    return [
+        {"topic": topic, "questions": topic_questions}
+        for topic, topic_questions in sorted(grouped.items())
+    ]
+
+
+def get_row_value(row, key, default=None):
+    """Safely return a value from a row dictionary or default if missing."""
+    if row is None:
+        return default
+    try:
+        return row[key]
+    except (KeyError, TypeError, IndexError):
+        return default
+
+
+def render_question(row, level):
+    """Build the data structure used by the exam templates."""
+    correct_answer = normalize_answer_value(row["true_answer"])
+    option_map = build_option_list(row["false_answers"], correct_answer, level=level)
+
+    return {
+        "id": row["id"],
+        "question": row["question"],
+        "topic": row["topic"],
+        "options": option_map,
+        "is_yes_no": level == "A",
+        "image_url": get_question_image_url(get_row_value(row, "image_link")),
+    }
+
+
+def normalize_level(level):
+    """Return a validated level or None."""
+    normalized = str(level).strip().upper()
+    if normalized in ALLOWED_LEVELS:
+        return normalized
+    return None
+
+
+def start_exam(level, question_amount, selected_topics=None):
+    """Set the selected level, question count, and retained topic filters."""
+    session["level"] = str(level).strip().upper()
+    session["question_amount"] = int(question_amount)
+    session["selected_topics"] = normalize_selected_topics(selected_topics)
+    session["started_at"] = time.time()
+    session["exam_question_ids"] = []
+
+
 @app.route("/favicon.svg")
 @app.route("/favicon.ico")
 def favicon():
@@ -429,15 +487,6 @@ def index():
     return render_template("index.html")
 
 
-def start_exam(level, question_amount, selected_topics=None):
-    """Set the selected level, question count, and retained topic filters."""
-    session["level"] = str(level).strip().upper()
-    session["question_amount"] = int(question_amount)
-    session["selected_topics"] = normalize_selected_topics(selected_topics)
-    session["started_at"] = time.time()
-    session["exam_question_ids"] = []
-
-
 @app.route("/practice")
 def practice():
     """Render the first practice selection step: choose the brevet level."""
@@ -453,8 +502,8 @@ def practice():
 @app.route("/practice/select", methods=["POST"])
 def practice_select():
     """Store the chosen brevet and continue to the mode selection step."""
-    level = request.form.get("level", "").strip().upper()
-    if level not in ("A", "B"):
+    level = normalize_level(request.form.get("level", ""))
+    if level is None:
         return "Ongeldige keuze. Kies A of B.", 400
 
     session["selected_level"] = level
@@ -464,8 +513,8 @@ def practice_select():
 @app.route("/practice/mode/<level>", methods=["GET", "POST"])
 def practice_mode(level):
     """Choose whether to create a full practice exam or do free practice."""
-    normalized_level = str(level).strip().upper()
-    if normalized_level not in ("A", "B"):
+    normalized_level = normalize_level(level)
+    if normalized_level is None:
         return "Ongeldige keuze. Kies A of B.", 400
 
     if request.method == "POST":
@@ -490,8 +539,8 @@ def practice_mode(level):
 @app.route("/practice/free/<level>", methods=["GET", "POST"])
 def practice_free(level):
     """Prompt for a custom question count and start free practice."""
-    normalized_level = str(level).strip().upper()
-    if normalized_level not in ("A", "B"):
+    normalized_level = normalize_level(level)
+    if normalized_level is None:
         return "Ongeldige keuze. Kies A of B.", 400
 
     available_topics = get_available_topics(normalized_level)
@@ -531,7 +580,6 @@ def practice_free(level):
         start_exam(normalized_level, question_amount, selected_topics)
         return redirect(url_for("exam"))
 
-    default_selected_topics = available_topics
     return render_template(
         "practice.html",
         stage="free",
@@ -539,7 +587,7 @@ def practice_free(level):
         question_text="Hoeveel vragen wil je laden?",
         error=None,
         available_topics=available_topics,
-        selected_topics=default_selected_topics,
+        selected_topics=available_topics,
     )
 
 
@@ -558,7 +606,6 @@ def contact():
         message = request.form.get("message", "").strip()
 
         if not name or not email or not message:
-            # Template context used when the contact form contains missing values.
             contact_context = {
                 "success": False,
                 "error": "Vul alle velden in om contact op te nemen.",
@@ -566,7 +613,6 @@ def contact():
             }
             return render_template("contact.html", **contact_context)
 
-        # Template context used after a successful contact form submission.
         contact_context = {
             "success": True,
             "error": None,
@@ -574,7 +620,6 @@ def contact():
         }
         return render_template("contact.html", **contact_context)
 
-    # Template context used when the contact page is first opened.
     contact_context = {
         "success": False,
         "error": None,
@@ -586,13 +631,13 @@ def contact():
 @app.route("/start", methods=["POST"])
 def start():
     """Validate the selected exam settings and redirect to the exam page."""
-    level = request.form.get("level", "").strip().upper()
+    level = normalize_level(request.form.get("level", ""))
     try:
         question_amount = int(request.form.get("question_amount", "1"))
     except ValueError:
         question_amount = 1
 
-    if level not in ("A", "B"):
+    if level is None:
         return "Ongeldige keuze. Kies A of B.", 400
 
     if not 1 <= question_amount <= 40:
@@ -600,19 +645,6 @@ def start():
 
     start_exam(level, question_amount)
     return redirect(url_for("exam"))
-
-
-def build_question_groups(questions):
-    """Group rendered questions by topic for topic-based exam UI."""
-    grouped = {}
-    for question in questions:
-        topic = question.get("topic") or "Onbekend"
-        grouped.setdefault(topic, []).append(question)
-
-    return [
-        {"topic": topic, "questions": topic_questions}
-        for topic, topic_questions in sorted(grouped.items())
-    ]
 
 
 @app.route("/exam", methods=["GET", "POST"])
@@ -639,27 +671,7 @@ def exam():
         session["exam_question_ids"] = [row["id"] for row in questions]
 
     if request.method == "POST":
-        rendered_questions = []
-        for row in questions:
-            correct_answer = normalize_answer_value(row["true_answer"])
-            option_map = build_option_list(
-                row["false_answers"],
-                correct_answer,
-                level=level,
-            )
-            rendered_questions.append(
-                {
-                    "id": row["id"],
-                    "question": row["question"],
-                    "topic": row["topic"],
-                    "options": option_map,
-                    "is_yes_no": level == "A",
-                    "image_url": get_question_image_url(
-                        get_row_value(row, "image_link")
-                    ),
-                }
-            )
-
+        rendered_questions = [render_question(row, level) for row in questions]
         submitted_ids = {
             key.split("_", 1)[1]
             for key, value in request.form.items()
@@ -667,13 +679,10 @@ def exam():
         }
 
         missing_answers = [
-            str(row["id"])
-            for row in questions
-            if str(row["id"]) not in submitted_ids
+            str(row["id"]) for row in questions if str(row["id"]) not in submitted_ids
         ]
 
         if missing_answers:
-            # Template context shown when the learner has not answered every exam.
             exam_context = {
                 "questions": rendered_questions,
                 "question_groups": build_question_groups(rendered_questions),
@@ -750,7 +759,6 @@ def exam():
 
         final_grade = calculate_grade(score, total_questions)
 
-        # Template context used for the final exam results page.
         result_context = {
             "score": score,
             "total": total_questions,
@@ -762,26 +770,7 @@ def exam():
         }
         return render_template("result.html", **result_context)
 
-    rendered_questions = []
-    for row in questions:
-        correct_answer = normalize_answer_value(row["true_answer"])
-        option_map = build_option_list(
-            row["false_answers"],
-            correct_answer,
-            level=level,
-        )
-        rendered_questions.append(
-            {
-                "id": row["id"],
-                "question": row["question"],
-                "topic": row["topic"],
-                "options": option_map,
-                "is_yes_no": level == "A",
-                "image_url": get_question_image_url(get_row_value(row, "image_link")),
-            }
-        )
-
-    # Template context used to render the exam page with the selected questions.
+    rendered_questions = [render_question(row, level) for row in questions]
     exam_context = {
         "questions": rendered_questions,
         "question_groups": build_question_groups(rendered_questions),
@@ -790,16 +779,6 @@ def exam():
         "level": level,
     }
     return render_template("exam.html", **exam_context)
-
-
-def get_row_value(row, key, default=None):
-    """Safely return a value from a row dictionary or default if missing."""
-    if row is None:
-        return default
-    try:
-        return row[key]
-    except (KeyError, TypeError, IndexError):
-        return default
 
 
 def get_question_image_url(image_link):
@@ -814,11 +793,7 @@ def get_question_image_url(image_link):
     normalized = image_path.replace("\\", "/")
     lower = normalized.lower()
 
-    if not (
-        lower.endswith(".jpg")
-        or lower.endswith(".jpeg")
-        or lower.endswith(".png")
-    ):
+    if not lower.endswith(IMAGE_EXTENSIONS):
         return None
 
     if normalized.startswith(("http://", "https://")):
@@ -840,6 +815,8 @@ def get_question_image_url(image_link):
 
     return None
 
-#purely for local development, gunicorn will be used in production
+
+# purely for local development, gunicorn will be used in production
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
+
