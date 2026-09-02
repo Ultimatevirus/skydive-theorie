@@ -18,7 +18,10 @@ from metar import DUTCH_AIRPORTS, MetarError, get_daily_metar, grade_answers
 from translations import TRANSLATIONS
 
 app = Flask(__name__)
-app.secret_key = "skydive-secret"
+secret_key = os.getenv("SECRET_KEY")
+if os.getenv("APP_ENV", "development").lower() == "production" and not secret_key:
+    raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")
+app.secret_key = secret_key or "local-development-only-change-me"
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_LOCAL_DB = BASE_DIR / "vragen.db"

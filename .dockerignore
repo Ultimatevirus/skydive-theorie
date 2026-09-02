@@ -1,0 +1,11 @@
+.git
+.github
+.vscode
+.venv
+__pycache__
+*.py[cod]
+.env
+README.md
+Dockerfile
+compose*.yml
+test_*.py

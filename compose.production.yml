@@ -1,0 +1,15 @@
+services:
+  app:
+    image: ${APP_IMAGE:?APP_IMAGE must be set to an immutable image tag or digest}
+    build: !reset null
+    environment:
+      APP_ENV: production
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
+    labels:
+      - traefik.http.routers.skydive.tls.certresolver=letsencrypt
+
+  traefik:
+    ports: !override
+      - "80:80"
+      - "443:443"

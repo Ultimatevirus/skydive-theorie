@@ -6,7 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DB_PATH=/data/vragen.db
 
-RUN mkdir -p /data
+RUN addgroup -S app && adduser -S -G app app && mkdir -p /data && chown app:app /data
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py ./
 COPY metar.py ./
@@ -16,9 +19,9 @@ COPY static ./static
 COPY templates ./templates
 COPY vragen.db /data/vragen.db
 
-RUN pip install --no-cache-dir --upgrade pip \
-    flask \
-    gunicorn
+RUN chown -R app:app /app /data
+
+USER app
 
 EXPOSE 5000
 

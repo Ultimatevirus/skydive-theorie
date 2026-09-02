@@ -5,9 +5,10 @@ services:
     restart: unless-stopped
     expose:
       - "5000"
-    volumes:
-      - ./vragen.db:/data/vragen.db
     environment:
+      APP_ENV: ${APP_ENV:-development}
+      SECRET_KEY: ${SECRET_KEY:-local-development-only-change-me}
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
       KNMI_API_KEY: ${KNMI_API_KEY:-}
       KNMI_METAR_URL: ${KNMI_METAR_URL:-https://api.dataportal.nl/v1/knmi/metar/{airport}}
     networks:
@@ -18,10 +19,14 @@ services:
       - traefik.http.routers.skydive.rule=Host(`${TRAEFIK_HOST:-skydive-theorie.localhost}`)
       - traefik.http.routers.skydive.entrypoints=websecure
       - traefik.http.routers.skydive.tls=true
-      - traefik.http.routers.skydive.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-}
       - traefik.http.services.skydive.loadbalancer.server.port=5000
       - traefik.http.services.skydive.loadbalancer.healthcheck.path=/healthz
       - traefik.http.services.skydive.loadbalancer.healthcheck.interval=10s
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
   traefik:
     image: traefik:v3.6.2
@@ -40,8 +45,8 @@ services:
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
     ports:
-      - "${TRAEFIK_HTTP_PORT:-80}:80"
-      - "${TRAEFIK_HTTPS_PORT:-443}:443"
+      - "${TRAEFIK_HTTP_PORT:-8080}:80"
+      - "${TRAEFIK_HTTPS_PORT:-8443}:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - letsencrypt:/letsencrypt
