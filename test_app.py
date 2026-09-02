@@ -9,6 +9,12 @@ from app import app
 
 
 class PracticeFlowTests(unittest.TestCase):
+    def test_health_check_is_available_for_reverse_proxy(self):
+        response = app.test_client().get("/healthz")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"status": "ok"})
+
     def test_practice_page_shows_level_question_and_cards(self):
         client = app.test_client()
         response = client.get("/practice")

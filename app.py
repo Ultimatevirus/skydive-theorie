@@ -418,6 +418,11 @@ def favicon():
     return response
 
 
+@app.route("/healthz")
+def healthz():
+    return {"status": "ok"}, 200
+
+
 @app.route("/")
 def index():
     """Render the home page."""

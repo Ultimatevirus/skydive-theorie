@@ -14,9 +14,9 @@ COPY static ./static
 COPY templates ./templates
 COPY vragen.db /data/vragen.db
 
-RUN pip install --upgrade pip
-RUN pip install --no-cache-dir flask
-RUN pip install --no-cache-dir gunicorn
+RUN pip install --no-cache-dir --upgrade pip \
+    flask \
+    gunicorn
 
 EXPOSE 5000
 

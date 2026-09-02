@@ -34,7 +34,34 @@ The questions on this site are created independently for educational purposes on
 
 ## 📦 Installation & Setup
 
-### Option 1: Build the container and run locally
+### Option 1: Run with Docker Compose and Traefik
+
+Docker Compose starts both the Flask application and Traefik. The application is not exposed directly; Traefik receives the request and forwards it to Gunicorn over the internal Docker network. HTTP traffic is redirected to HTTPS. Let’s Encrypt is enabled only when `TRAEFIK_CERT_RESOLVER=letsencrypt` is configured for a real public domain.
+
+For a real public domain, point DNS at the server, copy `.env.example` to `.env`, and set the hostname and Let's Encrypt email in `.env`:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+docker compose up --build -d
+```
+
+The production defaults are ports 80 and 443. For local testing, the defaults use `skydive-theorie.localhost` and Traefik’s development certificate, so your browser will show a certificate warning:
+
+```powershell
+Copy-Item .env.example .env
+$env:TRAEFIK_HOST = "skydive-theorie.localhost"
+$env:TRAEFIK_HTTP_PORT = "8080"
+$env:TRAEFIK_HTTPS_PORT = "8443"
+$env:TRAEFIK_CERT_RESOLVER = ""
+docker compose up --build -d
+```
+
+Open `https://skydive-theorie.localhost:8443` in your browser. The Docker socket is mounted read-only so Traefik can discover the application container. The Traefik image and Docker API version are configured for current Docker Desktop releases. Certificates are stored in the named `letsencrypt` volume and survive container recreation.
+
+The SQLite database is mounted from `vragen.db`, so the existing question data remains available when containers are recreated.
+
+### Option 2: Build the container and run locally
 
 1. Clone the repository
 2. run docker build . -t skydive-theorie
