@@ -77,6 +77,7 @@ TRANSLATIONS = {
         "Luchthaven": "Airport",
         "METAR van vandaag": "Today's METAR",
         "Windrichting": "Wind direction",
+        "Variatie windrichting": "Wind direction variation",
         "Windsnelheid": "Wind speed",
         "Windstoot": "Wind gust",
         "Zicht": "Visibility",

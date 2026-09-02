@@ -4,7 +4,7 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    DB_PATH=/data/vragen.db
+    DB_PATH=/data/data.db
 
 RUN addgroup -S app && adduser -S -G app app && mkdir -p /data && chown app:app /data
 
@@ -17,7 +17,7 @@ COPY translations.py ./
 COPY gunicorn_config.py ./
 COPY static ./static
 COPY templates ./templates
-COPY vragen.db /data/vragen.db
+COPY data.db /data/data.db
 
 RUN chown -R app:app /app /data
 

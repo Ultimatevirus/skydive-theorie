@@ -65,7 +65,7 @@
                 <form method="post" action="{{ url_for('metar_practice') }}" class="metar-form">
                     <div class="field-group">
                         <label for="airport">{{ t('Luchthaven') }}</label>
-                        <select id="airport" name="airport" required>
+                        <select id="airport" name="airport" required onchange="this.form.submit()">
                             {% for code, name in airports.items() %}
                                 <option value="{{ code }}" {% if code == airport %}selected{% endif %}>{{ code }} - {{ name }}</option>
                             {% endfor %}
@@ -78,7 +78,8 @@
                             <div><span>{{ t('METAR van vandaag') }}</span><code>{{ metar.raw }}</code></div>
                         </div>
                         <div class="metar-fields">
-                            <div class="field-group"><label for="wind_direction">{{ t('Windrichting') }} (° of VRB)</label><input id="wind_direction" name="wind_direction" placeholder="270" autocomplete="off"></div>
+                            <div class="field-group"><label for="wind_direction">{{ t('Windrichting') }} (° of VRB{% if metar.wind_direction_variation %}; variabel {{ metar.wind_direction_variation }}°{% endif %})</label><input id="wind_direction" name="wind_direction" placeholder="270" autocomplete="off"></div>
+                            <div class="field-group"><label for="wind_direction_variation">{{ t('Variatie windrichting') }} (bijv. 200V260)</label><input id="wind_direction_variation" name="wind_direction_variation" placeholder="200V260" autocomplete="off"></div>
                             <div class="field-group"><label for="wind_speed">{{ t('Windsnelheid') }} (kt)</label><input id="wind_speed" name="wind_speed" type="number" step="0.1" min="0"></div>
                             <div class="field-group"><label for="wind_gust">{{ t('Windstoot') }} (kt)</label><input id="wind_gust" name="wind_gust" type="number" step="0.1" min="0"></div>
                             <div class="field-group"><label for="visibility">{{ t('Zicht') }} (m)</label><input id="visibility" name="visibility" type="number" step="1" min="0"></div>
@@ -88,10 +89,10 @@
                             <div class="field-group"><label for="weather">{{ t('Weer') }}</label><input id="weather" name="weather" placeholder="RA, TS, ..." autocomplete="off"></div>
                             <div class="field-group"><label for="clouds">{{ t('Bewolking') }}</label><input id="clouds" name="clouds" placeholder="SCT 020, BKN 035" autocomplete="off"></div>
                         </div>
-                        <button type="submit" class="primary-btn">{{ t('Controleer METAR') }}</button>
+                        <button type="submit" name="action" value="check" class="primary-btn">{{ t('Controleer METAR') }}</button>
                     {% else %}
                         <p class="helper-text">{{ t('Selecteer een luchthaven om de dagelijkse METAR te laden.') }}</p>
-                        <button type="submit" class="primary-btn">{{ t('METAR laden') }}</button>
+                        <button type="submit" name="action" value="load" class="primary-btn">{{ t('METAR laden') }}</button>
                     {% endif %}
                 </form>
 

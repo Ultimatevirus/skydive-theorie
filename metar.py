@@ -3,10 +3,13 @@
 from datetime import date, datetime, timezone
 import json
 import os
+import sqlite3
 import re
+from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
+from xml.etree import ElementTree
 
 
 DUTCH_AIRPORTS = {
@@ -33,11 +36,13 @@ DUTCH_AIRPORTS = {
     "EHDL": "Valkenburg",
 }
 
-# The URL can be changed when the KNMI product endpoint changes. It must contain {airport}.
-DEFAULT_METAR_URL = os.getenv(
-    "KNMI_METAR_URL", "https://api.dataportal.nl/v1/knmi/metar/{airport}"
-)
+DEFAULT_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
+METAR_DATASET = os.getenv("KNMI_METAR_DATASET", "metar")
+METAR_VERSION = os.getenv("KNMI_METAR_VERSION", "1.0")
 _CACHE = {}
+BASE_DIR = Path(__file__).resolve().parent
+DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
+PRODUCTION_DB = Path("/data/data.db")
 
 
 class MetarError(RuntimeError):
@@ -65,24 +70,105 @@ def _first_value(payload, keys):
     return None
 
 
-def _fetch_payload(url, api_key, opener=urlopen):
+def _request(url, api_key, opener, accept):
     headers = {"Accept": "application/json"}
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
-        headers["X-API-Key"] = api_key
+        headers["Authorization"] = api_key
+    headers["Accept"] = accept
     request = Request(url, headers=headers)
     try:
         with opener(request, timeout=10) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return response.read()
     except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
         raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+
+
+def _fetch_payload(url, api_key, opener=urlopen):
+    try:
+        return json.loads(_request(url, api_key, opener, "application/json").decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MetarError("KNMI gaf geen geldige API-respons terug.") from exc
 
 
 def _extract_report(payload):
     report = _first_value(payload, ("metar", "raw", "raw_text", "report", "text"))
     if isinstance(report, str) and report.strip():
-        return report.strip()
+        report = report.strip()
+        return _extract_xml_report(report.encode("utf-8"))
     raise MetarError("KNMI gaf geen geldige METAR terug.")
+
+
+def _extract_xml_report(content):
+    text = content.decode("utf-8", errors="replace").strip()
+    if not text:
+        raise MetarError("KNMI gaf geen geldige METAR terug.")
+    comment = re.search(
+        r"<!--\s*(?:METAR\s+)?([A-Z]{4}\s+\d{6}Z\b.*?)\s*-->",
+        text,
+        re.DOTALL | re.IGNORECASE,
+    )
+    if comment:
+        return comment.group(1).strip()
+    xml_start = text.find("<")
+    if xml_start == -1:
+        return text
+    text = text[xml_start:]
+    try:
+        root = ElementTree.fromstring(text)
+    except ElementTree.ParseError as exc:
+        raise MetarError("KNMI gaf geen geldige METAR terug.") from exc
+    values = []
+    for element in root.iter():
+        if element.text and element.text.strip():
+            values.append(element.text.strip())
+        values.extend(value.strip() for value in element.attrib.values() if value.strip())
+    preferred_tags = {"raw_text", "raw", "metar", "report", "description", "value", "text"}
+    for element in root.iter():
+        tag = element.tag.rsplit("}", 1)[-1].lower()
+        if tag in preferred_tags and element.text and element.text.strip():
+            candidate = element.text.strip()
+            if not candidate.startswith("<"):
+                return candidate
+    for value in values:
+        match = re.search(r"\b(?:METAR\s+)?[A-Z]{4}\s+\d{6}Z\b.*", value, re.DOTALL)
+        if match:
+            return match.group(0).strip()
+    raise MetarError("KNMI gaf geen leesbare METAR terug.")
+
+
+def _normalise_report(report):
+    text = str(report or "").strip()
+    if text.lstrip().startswith("<"):
+        return _extract_xml_report(text.encode("utf-8"))
+    return text
+
+
+def _get_open_data_metar(code, day, api_key, opener):
+    base_url = os.getenv("KNMI_OPEN_DATA_URL", DEFAULT_OPEN_DATA_URL).rstrip("/")
+    path = f"{base_url}/v1/datasets/{quote(METAR_DATASET, safe='')}/versions/{quote(METAR_VERSION, safe='')}/files"
+    query = urlencode({
+        "maxKeys": 1000,
+        "orderBy": "created",
+        "sorting": "desc",
+        "begin": f"{day.isoformat()}T00:00:00Z",
+        "end": f"{day.isoformat()}T23:59:59Z",
+    })
+    listing = _fetch_payload(f"{path}?{query}", api_key, opener)
+    files = listing.get("files", []) if isinstance(listing, dict) else []
+    candidates = [
+        item for item in files
+        if isinstance(item, dict) and code in str(item.get("filename", "")).upper()
+    ]
+    if not candidates:
+        raise MetarError("KNMI heeft vandaag geen METAR voor deze luchthaven.")
+    filename = candidates[0].get("filename")
+    if not filename:
+        raise MetarError("KNMI gaf geen geldig METAR-bestand terug.")
+    download = _fetch_payload(f"{path}/{quote(filename, safe='')}/url", api_key, opener)
+    temporary_url = download.get("temporaryDownloadUrl") if isinstance(download, dict) else None
+    if not temporary_url:
+        raise MetarError("KNMI gaf geen downloadlink voor de METAR terug.")
+    return _extract_xml_report(_request(temporary_url, "", opener, "text/plain, application/xml"))
 
 
 def _number(value):
@@ -98,6 +184,7 @@ def parse_metar(report):
     parsed = {
         "raw": report,
         "wind_direction": None,
+        "wind_direction_variation": None,
         "wind_speed": None,
         "wind_gust": None,
         "visibility": None,
@@ -119,6 +206,12 @@ def parse_metar(report):
             parsed["wind_speed"] = round(speed * factor, 1)
             parsed["wind_gust"] = round(gust * factor, 1) if gust is not None else None
             continue
+        wind_variation = re.fullmatch(r"(\d{3})V(\d{3})", token)
+        if wind_variation:
+            parsed["wind_direction_variation"] = (
+                f"{wind_variation.group(1)}-{wind_variation.group(2)}"
+            )
+            continue
         visibility = re.fullmatch(r"(\d{4})", token)
         if visibility:
             parsed["visibility"] = float(visibility.group(1))
@@ -127,11 +220,11 @@ def parse_metar(report):
             parsed["visibility"] = 10000.0
             parsed["clouds"] = "CAVOK"
             continue
-        cloud = re.fullmatch(r"(FEW|SCT|BKN|OVC|VV)(\d{3}|///)(?:CB|TCU)?", token)
+        cloud = re.fullmatch(r"(FEW|SCT|BKN|OVC|VV)(\d{3}|///)(?:CB|TCU)?(?:///)?", token)
         if cloud:
             cloud_groups.append(f"{cloud.group(1)} {cloud.group(2)}")
             continue
-        weather_pattern = r"[+-]?(?:MI|BC|PR|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS)"
+        weather_pattern = r"[+-]?(?:(?:MI|BC|PR|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PO|SQ|FC|SS|DS))+"
         if re.fullmatch(weather_pattern, token):
             weather_groups.append(token)
             continue
@@ -156,6 +249,76 @@ def _signed_number(value):
     return -float(value[1:]) if value.startswith("M") else float(value)
 
 
+def _get_db_path():
+    configured_path = os.getenv("DB_PATH")
+    if configured_path:
+        db_path = Path(configured_path)
+    elif PRODUCTION_DB.exists():
+        db_path = PRODUCTION_DB
+    else:
+        db_path = DEFAULT_LOCAL_DB
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    return str(db_path)
+
+
+def _get_cached_metar(day, code):
+    conn = sqlite3.connect(_get_db_path())
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS metar (
+                datetime TEXT NOT NULL,
+                airport TEXT NOT NULL,
+                metar TEXT NOT NULL,
+                PRIMARY KEY (datetime, airport)
+            )
+            """
+        )
+        row = conn.execute(
+            "SELECT metar FROM metar WHERE datetime = ? AND airport = ?",
+            (day.isoformat(), code),
+        ).fetchone()
+    finally:
+        conn.close()
+    return row[0] if row else None
+
+
+def _store_metar(day, code, report):
+    conn = sqlite3.connect(_get_db_path())
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS metar (
+                datetime TEXT NOT NULL,
+                airport TEXT NOT NULL,
+                metar TEXT NOT NULL,
+                PRIMARY KEY (datetime, airport)
+            )
+            """
+        )
+        values = (day.isoformat(), code, report)
+        updated = conn.execute(
+            "UPDATE metar SET metar = ? WHERE datetime = ? AND airport = ?",
+            (report, day.isoformat(), code),
+        )
+        if updated.rowcount == 0:
+            conn.execute(
+                "INSERT INTO metar (datetime, airport, metar) VALUES (?, ?, ?)",
+                values,
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _build_result(report, code, day):
+    result = parse_metar(report)
+    result["airport"] = code
+    result["airport_name"] = DUTCH_AIRPORTS[code]
+    result["date"] = day.isoformat()
+    return result
+
+
 def get_daily_metar(airport, today=None, opener=urlopen):
     code = str(airport or "").strip().upper()
     if code not in DUTCH_AIRPORTS:
@@ -164,13 +327,26 @@ def get_daily_metar(airport, today=None, opener=urlopen):
     cache_key = (day.isoformat(), code)
     if cache_key in _CACHE:
         return _CACHE[cache_key]
-    template = os.getenv("KNMI_METAR_URL", DEFAULT_METAR_URL)
-    url = template.format(airport=quote(code), date=day.isoformat())
-    report = _extract_report(_fetch_payload(url, os.getenv("KNMI_API_KEY", ""), opener))
-    result = parse_metar(report)
-    result["airport"] = code
-    result["airport_name"] = DUTCH_AIRPORTS[code]
-    result["date"] = day.isoformat()
+    report = _get_cached_metar(day, code)
+    if report is not None:
+        normalised_report = _normalise_report(report)
+        if normalised_report != report:
+            _store_metar(day, code, normalised_report)
+        report = normalised_report
+        result = _build_result(report, code, day)
+        _CACHE[cache_key] = result
+        return result
+    api_key = os.getenv("KNMI_API_KEY", "").strip()
+    legacy_template = os.getenv("KNMI_METAR_URL", "")
+    if legacy_template and "{airport}" in legacy_template:
+        url = legacy_template.format(airport=quote(code), date=day.isoformat())
+        report = _extract_report(_fetch_payload(url, api_key, opener))
+    else:
+        if not api_key:
+            raise MetarError("KNMI_API_KEY is niet ingesteld.")
+        report = _get_open_data_metar(code, day, api_key, opener)
+    _store_metar(day, code, report)
+    result = _build_result(report, code, day)
     _CACHE[cache_key] = result
     return result
 
@@ -186,6 +362,7 @@ def grade_answers(metar, submitted):
     results = []
     fields = (
         ("wind_direction", "Windrichting", 0),
+        ("wind_direction_variation", "Variatie windrichting", 0),
         ("wind_speed", "Windsnelheid", 2),
         ("wind_gust", "Windstoot", 2),
         ("visibility", "Zicht", 100),
@@ -198,6 +375,11 @@ def grade_answers(metar, submitted):
         answer = str(submitted.get(field, "")).strip()
         if field == "wind_direction":
             correct = expected is not None and answer.upper() == str(expected).upper()
+        elif field == "wind_direction_variation":
+            normalised_answer = answer.upper().replace("V", "-")
+            correct = (
+                not answer if expected is None else normalised_answer == str(expected).upper()
+            )
         elif expected is None:
             correct = not answer
         else:
@@ -207,5 +389,8 @@ def grade_answers(metar, submitted):
     for field, label in (("weather", "Weer"), ("clouds", "Bewolking")):
         answer = str(submitted.get(field, "")).strip().upper()
         expected = str(metar.get(field) or "").upper()
-        results.append({"field": field, "label": label, "answer": answer or "-", "expected": expected or "-", "correct": answer == expected})
+        correct = answer == expected
+        if field == "weather" and not answer and expected == "GEEN SIGNIFICANT WEER":
+            correct = True
+        results.append({"field": field, "label": label, "answer": answer or "-", "expected": expected or "-", "correct": correct})
     return results

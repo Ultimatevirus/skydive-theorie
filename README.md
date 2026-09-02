@@ -28,7 +28,7 @@ The questions on this site are created independently for educational purposes on
 ## 🛠️ Technology Stack
 
 - **Backend**: Flask (Python 3.14)
-- **Database**: SQLite (`vragen.db`)
+- **Database**: SQLite (`data.db`)
 - **Containerization**: Docker
 - **Production Server**: Gunicorn
 - **Frontend**: Plain HTML/CSS/JavaScript with Google Fonts
@@ -77,7 +77,7 @@ docker compose -f compose.yml -f compose.production.yml ps
 
 Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Docker network. HTTP redirects to HTTPS, and Let's Encrypt state is stored in the named `letsencrypt` volume. To roll back, change `APP_IMAGE` to a previous commit tag and rerun `pull` and `up`.
 
-The SQLite `vragen.db` file is immutable versioned application content and is baked into each image. Do not bind-mount a host database over `/data/vragen.db`; release a new image when question content changes.
+The SQLite `data.db` file contains versioned application content and the daily METAR cache. It is baked into each image. Do not bind-mount a host database over `/data/data.db`; release a new image when question content changes.
 
 ### KNMI METAR configuration
 
@@ -85,11 +85,11 @@ The `/metar` page calls KNMI from the Flask server. Configure the credential and
 
 ```powershell
 $env:KNMI_API_KEY = "your-rotated-knmi-key"
-$env:KNMI_METAR_URL = "https://api.dataportal.nl/v1/knmi/metar/{airport}"
+$env:KNMI_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 docker compose up --build -d
 ```
 
-The endpoint must include `{airport}`, which is replaced with the validated Dutch ICAO code. METAR data is cached per airport and UTC day. Do not commit API keys to `.env` or source files, and rotate the key included in any public request.
+The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for the selected airport on the current UTC day. METAR data is stored in the SQLite `metar` table and reused per airport and UTC day. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
 
 ### Build and run the image directly
 

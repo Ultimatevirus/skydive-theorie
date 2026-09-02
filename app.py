@@ -24,8 +24,8 @@ if os.getenv("APP_ENV", "development").lower() == "production" and not secret_ke
 app.secret_key = secret_key or "local-development-only-change-me"
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_LOCAL_DB = BASE_DIR / "vragen.db"
-PRODUCTION_DB = Path("/data/vragen.db")
+DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
+PRODUCTION_DB = Path("/data/data.db")
 ALLOWED_LEVELS = ("A", "B")
 ALLOWED_LANGUAGES = ("NL", "EN")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
@@ -677,7 +677,7 @@ def metar_practice():
             metar = None
             error = str(exc)
 
-    if request.method == "POST" and metar and not error:
+    if request.method == "POST" and request.form.get("action") == "check" and metar and not error:
         result = grade_answers(metar, request.form)
 
     return render_template(
