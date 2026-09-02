@@ -15,6 +15,62 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
 
+    def test_language_selection_persists_and_localizes_pages(self):
+        client = app.test_client()
+
+        response = client.post("/language", data={"language": "EN"})
+
+        self.assertEqual(response.status_code, 302)
+        with client.session_transaction() as session:
+            self.assertEqual(session["language"], "EN")
+
+        response = client.get("/")
+        html = response.get_data(as_text=True)
+        self.assertIn("Practice exam", html)
+        self.assertIn('data-language="EN"', html)
+        self.assertIn('language-option is-selected', html)
+        self.assertIn('<html lang="en">', html)
+
+    def test_questions_are_filtered_by_language(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE questions (
+                id INTEGER PRIMARY KEY,
+                level TEXT,
+                language TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO questions (level, language, topic, subtopic, is_active, question, true_answer, false_answers) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("A", "NL", "Materiaal", "Harnas", 1, "Nederlands", "Ja", "[]"),
+                ("A", "EN", "Equipment", "Harness", 1, "English", "Yes", "[]"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        try:
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                questions = app_module.fetch_questions("A", 1, language="EN")
+
+            self.assertEqual(len(questions), 1)
+            self.assertEqual(questions[0]["question"], "English")
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
     def test_practice_page_shows_level_question_and_cards(self):
         client = app.test_client()
         response = client.get("/practice")

@@ -9,6 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN mkdir -p /data
 
 COPY app.py ./
+COPY translations.py ./
 COPY gunicorn_config.py ./
 COPY static ./static
 COPY templates ./templates

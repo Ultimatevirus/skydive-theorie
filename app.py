@@ -14,6 +14,7 @@ from flask import (
     session,
     url_for,
 )
+from translations import TRANSLATIONS
 
 app = Flask(__name__)
 app.secret_key = "skydive-secret"
@@ -22,7 +23,41 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_LOCAL_DB = BASE_DIR / "vragen.db"
 PRODUCTION_DB = Path("/data/vragen.db")
 ALLOWED_LEVELS = ("A", "B")
+ALLOWED_LANGUAGES = ("NL", "EN")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+
+def normalize_language(language):
+    """Return a validated language code or the Dutch default."""
+    normalized = str(language or "NL").strip().upper()
+    return normalized if normalized in ALLOWED_LANGUAGES else "NL"
+
+
+def translate(text, language="NL", **values):
+    """Translate a UI string and interpolate any dynamic values."""
+    translated = TRANSLATIONS.get(normalize_language(language), {}).get(text, text)
+    return translated.format(**values) if values else translated
+
+
+@app.context_processor
+def inject_language_context():
+    language = normalize_language(session.get("language", "NL"))
+    return {
+        "language": language,
+        "t": lambda text, **values: translate(text, language, **values),
+    }
+
+
+def questions_have_language_column(conn):
+    """Check whether this database has the optional question language column."""
+    columns = conn.execute("PRAGMA table_info(questions)").fetchall()
+    return any(column[1] == "language" for column in columns)
+
+
+def language_filter(conn, language, prefix=""):
+    """Return a query fragment and parameter for compatible question databases."""
+    if questions_have_language_column(conn):
+        return f" AND {prefix}language = ?", [normalize_language(language)]
+    return "", []
 
 
 def get_db_path():
@@ -74,14 +109,14 @@ def normalize_answer_value(value):
     return text.lower()
 
 
-def display_answer_value(value):
+def display_answer_value(value, language="NL"):
     """Convert a normalized answer into a user-friendly display label."""
     normalized = normalize_answer_value(value)
 
     if normalized == "ja":
-        return "Ja"
+        return "Yes" if normalize_language(language) == "EN" else "Ja"
     if normalized == "nee":
-        return "Nee"
+        return "No" if normalize_language(language) == "EN" else "Nee"
 
     return str(value).strip()
 
@@ -125,7 +160,7 @@ def normalize_options(raw_options):
     return [str(raw_options)]
 
 
-def build_option_list(false_options, correct_answer, level="B"):
+def build_option_list(false_options, correct_answer, level="B", language="NL"):
     """Build a shuffled multiple-choice answer map for a given exam level."""
     correct_answer = normalize_answer_value(correct_answer)
     wrong_answers = []
@@ -144,11 +179,11 @@ def build_option_list(false_options, correct_answer, level="B"):
 
     if level == "A":
         option_map = {
-            "A": display_answer_value(options[0]),
+            "A": display_answer_value(options[0], language),
             "B": (
-                display_answer_value(options[1])
+                display_answer_value(options[1], language)
                 if len(options) > 1
-                else display_answer_value(options[0])
+                else display_answer_value(options[0], language)
             ),
         }
         if normalize_answer_value(option_map["A"]) == "ja":
@@ -160,7 +195,7 @@ def build_option_list(false_options, correct_answer, level="B"):
     labels = ["A", "B", "C", "D"]
     option_map = {}
     for index, option in enumerate(options[:4]):
-        option_map[labels[index]] = display_answer_value(option)
+        option_map[labels[index]] = display_answer_value(option, language)
 
     return option_map
 
@@ -186,26 +221,28 @@ def normalize_selected_topics(raw_topics):
     return cleaned
 
 
-def get_available_topics(level):
+def get_available_topics(level, language="NL"):
     """Return all active topics for the selected exam level."""
     conn = get_db_connection()
+    language_clause, language_params = language_filter(conn, language)
     rows = conn.execute(
-        """
+        f"""
         SELECT DISTINCT topic
         FROM questions
-        WHERE level = ? AND is_active = 1
+        WHERE level = ? AND is_active = 1{language_clause}
         ORDER BY topic ASC
         """,
-        (level,),
+        (level, *language_params),
     ).fetchall()
     conn.close()
     return [row["topic"] for row in rows]
 
 
-def get_topic_counts_for_level(level, amount, selected_topics=None):
+def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL"):
     """Return per-topic, per-subtopic counts and the total selected questions."""
     selected_topics = normalize_selected_topics(selected_topics)
     conn = get_db_connection()
+    language_clause, language_params = language_filter(conn, language)
 
     if selected_topics:
         placeholders = ", ".join("?" for _ in selected_topics)
@@ -213,22 +250,22 @@ def get_topic_counts_for_level(level, amount, selected_topics=None):
             f"""
             SELECT topic, subtopic, COUNT(*) AS c
             FROM questions
-            WHERE level = ? AND topic IN ({placeholders}) AND is_active = 1
+            WHERE level = ? AND topic IN ({placeholders}) AND is_active = 1{language_clause}
             GROUP BY topic, subtopic
             ORDER BY topic, subtopic
             """,
-            (level, *selected_topics),
+            (level, *selected_topics, *language_params),
         ).fetchall()
     else:
         topic_rows = conn.execute(
-            """
+            f"""
             SELECT topic, subtopic, COUNT(*) AS c
             FROM questions
-            WHERE level = ? AND is_active = 1
+            WHERE level = ? AND is_active = 1{language_clause}
             GROUP BY topic, subtopic
             ORDER BY topic, subtopic
             """,
-            (level,),
+            (level, *language_params),
         ).fetchall()
     conn.close()
 
@@ -317,15 +354,18 @@ def get_topic_counts_for_level(level, amount, selected_topics=None):
     return counts, selected_total
 
 
-def fetch_questions(level, amount, selected_topics=None):
+def fetch_questions(level, amount, selected_topics=None, language="NL"):
     """Fetch a random set of active questions for a level and optional topic filter."""
     selected_topics = normalize_selected_topics(selected_topics)
-    topic_counts, selected_total = get_topic_counts_for_level(level, amount, selected_topics)
+    topic_counts, selected_total = get_topic_counts_for_level(
+        level, amount, selected_topics, language=language
+    )
 
     if selected_total == 0:
         return []
 
     conn = get_db_connection()
+    language_clause, language_params = language_filter(conn, language)
     rows = []
 
     for topic, subtopic_counts in topic_counts.items():
@@ -334,14 +374,14 @@ def fetch_questions(level, amount, selected_topics=None):
                 continue
 
             subtopic_rows = conn.execute(
-                """
+                f"""
                 SELECT rowid AS id, *
                 FROM questions
-                WHERE level = ? AND topic = ? AND subtopic = ? AND is_active = 1
+                WHERE level = ? AND topic = ? AND subtopic = ? AND is_active = 1{language_clause}
                 ORDER BY RANDOM()
                 LIMIT ?
                 """,
-                (level, topic, subtopic, count),
+                (level, topic, subtopic, *language_params, count),
             ).fetchall()
 
             rows.extend(subtopic_rows)
@@ -352,7 +392,7 @@ def fetch_questions(level, amount, selected_topics=None):
     return rows
 
 
-def fetch_questions_by_ids(level, question_ids):
+def fetch_questions_by_ids(level, question_ids, language="NL"):
     """Fetch active questions by ID for a specific level."""
     normalized_ids = [
         int(question_id) for question_id in question_ids if str(question_id).strip()
@@ -362,13 +402,14 @@ def fetch_questions_by_ids(level, question_ids):
 
     placeholders = ", ".join("?" for _ in normalized_ids)
     conn = get_db_connection()
+    language_clause, language_params = language_filter(conn, language)
     rows = conn.execute(
         f"""
         SELECT rowid AS id, *
         FROM questions
-        WHERE level = ? AND rowid IN ({placeholders}) AND is_active = 1
+        WHERE level = ? AND rowid IN ({placeholders}) AND is_active = 1{language_clause}
         """,
-        (level, *normalized_ids),
+        (level, *normalized_ids, *language_params),
     ).fetchall()
     conn.close()
 
@@ -434,10 +475,12 @@ def get_row_value(row, key, default=None):
         return default
 
 
-def render_question(row, level):
+def render_question(row, level, language="NL"):
     """Build the data structure used by the exam templates."""
     correct_answer = normalize_answer_value(row["true_answer"])
-    option_map = build_option_list(row["false_answers"], correct_answer, level=level)
+    option_map = build_option_list(
+        row["false_answers"], correct_answer, level=level, language=language
+    )
 
     return {
         "id": row["id"],
@@ -481,6 +524,17 @@ def healthz():
     return {"status": "ok"}, 200
 
 
+@app.route("/language", methods=["POST"])
+def set_language():
+    """Persist the selected UI and question language, then return to the page."""
+    session["language"] = normalize_language(request.form.get("language"))
+    session.pop("exam_question_ids", None)
+    target = request.referrer or url_for("index")
+    if not target.startswith(request.host_url):
+        target = url_for("index")
+    return redirect(target)
+
+
 @app.route("/")
 def index():
     """Render the home page."""
@@ -504,7 +558,7 @@ def practice_select():
     """Store the chosen brevet and continue to the mode selection step."""
     level = normalize_level(request.form.get("level", ""))
     if level is None:
-        return "Ongeldige keuze. Kies A of B.", 400
+        return translate("Ongeldige keuze. Kies A of B.", session.get("language")), 400
 
     session["selected_level"] = level
     return redirect(url_for("practice_mode", level=level))
@@ -515,7 +569,7 @@ def practice_mode(level):
     """Choose whether to create a full practice exam or do free practice."""
     normalized_level = normalize_level(level)
     if normalized_level is None:
-        return "Ongeldige keuze. Kies A of B.", 400
+        return translate("Ongeldige keuze. Kies A of B.", session.get("language")), 400
 
     if request.method == "POST":
         practice_type = request.form.get("practice_type", "").strip().lower()
@@ -524,7 +578,7 @@ def practice_mode(level):
             return redirect(url_for("exam"))
         if practice_type == "free":
             return redirect(url_for("practice_free", level=normalized_level))
-        return "Ongeldige keuze. Kies een oefenmodus.", 400
+        return translate("Ongeldige keuze. Kies een oefenmodus.", session.get("language")), 400
 
     session["selected_level"] = normalized_level
     return render_template(
@@ -541,9 +595,10 @@ def practice_free(level):
     """Prompt for a custom question count and start free practice."""
     normalized_level = normalize_level(level)
     if normalized_level is None:
-        return "Ongeldige keuze. Kies A of B.", 400
+        return translate("Ongeldige keuze. Kies A of B.", session.get("language")), 400
 
-    available_topics = get_available_topics(normalized_level)
+    language = normalize_language(session.get("language", "NL"))
+    available_topics = get_available_topics(normalized_level, language)
 
     if request.method == "POST":
         try:
@@ -638,10 +693,10 @@ def start():
         question_amount = 1
 
     if level is None:
-        return "Ongeldige keuze. Kies A of B.", 400
+        return translate("Ongeldige keuze. Kies A of B.", session.get("language")), 400
 
     if not 1 <= question_amount <= 40:
-        return "Kies een getal tussen 1 en 40.", 400
+        return translate("Kies een getal tussen 1 en 40.", session.get("language")), 400
 
     start_exam(level, question_amount)
     return redirect(url_for("exam"))
@@ -653,6 +708,7 @@ def exam():
     level = session.get("level")
     amount = session.get("question_amount", 1)
     selected_topics = session.get("selected_topics")
+    language = normalize_language(session.get("language", "NL"))
 
     if not level:
         return redirect(url_for("index"))
@@ -660,18 +716,22 @@ def exam():
     if request.method == "POST":
         stored_ids = session.get("exam_question_ids", [])
         questions = (
-            fetch_questions_by_ids(level, stored_ids)
+            fetch_questions_by_ids(level, stored_ids, language=language)
             if stored_ids
-            else fetch_questions(level, amount, selected_topics=selected_topics)
+            else fetch_questions(
+                level, amount, selected_topics=selected_topics, language=language
+            )
         )
     else:
-        questions = fetch_questions(level, amount, selected_topics=selected_topics)
+        questions = fetch_questions(
+            level, amount, selected_topics=selected_topics, language=language
+        )
 
     if request.method == "GET" and questions:
         session["exam_question_ids"] = [row["id"] for row in questions]
 
     if request.method == "POST":
-        rendered_questions = [render_question(row, level) for row in questions]
+        rendered_questions = [render_question(row, level, language) for row in questions]
         submitted_ids = {
             key.split("_", 1)[1]
             for key, value in request.form.items()
@@ -713,6 +773,7 @@ def exam():
                 row["false_answers"],
                 correct_answer,
                 level=level,
+                language=language,
             )
 
             submitted_value = request.form.get(f"answer_{row['id']}", "")
@@ -729,8 +790,8 @@ def exam():
                 {
                     "question": row["question"],
                     "topic": topic,
-                    "selected": display_answer_value(selected_value),
-                    "correct": display_answer_value(correct_answer),
+                    "selected": display_answer_value(selected_value, language),
+                    "correct": display_answer_value(correct_answer, language),
                     "is_correct": is_correct,
                     "options": option_map,
                     "image_url": get_question_image_url(
@@ -770,7 +831,7 @@ def exam():
         }
         return render_template("result.html", **result_context)
 
-    rendered_questions = [render_question(row, level) for row in questions]
+    rendered_questions = [render_question(row, level, language) for row in questions]
     exam_context = {
         "questions": rendered_questions,
         "question_groups": build_question_groups(rendered_questions),
