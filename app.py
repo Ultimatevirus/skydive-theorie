@@ -14,6 +14,7 @@ from flask import (
     session,
     url_for,
 )
+from metar import DUTCH_AIRPORTS, MetarError, get_daily_metar, grade_answers
 from translations import TRANSLATIONS
 
 app = Flask(__name__)
@@ -650,6 +651,40 @@ def practice_free(level):
 def learn():
     """Render the learning page."""
     return render_template("learn.html")
+
+
+@app.route("/metar", methods=["GET", "POST"])
+def metar_practice():
+    """Show and grade the daily METAR exercise for a Dutch airport."""
+    selected_airport = str(
+        request.form.get("airport") or request.args.get("airport") or session.get("metar_airport") or "EHAM"
+    ).strip().upper()
+    error = None
+    result = None
+
+    if selected_airport not in DUTCH_AIRPORTS:
+        error = "Kies een Nederlandse luchthaven uit de lijst."
+        metar = None
+    else:
+        try:
+            metar = get_daily_metar(selected_airport)
+            session["metar_airport"] = selected_airport
+            session["metar_report"] = metar["raw"]
+        except MetarError as exc:
+            metar = None
+            error = str(exc)
+
+    if request.method == "POST" and metar and not error:
+        result = grade_answers(metar, request.form)
+
+    return render_template(
+        "metar.html",
+        airports=DUTCH_AIRPORTS,
+        airport=selected_airport,
+        metar=metar,
+        result=result,
+        error=error,
+    )
 
 
 @app.route("/contact", methods=["GET", "POST"])

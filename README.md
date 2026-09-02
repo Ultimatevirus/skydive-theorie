@@ -9,6 +9,7 @@ This website helps you prepare for the KNVVL theory exams required to obtain you
 - Instant feedback on answers and overall performance
 - Learning resources page
 - Contact form for inquiries
+- Daily METAR practice using KNMI observations
 
 ## ⚠️ Important Disclaimer
 
@@ -60,6 +61,18 @@ docker compose up --build -d
 Open `https://skydive-theorie.localhost:8443` in your browser. The Docker socket is mounted read-only so Traefik can discover the application container. The Traefik image and Docker API version are configured for current Docker Desktop releases. Certificates are stored in the named `letsencrypt` volume and survive container recreation.
 
 The SQLite database is mounted from `vragen.db`, so the existing question data remains available when containers are recreated.
+
+### KNMI METAR configuration
+
+The `/metar` page calls KNMI from the Flask server. Configure the credential and endpoint through deployment environment variables; the API key is never sent to the browser:
+
+```powershell
+$env:KNMI_API_KEY = "your-rotated-knmi-key"
+$env:KNMI_METAR_URL = "https://api.dataportal.nl/v1/knmi/metar/{airport}"
+docker compose up --build -d
+```
+
+The endpoint must include `{airport}`, which is replaced with the validated Dutch ICAO code. METAR data is cached per airport and UTC day. Do not commit API keys to `.env` or source files, and rotate the key included in any public request.
 
 ### Option 2: Build the container and run locally
 

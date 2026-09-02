@@ -25,6 +25,7 @@
                     <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
                     <span>{{ t('Oefenexamen') }}</span>
                 </a>
+                <a href="{{ url_for('metar_practice') }}" class="nav-link"><img class="nav-icon" src="{{ url_for('static', filename='icons/plane.svg') }}" alt=""><span>{{ t('METAR oefenen') }}</span></a>
                 <a href="{{ url_for('learn') }}" class="nav-link">
                     <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
                     <span>{{ t('Leren voor het examen') }}</span>
@@ -81,6 +82,7 @@
 
                     <div class="button-row">
                         <a href="{{ url_for('practice') }}" class="primary-btn">{{ t('Naar examen') }}</a>
+                        <a href="{{ url_for('metar_practice') }}" class="secondary-btn">{{ t('METAR oefenen') }}</a>
                         <a href="{{ url_for('contact') }}" class="secondary-btn">{{ t('Contact') }}</a>
                     </div>
                 </div>

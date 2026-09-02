@@ -7,6 +7,9 @@ services:
       - "5000"
     volumes:
       - ./vragen.db:/data/vragen.db
+    environment:
+      KNMI_API_KEY: ${KNMI_API_KEY:-}
+      KNMI_METAR_URL: ${KNMI_METAR_URL:-https://api.dataportal.nl/v1/knmi/metar/{airport}}
     networks:
       - proxy
     labels:
