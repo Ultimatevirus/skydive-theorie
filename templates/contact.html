@@ -9,6 +9,10 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
     <link rel="shortcut icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
     <title>{{ t('Contact') }}</title>
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.jpg') }}" fetchpriority="high">
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.png') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='page-transition.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='language.js') }}" defer></script>
 </head>

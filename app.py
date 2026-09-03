@@ -29,6 +29,7 @@ from quiz import (
 from translations import TRANSLATIONS
 
 app = Flask(__name__)
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
 secret_key = os.getenv("SECRET_KEY")
 if os.getenv("APP_ENV", "development").lower() == "production" and not secret_key:
     raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")

@@ -2,6 +2,7 @@ import os
 import sqlite3
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 import app as app_module
@@ -9,6 +10,38 @@ from app import app
 
 
 class PracticeFlowTests(unittest.TestCase):
+    def test_recent_template_strings_are_in_english_translation_map(self):
+        required = [
+            "Oefenen voor je KNVVL A/B brevet",
+            "Let op!: Dit zijn geen officiële KNVVL (oefen)examenvragen!",
+            "Op dit moment zijn de vragen nog NIET gevalideerd!",
+            "METAR mode",
+            "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.",
+            "Selecteer een luchthaven om de dagelijkse METAR te laden.",
+        ]
+
+        for key in required:
+            self.assertIn(key, app_module.TRANSLATIONS["EN"])
+
+    def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
+        transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()
+        stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
+        client = app.test_client()
+        html = client.get("/").get_data(as_text=True)
+        background_response = client.get("/static/branding/background.jpg")
+
+        self.assertNotIn("page-entering", transition_script)
+        self.assertIn("page-leaving", transition_script)
+        self.assertNotIn("page-entering", stylesheet)
+        self.assertIn("background-color: #eef6fb", stylesheet)
+        self.assertIn('rel="preload" as="image"', html)
+        self.assertIn('fetchpriority="high"', html)
+        self.assertIn("branding/background.jpg", html)
+        self.assertIn("branding/logo.png", html)
+        self.assertEqual(background_response.status_code, 200)
+        self.assertIn("public", background_response.headers["Cache-Control"])
+        self.assertIn("max-age=31536000", background_response.headers["Cache-Control"])
+
     def test_health_check_is_available_for_reverse_proxy(self):
         response = app.test_client().get("/healthz")
 

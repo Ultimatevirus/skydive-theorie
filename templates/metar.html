@@ -8,6 +8,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
     <title>{{ t('METAR oefenen') }}</title>
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.jpg') }}" fetchpriority="high">
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.png') }}">
+    <script src="{{ url_for('static', filename='theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='page-transition.js') }}"></script>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script src="{{ url_for('static', filename='language.js') }}" defer></script>
 </head>
@@ -56,7 +60,7 @@
                     <div>
                         <p class="eyebrow">{{ t('Dagelijkse uitdaging') }}</p>
                         <h1>{{ t('METAR mode') }}</h1>
-                        <p class="metar-subheader">{{ t('Kies een luchthaven en decodeer de actuele METAR. De oefening blijft vandaag hetzelfde.') }}</p>
+                        <p class="metar-subheader">{{ t("Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.") }}</p>
                     </div>
                 </div>
 
