@@ -1,7 +1,11 @@
+import logging
 import os
 import random
+import re
+import smtplib
 import sqlite3
 import time
+from email.message import EmailMessage
 from pathlib import Path
 
 from flask import (
@@ -30,6 +34,7 @@ from translations import TRANSLATIONS
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
+logger = logging.getLogger(__name__)
 secret_key = os.getenv("SECRET_KEY")
 if os.getenv("APP_ENV", "development").lower() == "production" and not secret_key:
     raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")
@@ -40,6 +45,49 @@ DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
 PRODUCTION_DB = Path("/data/data.db")
 ALLOWED_LEVELS = ("A", "B")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+HEADER_INJECTION_PATTERN = re.compile(r"[\r\n]")
+
+
+def send_contact_email(name, email, message):
+    """Send a contact form submission via SMTP; returns True on success."""
+    host = os.getenv("SMTP_HOST")
+    recipient = os.getenv("CONTACT_RECIPIENT_EMAIL")
+    if not host or not recipient:
+        logger.error("Contact email not sent: SMTP_HOST or CONTACT_RECIPIENT_EMAIL not configured")
+        return False
+
+    if HEADER_INJECTION_PATTERN.search(name) or HEADER_INJECTION_PATTERN.search(email):
+        logger.error("Contact email not sent: rejected header injection attempt")
+        return False
+    if not EMAIL_PATTERN.match(email):
+        logger.error("Contact email not sent: invalid submitted email address")
+        return False
+
+    port = int(os.getenv("SMTP_PORT", "587"))
+    username = os.getenv("SMTP_USERNAME")
+    password = os.getenv("SMTP_PASSWORD")
+    use_tls = os.getenv("SMTP_USE_TLS", "1").lower() not in {"0", "false", "no"}
+    sender = os.getenv("CONTACT_SENDER_EMAIL", username or recipient)
+
+    msg = EmailMessage()
+    msg["Subject"] = f"New contact form message from {name}"
+    msg["From"] = sender
+    msg["To"] = recipient
+    msg["Reply-To"] = email
+    msg.set_content(f"Name: {name}\nEmail: {email}\n\n{message}")
+
+    try:
+        with smtplib.SMTP(host, port, timeout=10) as smtp:
+            if use_tls:
+                smtp.starttls()
+            if username and password:
+                smtp.login(username, password)
+            smtp.send_message(msg)
+    except (smtplib.SMTPException, OSError):
+        logger.exception("Failed to send contact form email")
+        return False
+    return True
 
 
 def translate(text, language="NL", **values):
@@ -354,7 +402,7 @@ def favicon():
     """Serve a high-contrast favicon for the browser tab."""
     icon_path = os.path.join(app.root_path, "static", "icons", "plane-favicon.svg")
     response = send_file(icon_path, mimetype="image/svg+xml")
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 
@@ -537,6 +585,14 @@ def contact():
             contact_context = {
                 "success": False,
                 "error": "Vul alle velden in om contact op te nemen.",
+                "name": name,
+            }
+            return render_template("contact.html", **contact_context)
+
+        if not send_contact_email(name, email, message):
+            contact_context = {
+                "success": False,
+                "error": "Er ging iets mis bij het verzenden van je bericht. Probeer het later opnieuw.",
                 "name": name,
             }
             return render_template("contact.html", **contact_context)

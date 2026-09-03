@@ -38,6 +38,7 @@ TRANSLATIONS = {
         "Neem contact op": "Get in touch",
         "Bedankt, {name}! Je bericht is verzonden.": "Thank you, {name}! Your message has been sent.",
         "Vul alle velden in om contact op te nemen.": "Please fill in all fields to get in touch.",
+        "Er ging iets mis bij het verzenden van je bericht. Probeer het later opnieuw.": "Something went wrong sending your message. Please try again later.",
         "Naam": "Name",
         "Bericht": "Message",
         "Verstuur": "Send",
