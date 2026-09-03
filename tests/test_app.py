@@ -48,6 +48,13 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
 
+    def test_production_compose_keeps_knmi_metar_configuration(self):
+        compose_path = Path(app_module.BASE_DIR) / "compose.production.yml"
+        compose_text = compose_path.read_text(encoding="utf-8")
+
+        self.assertIn("KNMI_API_KEY:", compose_text)
+        self.assertIn("KNMI_OPEN_DATA_URL:", compose_text)
+
     def test_language_selection_persists_and_localizes_pages(self):
         client = app.test_client()
 
