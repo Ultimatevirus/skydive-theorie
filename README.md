@@ -81,7 +81,9 @@ The SQLite `data.db` file contains versioned application content and the daily M
 
 ### KNMI METAR configuration
 
-The `/metar` page calls KNMI from the Flask server. Configure the credential and endpoint through deployment environment variables; the API key is never sent to the browser:
+The application starts a background METAR refresh from the Gunicorn master. It fetches every unique Dutch airport immediately after startup and refreshes them again at each UTC calendar day, before a user opens the `/metar` page. The shared SQLite limiter allows at most 3 airport METAR fetches per rolling minute, including on-demand requests. Failed airports are retried by the next refresh pass.
+
+Configure the credential and endpoint through deployment environment variables; the API key is never sent to the browser:
 
 ```powershell
 $env:KNMI_API_KEY = "your-rotated-knmi-key"
@@ -89,7 +91,7 @@ $env:KNMI_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 docker compose up --build -d
 ```
 
-The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for the selected airport on the current UTC day. METAR data is stored in the SQLite `metar` table and reused per airport and UTC day. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
+The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for each airport on the current UTC day. METAR data is stored in the SQLite `metar` table and reused per airport and UTC day; same-day fetch claims prevent duplicate API calls across Gunicorn processes. The image contains the initial database, but `/data/data.db` is ephemeral unless a deployment explicitly mounts persistent storage. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
 
 ### Build and run the image directly
 

@@ -2,10 +2,13 @@
 
 from datetime import date, datetime, timezone
 import json
+import logging
 import os
 import sqlite3
 import re
+import time
 from pathlib import Path
+from threading import Event
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -43,6 +46,10 @@ _CACHE = {}
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
 PRODUCTION_DB = Path("/data/data.db")
+API_CALL_LIMIT = 3
+API_CALL_WINDOW = 60
+CLAIM_TIMEOUT = 600
+logger = logging.getLogger(__name__)
 
 
 class MetarError(RuntimeError):
@@ -261,6 +268,110 @@ def _get_db_path():
     return str(db_path)
 
 
+def _ensure_metar_tables(conn):
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS metar (
+            datetime TEXT NOT NULL,
+            airport TEXT NOT NULL,
+            metar TEXT NOT NULL,
+            PRIMARY KEY (datetime, airport)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS metar_fetch_claim (
+            datetime TEXT NOT NULL,
+            airport TEXT NOT NULL,
+            claimed_at REAL NOT NULL,
+            PRIMARY KEY (datetime, airport)
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS metar_api_call (
+            called_at REAL NOT NULL
+        )
+        """
+    )
+
+
+def _wait_for_api_slot(wait=True):
+    while True:
+        now = time.time()
+        conn = sqlite3.connect(_get_db_path(), timeout=30)
+        try:
+            _ensure_metar_tables(conn)
+            conn.commit()
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "DELETE FROM metar_api_call WHERE called_at <= ?",
+                (now - API_CALL_WINDOW,),
+            )
+            count = conn.execute("SELECT COUNT(*) FROM metar_api_call").fetchone()[0]
+            if count < API_CALL_LIMIT:
+                conn.execute("INSERT INTO metar_api_call (called_at) VALUES (?)", (now,))
+                conn.commit()
+                return True
+            oldest = conn.execute("SELECT MIN(called_at) FROM metar_api_call").fetchone()[0]
+            conn.commit()
+        finally:
+            conn.close()
+        if not wait:
+            return False
+        time.sleep(max(0.01, oldest + API_CALL_WINDOW - time.time()))
+
+
+def _claim_metar_fetch(day, code):
+    while True:
+        conn = sqlite3.connect(_get_db_path(), timeout=30)
+        try:
+            _ensure_metar_tables(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            cached = conn.execute(
+                "SELECT metar FROM metar WHERE datetime = ? AND airport = ?",
+                (day.isoformat(), code),
+            ).fetchone()
+            if cached:
+                conn.commit()
+                return False
+            now = time.time()
+            conn.execute(
+                "DELETE FROM metar_fetch_claim WHERE datetime = ? AND airport = ? AND claimed_at < ?",
+                (day.isoformat(), code, now - CLAIM_TIMEOUT),
+            )
+            claimed = conn.execute(
+                "INSERT OR IGNORE INTO metar_fetch_claim (datetime, airport, claimed_at) VALUES (?, ?, ?)",
+                (day.isoformat(), code, now),
+            ).rowcount == 1
+            conn.commit()
+            if claimed:
+                return True
+        finally:
+            conn.close()
+        time.sleep(0.2)
+
+
+def _release_metar_fetch(day, code, report=None):
+    conn = sqlite3.connect(_get_db_path(), timeout=30)
+    try:
+        _ensure_metar_tables(conn)
+        if report is not None:
+            conn.execute(
+                "INSERT OR REPLACE INTO metar (datetime, airport, metar) VALUES (?, ?, ?)",
+                (day.isoformat(), code, report),
+            )
+        conn.execute(
+            "DELETE FROM metar_fetch_claim WHERE datetime = ? AND airport = ?",
+            (day.isoformat(), code),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def _get_cached_metar(day, code):
     conn = sqlite3.connect(_get_db_path())
     try:
@@ -319,7 +430,7 @@ def _build_result(report, code, day):
     return result
 
 
-def get_daily_metar(airport, today=None, opener=urlopen):
+def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=True):
     code = str(airport or "").strip().upper()
     if code not in DUTCH_AIRPORTS:
         raise MetarError("Kies een Nederlandse luchthaven uit de lijst.")
@@ -336,19 +447,57 @@ def get_daily_metar(airport, today=None, opener=urlopen):
         result = _build_result(report, code, day)
         _CACHE[cache_key] = result
         return result
+    if not _claim_metar_fetch(day, code):
+        report = _get_cached_metar(day, code)
+        if report is None:
+            raise MetarError("De METAR-ophaling is onverwacht gestopt.")
+        normalised_report = _normalise_report(report)
+        if normalised_report != report:
+            _store_metar(day, code, normalised_report)
+        result = _build_result(normalised_report, code, day)
+        _CACHE[cache_key] = result
+        return result
     api_key = os.getenv("KNMI_API_KEY", "").strip()
-    legacy_template = os.getenv("KNMI_METAR_URL", "")
-    if legacy_template and "{airport}" in legacy_template:
-        url = legacy_template.format(airport=quote(code), date=day.isoformat())
-        report = _extract_report(_fetch_payload(url, api_key, opener))
-    else:
-        if not api_key:
-            raise MetarError("KNMI_API_KEY is niet ingesteld.")
-        report = _get_open_data_metar(code, day, api_key, opener)
-    _store_metar(day, code, report)
+    try:
+        legacy_template = os.getenv("KNMI_METAR_URL", "")
+        if legacy_template and "{airport}" in legacy_template:
+            url = legacy_template.format(airport=quote(code), date=day.isoformat())
+            report = _extract_report(_fetch_payload(url, api_key, opener))
+        else:
+            if not api_key:
+                raise MetarError("KNMI_API_KEY is niet ingesteld.")
+            if not _wait_for_api_slot(wait_for_rate_limit):
+                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.")
+            report = _get_open_data_metar(code, day, api_key, opener)
+        _release_metar_fetch(day, code, report)
+    except Exception:
+        _release_metar_fetch(day, code)
+        raise
     result = _build_result(report, code, day)
     _CACHE[cache_key] = result
     return result
+
+
+def refresh_daily_metars(day=None, opener=urlopen):
+    """Fetch each unique Dutch airport's METAR for the given UTC day."""
+    day = day or datetime.now(timezone.utc).date()
+    for code in dict.fromkeys(DUTCH_AIRPORTS):
+        try:
+            get_daily_metar(code, day, opener=opener)
+        except MetarError:
+            logger.exception("METAR refresh failed for %s", code)
+
+
+def metar_refresh_loop(stop_event=None, opener=urlopen):
+    """Refresh all airports immediately and again at each UTC calendar day."""
+    stop_event = stop_event or Event()
+    while not stop_event.is_set():
+        day = datetime.now(timezone.utc).date()
+        refresh_daily_metars(day, opener=opener)
+        tomorrow = day.fromordinal(day.toordinal() + 1)
+        next_refresh = datetime.combine(tomorrow, datetime.min.time(), timezone.utc)
+        wait_seconds = max(1, (next_refresh - datetime.now(timezone.utc)).total_seconds())
+        stop_event.wait(wait_seconds)
 
 
 def _submitted_number(value):

@@ -1,4 +1,3 @@
-import ast
 import os
 import random
 import sqlite3
@@ -15,6 +14,18 @@ from flask import (
     url_for,
 )
 from metar import DUTCH_AIRPORTS, MetarError, get_daily_metar, grade_answers
+from quiz import (
+    build_option_list,
+    build_question_groups,
+    calculate_grade,
+    display_answer_value,
+    format_elapsed,
+    is_passed,
+    normalize_answer_value,
+    normalize_language,
+    normalize_selected_topics,
+    topic_passed,
+)
 from translations import TRANSLATIONS
 
 app = Flask(__name__)
@@ -27,13 +38,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
 PRODUCTION_DB = Path("/data/data.db")
 ALLOWED_LEVELS = ("A", "B")
-ALLOWED_LANGUAGES = ("NL", "EN")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
-
-def normalize_language(language):
-    """Return a validated language code or the Dutch default."""
-    normalized = str(language or "NL").strip().upper()
-    return normalized if normalized in ALLOWED_LANGUAGES else "NL"
 
 
 def translate(text, language="NL", **values):
@@ -92,137 +97,6 @@ def get_db_connection():
     conn = sqlite3.connect(get_db_path())
     conn.row_factory = sqlite3.Row
     return conn
-
-
-def normalize_answer_value(value):
-    """Normalize a submitted or stored answer to a consistent lowercase value."""
-    if value is None:
-        return ""
-
-    text = str(value).strip()
-    if not text:
-        return ""
-
-    lowered = text.lower()
-
-    if lowered in ("ja", "j", "yes", "y", "true", "waar", "1"):
-        return "ja"
-    if lowered in ("nee", "n", "no", "false", "onwaar", "0"):
-        return "nee"
-
-    return text.lower()
-
-
-def display_answer_value(value, language="NL"):
-    """Convert a normalized answer into a user-friendly display label."""
-    normalized = normalize_answer_value(value)
-
-    if normalized == "ja":
-        return "Yes" if normalize_language(language) == "EN" else "Ja"
-    if normalized == "nee":
-        return "No" if normalize_language(language) == "EN" else "Nee"
-
-    return str(value).strip()
-
-
-def normalize_options(raw_options):
-    """Return a clean list of option strings from varying stored formats."""
-    if raw_options is None:
-        return []
-
-    if isinstance(raw_options, (list, tuple, set)):
-        return [str(item).strip() for item in raw_options if str(item).strip()]
-
-    if isinstance(raw_options, str):
-        text = raw_options.strip()
-        if not text:
-            return []
-
-        if text.startswith("[") and text.endswith("]"):
-            try:
-                parsed = ast.literal_eval(text)
-                if isinstance(parsed, (list, tuple, set)):
-                    return [
-                        str(item).strip()
-                        for item in parsed
-                        if str(item).strip()
-                    ]
-            except (ValueError, SyntaxError):
-                pass
-
-            text = text[1:-1].strip()
-
-        if not text:
-            return []
-
-        return [
-            item.strip().strip("'\"")
-            for item in text.split(",")
-            if item.strip()
-        ]
-
-    return [str(raw_options)]
-
-
-def build_option_list(false_options, correct_answer, level="B", language="NL"):
-    """Build a shuffled multiple-choice answer map for a given exam level."""
-    correct_answer = normalize_answer_value(correct_answer)
-    wrong_answers = []
-
-    for item in normalize_options(false_options):
-        normalized = normalize_answer_value(item)
-        if normalized and normalized != correct_answer:
-            wrong_answers.append(normalized)
-
-    wrong_answers = list(dict.fromkeys(wrong_answers))
-    if len(wrong_answers) > 3:
-        wrong_answers = random.sample(wrong_answers, 3)
-
-    options = wrong_answers + [correct_answer]
-    random.shuffle(options)
-
-    if level == "A":
-        option_map = {
-            "A": display_answer_value(options[0], language),
-            "B": (
-                display_answer_value(options[1], language)
-                if len(options) > 1
-                else display_answer_value(options[0], language)
-            ),
-        }
-        if normalize_answer_value(option_map["A"]) == "ja":
-            option_map = {"A": "Ja", "B": "Nee"}
-        elif normalize_answer_value(option_map["B"]) == "ja":
-            option_map = {"A": "Nee", "B": "Ja"}
-        return option_map
-
-    labels = ["A", "B", "C", "D"]
-    option_map = {}
-    for index, option in enumerate(options[:4]):
-        option_map[labels[index]] = display_answer_value(option, language)
-
-    return option_map
-
-
-def normalize_selected_topics(raw_topics):
-    """Return a deduplicated list of selected topic names."""
-    if raw_topics is None:
-        return []
-
-    if isinstance(raw_topics, str):
-        raw_values = [raw_topics]
-    else:
-        raw_values = list(raw_topics)
-
-    cleaned = []
-    for value in raw_values:
-        if value is None:
-            continue
-        name = str(value).strip()
-        if name and name not in cleaned:
-            cleaned.append(name)
-
-    return cleaned
 
 
 def get_available_topics(level, language="NL"):
@@ -370,30 +244,34 @@ def fetch_questions(level, amount, selected_topics=None, language="NL"):
 
     conn = get_db_connection()
     language_clause, language_params = language_filter(conn, language)
-    rows = []
+    topic_names = list(topic_counts)
+    placeholders = ", ".join("?" for _ in topic_names)
+    rows = conn.execute(
+        f"""
+        SELECT rowid AS id, *
+        FROM questions
+        WHERE level = ? AND topic IN ({placeholders}) AND is_active = 1{language_clause}
+        """,
+        (level, *topic_names, *language_params),
+    ).fetchall()
 
+    conn.close()
+
+    rows_by_subtopic = {}
+    for row in rows:
+        key = (row["topic"], row["subtopic"])
+        rows_by_subtopic.setdefault(key, []).append(row)
+
+    selected_rows = []
     for topic, subtopic_counts in topic_counts.items():
         for subtopic, count in subtopic_counts.items():
             if count <= 0:
                 continue
+            candidates = rows_by_subtopic.get((topic, subtopic), [])
+            selected_rows.extend(random.sample(candidates, min(count, len(candidates))))
 
-            subtopic_rows = conn.execute(
-                f"""
-                SELECT rowid AS id, *
-                FROM questions
-                WHERE level = ? AND topic = ? AND subtopic = ? AND is_active = 1{language_clause}
-                ORDER BY RANDOM()
-                LIMIT ?
-                """,
-                (level, topic, subtopic, *language_params, count),
-            ).fetchall()
-
-            rows.extend(subtopic_rows)
-
-    conn.close()
-
-    random.shuffle(rows)
-    return rows
+    random.shuffle(selected_rows)
+    return selected_rows
 
 
 def fetch_questions_by_ids(level, question_ids, language="NL"):
@@ -422,50 +300,6 @@ def fetch_questions_by_ids(level, question_ids, language="NL"):
         row_map[question_id]
         for question_id in normalized_ids
         if question_id in row_map
-    ]
-
-
-def format_elapsed(seconds):
-    """Convert elapsed seconds into a HH:MM:SS or MM:SS display string."""
-    total_seconds = int(seconds)
-    minutes, secs = divmod(total_seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    if hours:
-        return f"{hours:02d}:{minutes:02d}:{secs:02d}"
-    return f"{minutes:02d}:{secs:02d}"
-
-
-def calculate_grade(score, total):
-    """Return the final grade on a 10-point scale based on score ratio."""
-    if total == 0:
-        return 0.0
-    return round((score / total) * 10, 1)
-
-
-def is_passed(score, total):
-    """Check whether the overall exam score passes the 60% threshold."""
-    if total == 0:
-        return False
-    return (score / total) * 100 >= 60
-
-
-def topic_passed(correct, total):
-    """Check whether a topic score passes the 60% threshold."""
-    if total == 0:
-        return False
-    return (correct / total) * 100 >= 60
-
-
-def build_question_groups(questions):
-    """Group rendered questions by topic for topic-based exam UI."""
-    grouped = {}
-    for question in questions:
-        topic = question.get("topic") or "Onbekend"
-        grouped.setdefault(topic, []).append(question)
-
-    return [
-        {"topic": topic, "questions": topic_questions}
-        for topic, topic_questions in sorted(grouped.items())
     ]
 
 
@@ -670,7 +504,7 @@ def metar_practice():
         metar = None
     else:
         try:
-            metar = get_daily_metar(selected_airport)
+            metar = get_daily_metar(selected_airport, wait_for_rate_limit=False)
             session["metar_airport"] = selected_airport
             session["metar_report"] = metar["raw"]
         except MetarError as exc:

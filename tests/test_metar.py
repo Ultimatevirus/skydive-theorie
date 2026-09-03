@@ -8,7 +8,15 @@ from unittest.mock import patch
 
 import app as app_module
 from app import app
-from metar import DUTCH_AIRPORTS, _CACHE, get_daily_metar, grade_answers, parse_metar
+from metar import (
+    DUTCH_AIRPORTS,
+    MetarError,
+    _CACHE,
+    get_daily_metar,
+    grade_answers,
+    parse_metar,
+    refresh_daily_metars,
+)
 
 
 REPORT = "EHAM 021255Z 27012G20KT 9999 -RA SCT020 BKN035 12/08 Q1013"
@@ -147,6 +155,21 @@ class MetarServiceTests(unittest.TestCase):
         self.assertEqual(result["raw"], REPORT)
         self.assertEqual(opener.call_count, 3)
         self.assertEqual(opener.call_args_list[0].args[0].headers["Authorization"], "test-key")
+
+    def test_refresh_fetches_each_airport_once_and_continues_after_failure(self):
+        calls = []
+
+        def fetch(code, day, opener):
+            calls.append(code)
+            if code == "EHRD":
+                raise MetarError("temporary")
+            return {}
+
+        with patch("metar.get_daily_metar", side_effect=fetch):
+            refresh_daily_metars(date(2026, 9, 3))
+
+        self.assertEqual(calls, list(dict.fromkeys(DUTCH_AIRPORTS)))
+        self.assertEqual(calls.count("EHAM"), 1)
 
     def test_grading_allows_small_numeric_difference(self):
         parsed = parse_metar(REPORT)
