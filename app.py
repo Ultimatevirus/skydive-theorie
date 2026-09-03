@@ -364,9 +364,8 @@ def get_row_value(row, key, default=None):
 
 def render_question(row, level, language="NL"):
     """Build the data structure used by the exam templates."""
-    correct_answer = normalize_answer_value(row["true_answer"])
     option_map = build_option_list(
-        row["false_answers"], correct_answer, level=level, language=language
+        row["false_answers"], row["true_answer"], level=level, language=language
     )
 
     return {
@@ -700,7 +699,7 @@ def exam():
             correct_answer = normalize_answer_value(row["true_answer"])
             option_map = build_option_list(
                 row["false_answers"],
-                correct_answer,
+                row["true_answer"],
                 level=level,
                 language=language,
             )
@@ -719,8 +718,8 @@ def exam():
                 {
                     "question": row["question"],
                     "topic": topic,
-                    "selected": display_answer_value(selected_value, language),
-                    "correct": display_answer_value(correct_answer, language),
+                    "selected": display_answer_value(submitted_value, language),
+                    "correct": display_answer_value(row["true_answer"], language),
                     "is_correct": is_correct,
                     "options": option_map,
                     "image_url": get_question_image_url(

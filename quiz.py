@@ -14,7 +14,7 @@ def normalize_language(language):
 
 
 def normalize_answer_value(value):
-    """Normalize a submitted or stored answer to a consistent lowercase value."""
+    """Normalize a submitted or stored answer to a consistent lowercase key for comparison."""
     if value is None:
         return ""
 
@@ -24,12 +24,15 @@ def normalize_answer_value(value):
 
     lowered = text.lower()
 
-    if lowered in ("ja", "j", "yes", "y", "true", "waar", "1"):
+    # Only exact yes/no words are treated as boolean answers, so numeric or
+    # abbreviated answers (e.g. "1", "0", "j") used in multiple-choice
+    # questions are never mistaken for a Ja/Nee answer.
+    if lowered in ("ja", "yes"):
         return "ja"
-    if lowered in ("nee", "n", "no", "false", "onwaar", "0"):
+    if lowered in ("nee", "no"):
         return "nee"
 
-    return text.lower()
+    return lowered
 
 
 def display_answer_value(value, language="NL"):
@@ -85,19 +88,23 @@ def normalize_options(raw_options):
 
 def build_option_list(false_options, correct_answer, level="B", language="NL"):
     """Build a shuffled multiple-choice answer map for a given exam level."""
-    correct_answer = normalize_answer_value(correct_answer)
+    correct_display = str(correct_answer).strip() if correct_answer is not None else ""
+    correct_key = normalize_answer_value(correct_answer)
+
+    # Keep the original casing of each option for display, only using the
+    # normalized key to dedupe and to exclude the correct answer.
     wrong_answers = []
-
+    seen_keys = {correct_key}
     for item in normalize_options(false_options):
-        normalized = normalize_answer_value(item)
-        if normalized and normalized != correct_answer:
-            wrong_answers.append(normalized)
+        key = normalize_answer_value(item)
+        if key and key not in seen_keys:
+            wrong_answers.append(item)
+            seen_keys.add(key)
 
-    wrong_answers = list(dict.fromkeys(wrong_answers))
     if len(wrong_answers) > 3:
         wrong_answers = random.sample(wrong_answers, 3)
 
-    options = wrong_answers + [correct_answer]
+    options = wrong_answers + [correct_display]
     random.shuffle(options)
 
     if level == "A":
@@ -110,9 +117,15 @@ def build_option_list(false_options, correct_answer, level="B", language="NL"):
             ),
         }
         if normalize_answer_value(option_map["A"]) == "ja":
-            option_map = {"A": "Ja", "B": "Nee"}
+            option_map = {
+                "A": display_answer_value("ja", language),
+                "B": display_answer_value("nee", language),
+            }
         elif normalize_answer_value(option_map["B"]) == "ja":
-            option_map = {"A": "Nee", "B": "Ja"}
+            option_map = {
+                "A": display_answer_value("nee", language),
+                "B": display_answer_value("ja", language),
+            }
         return option_map
 
     labels = ["A", "B", "C", "D"]
