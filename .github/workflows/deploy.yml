@@ -63,15 +63,64 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    env:
+      SERVER_HOST: ${{ secrets.SERVER_HOST }}
+      SERVER_USER: ${{ secrets.SERVER_USER }}
+      SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+      APP_IMAGE: ghcr.io/ultimatevirus/skydive-theorie:${{ github.sha }}
+      SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
+      TRAEFIK_HOST: ${{ secrets.TRAEFIK_HOST }}
+      ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+      KNMI_API_KEY: ${{ secrets.KNMI_API_KEY }}
+      KNMI_OPEN_DATA_URL: ${{ secrets.KNMI_OPEN_DATA_URL }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
+      CONTACT_RECIPIENT_EMAIL: ${{ secrets.CONTACT_RECIPIENT_EMAIL }}
+      CONTACT_SENDER_EMAIL: ${{ secrets.CONTACT_SENDER_EMAIL }}
 
     steps:
+      - name: Validate required deploy secrets
+        shell: bash
+        run: |
+          required_vars=(
+            SERVER_HOST
+            SERVER_USER
+            SERVER_SSH_KEY
+            APP_SECRET_KEY
+            TRAEFIK_HOST
+            ACME_EMAIL
+            KNMI_API_KEY
+            KNMI_OPEN_DATA_URL
+          )
+
+          missing=()
+          for var_name in "${required_vars[@]}"; do
+            env_var_name="$var_name"
+            if [ "$var_name" = "APP_SECRET_KEY" ]; then
+              env_var_name="SECRET_KEY"
+            fi
+
+            if [ -z "${!env_var_name:-}" ]; then
+              missing+=("$var_name")
+            fi
+          done
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Missing required deploy secrets:" >&2
+            printf ' - %s\n' "${missing[@]}" >&2
+            exit 1
+          fi
+
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: APP_IMAGE,SECRET_KEY,TRAEFIK_HOST,ACME_EMAIL,KNMI_API_KEY,KNMI_METAR_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,SMTP_USE_TLS,CONTACT_RECIPIENT_EMAIL,CONTACT_SENDER_EMAIL
+          host: ${{ env.SERVER_HOST }}
+          username: ${{ env.SERVER_USER }}
+          key: ${{ env.SERVER_SSH_KEY }}
+          envs: APP_IMAGE,SECRET_KEY,TRAEFIK_HOST,ACME_EMAIL,KNMI_API_KEY,KNMI_OPEN_DATA_URL,SMTP_HOST,SMTP_PORT,SMTP_USERNAME,SMTP_PASSWORD,SMTP_USE_TLS,CONTACT_RECIPIENT_EMAIL,CONTACT_SENDER_EMAIL
           script: |
             set -e
             mkdir -p /opt/skydive-theorie
@@ -84,7 +133,7 @@ jobs:
             TRAEFIK_HOST=$TRAEFIK_HOST
             ACME_EMAIL=$ACME_EMAIL
             KNMI_API_KEY=$KNMI_API_KEY
-            KNMI_METAR_URL=$KNMI_METAR_URL
+            KNMI_OPEN_DATA_URL=$KNMI_OPEN_DATA_URL
             SMTP_HOST=$SMTP_HOST
             SMTP_PORT=$SMTP_PORT
             SMTP_USERNAME=$SMTP_USERNAME
@@ -101,17 +150,3 @@ jobs:
             docker compose -f compose.yml -f compose.production.yml pull
             docker compose -f compose.yml -f compose.production.yml up -d --remove-orphans
             docker image prune -f
-        env:
-          APP_IMAGE: ghcr.io/ultimatevirus/skydive-theorie:${{ github.sha }}
-          SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
-          TRAEFIK_HOST: ${{ secrets.TRAEFIK_HOST }}
-          ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
-          KNMI_API_KEY: ${{ secrets.KNMI_API_KEY }}
-          KNMI_METAR_URL: ${{ secrets.KNMI_METAR_URL }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
-          CONTACT_RECIPIENT_EMAIL: ${{ secrets.CONTACT_RECIPIENT_EMAIL }}
-          CONTACT_SENDER_EMAIL: ${{ secrets.CONTACT_SENDER_EMAIL }}
