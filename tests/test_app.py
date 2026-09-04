@@ -355,6 +355,25 @@ class ContactFormTests(unittest.TestCase):
         smtp_cls.return_value.__enter__.return_value.send_message.assert_not_called()
         self.assertIn("Er ging iets mis bij het verzenden", response.get_data(as_text=True))
 
+    def test_get_db_path_resolves_local_db_when_production_db_unavailable(self):
+        with patch.dict(os.environ, {}, clear=False):
+            if "DB_PATH" in os.environ:
+                del os.environ["DB_PATH"]
+            db_path = app_module.get_db_path()
+            self.assertTrue(db_path.endswith("data.db"))
+            self.assertTrue(os.path.isabs(db_path))
+
+    def test_b_practice_flow_succeeds_without_db_path_env(self):
+        client = app.test_client()
+        with patch.dict(os.environ, {}, clear=False):
+            if "DB_PATH" in os.environ:
+                del os.environ["DB_PATH"]
+            client.post("/practice/select", data={"level": "B"})
+            response = client.post("/practice/mode/B", data={"practice_type": "exam"})
+            self.assertEqual(response.status_code, 302)
+            exam_response = client.get("/exam")
+            self.assertEqual(exam_response.status_code, 200)
+
 
 if __name__ == "__main__":
     unittest.main()

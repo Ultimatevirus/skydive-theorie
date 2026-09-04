@@ -125,19 +125,22 @@ def get_db_path():
         db_path = Path(configured_path)
     elif PRODUCTION_DB.exists():
         db_path = PRODUCTION_DB
-    elif DEFAULT_LOCAL_DB.exists():
-        db_path = DEFAULT_LOCAL_DB
-        if not PRODUCTION_DB.exists():
-            PRODUCTION_DB.parent.mkdir(parents=True, exist_ok=True)
+    elif PRODUCTION_DB.parent.exists():
+        db_path = PRODUCTION_DB
+        if DEFAULT_LOCAL_DB.exists() and not PRODUCTION_DB.exists():
             try:
                 PRODUCTION_DB.write_bytes(DEFAULT_LOCAL_DB.read_bytes())
             except OSError:
                 pass
-        db_path = PRODUCTION_DB
+    elif DEFAULT_LOCAL_DB.exists():
+        db_path = DEFAULT_LOCAL_DB
     else:
-        db_path = PRODUCTION_DB
+        db_path = DEFAULT_LOCAL_DB
 
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
     return str(db_path)
 
 
