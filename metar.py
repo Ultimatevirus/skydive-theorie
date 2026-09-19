@@ -251,6 +251,14 @@ def _get_db_path():
     return str(db_path)
 
 
+def _connect_db():
+    """Open a connection with WAL mode so metar writes don't lock out other readers."""
+    conn = sqlite3.connect(_get_db_path(), timeout=30)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=30000")
+    return conn
+
+
 def _ensure_metar_tables(conn):
     conn.execute(
         """
@@ -284,7 +292,7 @@ def _ensure_metar_tables(conn):
 def _wait_for_api_slot(wait=True):
     while True:
         now = time.time()
-        conn = sqlite3.connect(_get_db_path(), timeout=30)
+        conn = _connect_db()
         try:
             _ensure_metar_tables(conn)
             conn.commit()
@@ -309,7 +317,7 @@ def _wait_for_api_slot(wait=True):
 
 def _claim_metar_fetch(day, code):
     while True:
-        conn = sqlite3.connect(_get_db_path(), timeout=30)
+        conn = _connect_db()
         try:
             _ensure_metar_tables(conn)
             conn.execute("BEGIN IMMEDIATE")
@@ -338,7 +346,7 @@ def _claim_metar_fetch(day, code):
 
 
 def _release_metar_fetch(day, code, report=None):
-    conn = sqlite3.connect(_get_db_path(), timeout=30)
+    conn = _connect_db()
     try:
         _ensure_metar_tables(conn)
         if report is not None:
@@ -356,7 +364,7 @@ def _release_metar_fetch(day, code, report=None):
 
 
 def _get_cached_metar(day, code):
-    conn = sqlite3.connect(_get_db_path())
+    conn = _connect_db()
     try:
         conn.execute(
             """
@@ -378,7 +386,7 @@ def _get_cached_metar(day, code):
 
 
 def _store_metar(day, code, report):
-    conn = sqlite3.connect(_get_db_path())
+    conn = _connect_db()
     try:
         conn.execute(
             """

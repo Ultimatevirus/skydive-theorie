@@ -553,8 +553,12 @@ button,
     font-family: inherit;
     font-size: 1rem;
     font-weight: 700;
+    line-height: 1.2;
     border: none;
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
 }
 
 .primary-btn,
@@ -562,6 +566,7 @@ button {
     background: linear-gradient(135deg, var(--primary) 0%, #0f9a9c 100%);
     color: #ffffff !important;
     padding: 13px 22px;
+    border: 1px solid transparent;
     box-shadow: 0 10px 20px rgba(15, 118, 110, 0.2);
 }
 
