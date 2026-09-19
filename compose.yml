@@ -10,6 +10,8 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       SECRET_KEY: ${SECRET_KEY:-local-development-only-change-me}
+      ACCESS_GATE_ENABLED: ${ACCESS_GATE_ENABLED:-1}
+      ACCESS_CODE: ${ACCESS_CODE:-}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
       KNMI_API_KEY: ${KNMI_API_KEY:-}
       KNMI_OPEN_DATA_URL: ${KNMI_OPEN_DATA_URL:-https://api.dataplatform.knmi.nl/open-data}

@@ -1,3 +1,4 @@
+import hmac
 import logging
 import os
 import random
@@ -5,6 +6,7 @@ import re
 import smtplib
 import sqlite3
 import time
+from datetime import timedelta
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -39,6 +41,57 @@ secret_key = os.getenv("SECRET_KEY")
 if os.getenv("APP_ENV", "development").lower() == "production" and not secret_key:
     raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")
 app.secret_key = secret_key or "local-development-only-change-me"
+
+if (
+    os.getenv("APP_ENV", "development").lower() == "production"
+    and os.getenv("ACCESS_GATE_ENABLED", "1").lower() not in {"0", "false", "no"}
+    and not os.getenv("ACCESS_CODE")
+):
+    raise RuntimeError("ACCESS_CODE must be set when APP_ENV=production and ACCESS_GATE_ENABLED is on")
+
+ACCESS_TOKEN_LIFETIME = timedelta(days=int(os.getenv("ACCESS_TOKEN_LIFETIME_DAYS", "7")))
+app.config["PERMANENT_SESSION_LIFETIME"] = ACCESS_TOKEN_LIFETIME
+GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "static"}
+_missing_access_code_warned = False
+
+
+def access_gate_enabled():
+    """Return whether the access gate should be enforced right now."""
+    global _missing_access_code_warned
+    flag_on = os.getenv("ACCESS_GATE_ENABLED", "1").lower() not in {"0", "false", "no"}
+    if not flag_on:
+        return False
+    if not os.getenv("ACCESS_CODE"):
+        if not _missing_access_code_warned:
+            logger.warning("ACCESS_GATE_ENABLED is on but ACCESS_CODE is not set; access gate disabled")
+            _missing_access_code_warned = True
+        return False
+    return True
+
+
+def is_access_granted():
+    """Check whether the current session holds a still-valid access token."""
+    granted_at = session.get("access_granted_at")
+    if not granted_at:
+        return False
+    return (time.time() - granted_at) < ACCESS_TOKEN_LIFETIME.total_seconds()
+
+
+def is_safe_redirect_target(target):
+    """Only allow same-origin relative paths as a post-login redirect target."""
+    return bool(target) and target.startswith("/") and not target.startswith("//")
+
+
+@app.before_request
+def enforce_access_gate():
+    """Redirect unauthenticated visitors to the access gate while it is enabled."""
+    if not access_gate_enabled():
+        return None
+    if request.endpoint is None or request.endpoint in GATE_EXEMPT_ENDPOINTS:
+        return None
+    if is_access_granted():
+        return None
+    return redirect(url_for("access_gate", next=request.full_path))
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
@@ -422,6 +475,32 @@ def set_language():
     if not target.startswith(request.host_url):
         target = url_for("index")
     return redirect(target)
+
+
+@app.route("/access-gate", methods=["GET", "POST"])
+def access_gate():
+    """Show the under-construction code gate and verify submitted access codes."""
+    next_target = request.values.get("next", "")
+    if not is_safe_redirect_target(next_target):
+        next_target = url_for("index")
+
+    if request.method == "POST":
+        submitted_code = request.form.get("code", "")
+        expected_code = os.getenv("ACCESS_CODE") or ""
+        if expected_code and hmac.compare_digest(submitted_code, expected_code):
+            session["access_granted_at"] = time.time()
+            session.permanent = True
+            return redirect(next_target)
+
+        logger.warning("Rejected access gate code attempt from %s", request.remote_addr)
+        time.sleep(1)
+        return render_template(
+            "gate.html",
+            next=next_target,
+            error=translate("De ingevoerde code is onjuist. Probeer het opnieuw.", session.get("language")),
+        ), 401
+
+    return render_template("gate.html", next=next_target, error=None)
 
 
 @app.route("/")

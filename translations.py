@@ -98,5 +98,10 @@ TRANSLATIONS = {
         "Kies een Nederlandse luchthaven uit de lijst.": "Choose a Dutch airport from the list.",
         "De METAR-service is tijdelijk niet beschikbaar.": "The METAR service is temporarily unavailable.",
         "KNMI gaf geen geldige METAR terug.": "KNMI returned no valid METAR.",
+        "Site in ontwikkeling": "Site under construction",
+        "Deze site bevindt zich nog in de testfase en is alleen toegankelijk voor uitgenodigde testers. Voer je toegangscode in om verder te gaan.": "This site is still in the testing phase and is only accessible to invited testers. Enter your access code to continue.",
+        "Toegangscode": "Access code",
+        "Toegang verkrijgen": "Get access",
+        "De ingevoerde code is onjuist. Probeer het opnieuw.": "The code you entered is incorrect. Please try again.",
     },
 }

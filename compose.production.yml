@@ -5,6 +5,8 @@ services:
     environment:
       APP_ENV: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
+      ACCESS_GATE_ENABLED: ${ACCESS_GATE_ENABLED:-1}
+      ACCESS_CODE: ${ACCESS_CODE:?ACCESS_CODE must be set}
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
       KNMI_API_KEY: ${KNMI_API_KEY:-}
       KNMI_OPEN_DATA_URL: ${KNMI_OPEN_DATA_URL:-https://api.dataplatform.knmi.nl/open-data}
