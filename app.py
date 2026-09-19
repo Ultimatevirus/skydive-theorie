@@ -35,13 +35,20 @@ from translations import TRANSLATIONS
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
 logger = logging.getLogger(__name__)
+is_production = os.getenv("APP_ENV", "development").lower() == "production"
 secret_key = os.getenv("SECRET_KEY")
-if os.getenv("APP_ENV", "development").lower() == "production" and not secret_key:
+if is_production and not secret_key:
     raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")
 app.secret_key = secret_key or "local-development-only-change-me"
+if is_production:
+    app.config.update(
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+    )
 
 if (
-    os.getenv("APP_ENV", "development").lower() == "production"
+    is_production
     and os.getenv("ACCESS_GATE_ENABLED", "1").lower() not in {"0", "false", "no"}
     and not os.getenv("ACCESS_CODE")
 ):
@@ -814,4 +821,3 @@ def get_question_image_url(image_link):
 # purely for local development, gunicorn will be used in production
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
-
