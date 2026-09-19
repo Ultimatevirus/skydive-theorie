@@ -24,7 +24,7 @@ _metar_refresh_stop = Event()
 _metar_refresh_thread = None
 
 
-def on_starting(server):
+def when_ready(server):
 	global _metar_refresh_thread
 	if os.environ.get('KNMI_METAR_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
 		_metar_refresh_thread = Thread(

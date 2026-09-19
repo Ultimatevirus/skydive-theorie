@@ -21,15 +21,15 @@
 
     <main class="page-shell">
         <div class="container">
-            <div class="card" style="max-width: 480px; margin: 0 auto;">
+            <div class="card gate-card" style="max-width: 480px; margin: 0 auto;">
                 <div class="page-header">
                     <div>
-                        <p class="eyebrow">{{ t('Site in ontwikkeling') }}</p>
-                        <h1>{{ t('Site in ontwikkeling') }}</h1>
+                        <p class="eyebrow">{{ t('Waarschuwing') }}</p>
+                        <h1>{{ t('Deze site is nog in ontwikkeling!') }}</h1>
                     </div>
                 </div>
 
-                <p>{{ t('Deze site bevindt zich nog in de testfase en is alleen toegankelijk voor uitgenodigde testers. Voer je toegangscode in om verder te gaan.') }}</p>
+                <p>{{ t('Deze site bevindt zich op dit moment nog in de testfase en is alleen toegankelijk voor uitgenodigde testers. Voer je toegangscode in om verder te gaan.') }}</p>
 
                 {% if error %}
                     <div class="error-box">
@@ -37,7 +37,7 @@
                     </div>
                 {% endif %}
 
-                <form method="POST" action="{{ url_for('access_gate') }}">
+                <form method="POST" action="{{ url_for('access_gate') }}" class="form">
                     <input type="hidden" name="next" value="{{ next }}">
                     <div class="field-group">
                         <label for="code">{{ t('Toegangscode') }}</label>
