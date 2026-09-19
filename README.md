@@ -54,28 +54,41 @@ docker compose logs -f
 docker compose down
 ```
 
-### Production deployment with Docker Compose and Traefik
+### Production deployment with Docker Compose, Portainer, and Traefik
 
-Point DNS at the server and install the checked-in `compose.yml` and `compose.production.yml` files in the deployment directory. Create a protected `.env` containing a long random `SECRET_KEY`, the public `TRAEFIK_HOST`, `ACME_EMAIL`, and an immutable image reference:
+Point DNS at the server and deploy `/home/runner/work/skydive-theorie/skydive-theorie/compose.production.yml` as the production stack. The file is standalone: it includes the app, Traefik, network, and volume definitions, and it does not expose Gunicorn directly on port `5000`.
+
+When Portainer builds from the checked-out repository on the VPS, `APP_IMAGE` is optional and can be omitted. Only set `APP_IMAGE` when you intentionally want the stack to pull a prebuilt image instead of building from source.
+
+Create a protected `.env` containing a long random `SECRET_KEY`, the public `TRAEFIK_HOST`, `ACME_EMAIL`, and the access gate settings:
 
 ```dotenv
-APP_IMAGE=ghcr.io/ultimatevirus/skydive-theorie:COMMIT_SHA
 SECRET_KEY=replace-with-a-long-random-secret
 TRAEFIK_HOST=theorie.example.com
 ACME_EMAIL=admin@example.com
-TRAEFIK_HTTP_PORT=80
-TRAEFIK_HTTPS_PORT=443
+ACCESS_GATE_ENABLED=1
+ACCESS_CODE=replace-with-a-long-random-access-code
+KNMI_API_KEY=your-rotated-knmi-key
+KNMI_OPEN_DATA_URL=https://api.dataplatform.knmi.nl/open-data
 ```
+
+If you want to publish the site immediately without the gate, set `ACCESS_GATE_ENABLED=0` and leave `ACCESS_CODE` empty.
 
 Start the production stack with:
 
 ```powershell
-docker compose -f compose.yml -f compose.production.yml pull
-docker compose -f compose.yml -f compose.production.yml up -d --remove-orphans
-docker compose -f compose.yml -f compose.production.yml ps
+docker compose -f compose.production.yml up -d --build --remove-orphans
+docker compose -f compose.production.yml ps
 ```
 
-Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Docker network. HTTP redirects to HTTPS, and Let's Encrypt state is stored in the named `letsencrypt` volume. To roll back, change `APP_IMAGE` to a previous commit tag and rerun `pull` and `up`.
+If you prefer immutable image deployments instead of on-host builds, set `APP_IMAGE` and use:
+
+```powershell
+docker compose -f compose.production.yml pull
+docker compose -f compose.production.yml up -d --remove-orphans
+```
+
+Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Docker network. HTTP redirects to HTTPS, and Let's Encrypt state is stored in the named `letsencrypt` volume. Production session cookies are marked `Secure`, `HttpOnly`, and `SameSite=Lax`.
 
 The SQLite `data.db` file contains versioned application content and the daily METAR cache. It is baked into each image. Do not bind-mount a host database over `/data/data.db`; release a new image when question content changes.
 
@@ -101,7 +114,6 @@ The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML fi
 
 ### Visit the currently live build
 1. visit www.skydive-theorie.nl
-
 
 
 

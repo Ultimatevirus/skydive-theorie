@@ -122,6 +122,23 @@ class AccessGateTests(unittest.TestCase):
         finally:
             importlib.reload(app_module)
 
+    def test_production_import_hardens_session_cookie_settings(self):
+        env_overrides = {
+            "APP_ENV": "production",
+            "SECRET_KEY": "some-production-secret",
+            "ACCESS_GATE_ENABLED": "0",
+        }
+        env = dict(os.environ)
+        env.update(env_overrides)
+        try:
+            with patch.dict(os.environ, env, clear=True):
+                reloaded = importlib.reload(app_module)
+                self.assertTrue(reloaded.app.config["SESSION_COOKIE_SECURE"])
+                self.assertTrue(reloaded.app.config["SESSION_COOKIE_HTTPONLY"])
+                self.assertEqual(reloaded.app.config["SESSION_COOKIE_SAMESITE"], "Lax")
+        finally:
+            importlib.reload(app_module)
+
 
 if __name__ == "__main__":
     unittest.main()

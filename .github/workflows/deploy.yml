@@ -30,6 +30,8 @@ jobs:
           SECRET_KEY: ci-validation-secret
           TRAEFIK_HOST: theorie.example.com
           ACME_EMAIL: ci@example.com
+          ACCESS_GATE_ENABLED: "1"
+          ACCESS_CODE: ci-validation-access-code
         run: docker compose -f compose.yml -f compose.production.yml config
 
       - name: Set up Docker Buildx
@@ -71,6 +73,8 @@ jobs:
       SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
       TRAEFIK_HOST: ${{ secrets.TRAEFIK_HOST }}
       ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+      ACCESS_GATE_ENABLED: ${{ secrets.ACCESS_GATE_ENABLED }}
+      ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
       KNMI_API_KEY: ${{ secrets.KNMI_API_KEY }}
       KNMI_OPEN_DATA_URL: ${{ secrets.KNMI_OPEN_DATA_URL }}
 
@@ -113,7 +117,7 @@ jobs:
           host: ${{ env.SERVER_HOST }}
           username: ${{ env.SERVER_USER }}
           key: ${{ env.SERVER_SSH_KEY }}
-          envs: APP_IMAGE,SECRET_KEY,TRAEFIK_HOST,ACME_EMAIL,KNMI_API_KEY,KNMI_OPEN_DATA_URL
+          envs: APP_IMAGE,SECRET_KEY,TRAEFIK_HOST,ACME_EMAIL,ACCESS_GATE_ENABLED,ACCESS_CODE,KNMI_API_KEY,KNMI_OPEN_DATA_URL
           script: |
             set -e
             mkdir -p /opt/skydive-theorie
@@ -125,12 +129,19 @@ jobs:
             SECRET_KEY=$SECRET_KEY
             TRAEFIK_HOST=$TRAEFIK_HOST
             ACME_EMAIL=$ACME_EMAIL
+            ACCESS_GATE_ENABLED=${ACCESS_GATE_ENABLED:-1}
+            ACCESS_CODE=$ACCESS_CODE
             KNMI_API_KEY=$KNMI_API_KEY
             KNMI_OPEN_DATA_URL=$KNMI_OPEN_DATA_URL
             TRAEFIK_HTTP_PORT=80
             TRAEFIK_HTTPS_PORT=443
             FORWARDED_ALLOW_IPS=*
             EOF
+
+            if [ "${ACCESS_GATE_ENABLED:-1}" != "0" ] && [ "${ACCESS_GATE_ENABLED:-1}" != "false" ] && [ "${ACCESS_GATE_ENABLED:-1}" != "no" ] && [ -z "${ACCESS_CODE:-}" ]; then
+              echo "ACCESS_CODE must be set when ACCESS_GATE_ENABLED is enabled." >&2
+              exit 1
+            fi
 
             docker compose -f compose.yml -f compose.production.yml config
             docker compose -f compose.yml -f compose.production.yml pull

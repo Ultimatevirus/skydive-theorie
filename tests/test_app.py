@@ -54,6 +54,9 @@ class PracticeFlowTests(unittest.TestCase):
 
         self.assertIn("KNMI_API_KEY:", compose_text)
         self.assertIn("KNMI_OPEN_DATA_URL:", compose_text)
+        self.assertIn("build:", compose_text)
+        self.assertNotIn('"${APP_PORT:-5000}:5000"', compose_text)
+        self.assertNotIn("APP_IMAGE must be set", compose_text)
 
     def test_language_selection_persists_and_localizes_pages(self):
         client = app.test_client()
