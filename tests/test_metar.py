@@ -15,6 +15,7 @@ from metar import (
     _CACHE,
     get_daily_metar,
     grade_answers,
+    metar_refresh_loop,
     parse_metar,
     refresh_daily_metars,
 )
@@ -180,6 +181,18 @@ class MetarServiceTests(unittest.TestCase):
 
         self.assertEqual(calls, list(dict.fromkeys(DUTCH_AIRPORTS)))
         self.assertEqual(calls.count("EHAM"), 1)
+
+    def test_refresh_loop_waits_30_minutes_between_refreshes(self):
+        stop_event = unittest.mock.Mock()
+        stop_event.is_set.side_effect = [False, True]
+        wait_calls = []
+        stop_event.wait.side_effect = lambda seconds: wait_calls.append(seconds)
+
+        with patch("metar.refresh_daily_metars") as refresh_metars:
+            metar_refresh_loop(stop_event=stop_event, opener=unittest.mock.Mock())
+
+        self.assertEqual(refresh_metars.call_count, 1)
+        self.assertEqual(wait_calls, [1800])
 
     def test_foreground_fetch_returns_busy_error_when_another_worker_holds_claim(self):
         conn = sqlite3.connect(self.database.name)

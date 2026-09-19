@@ -475,15 +475,12 @@ def refresh_daily_metars(day=None, opener=urlopen):
 
 
 def metar_refresh_loop(stop_event=None, opener=urlopen):
-    """Refresh all airports immediately and again at each UTC calendar day."""
+    """Refresh all airports immediately and then every 30 minutes."""
     stop_event = stop_event or Event()
     while not stop_event.is_set():
         day = datetime.now(timezone.utc).date()
         refresh_daily_metars(day, opener=opener)
-        tomorrow = day.fromordinal(day.toordinal() + 1)
-        next_refresh = datetime.combine(tomorrow, datetime.min.time(), timezone.utc)
-        wait_seconds = max(1, (next_refresh - datetime.now(timezone.utc)).total_seconds())
-        stop_event.wait(wait_seconds)
+        stop_event.wait(1800)
 
 
 def _submitted_number(value):

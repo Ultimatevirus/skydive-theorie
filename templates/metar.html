@@ -10,7 +10,7 @@
             <div>
                 <p class="eyebrow">{{ t('Dagelijkse uitdaging') }}</p>
                 <h1>{{ t('METAR mode') }}</h1>
-                <p class="metar-subheader">{{ t("Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.") }}</p>
+                <p class="metar-subheader">{{ t("Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint, de website verwacht namelijk soortgelijke invoer. De METAR's worden elke 30 minuten bijgewerkt.") }}</p>
             </div>
         </div>
 
@@ -30,7 +30,7 @@
             {% if metar %}
                 <div class="metar-report">
                     <div><span>{{ t('Luchthaven') }}</span><strong>{{ metar.airport }} · {{ metar.airport_name }}</strong></div>
-                    <div><span>{{ t('METAR van vandaag') }}</span><code>{{ metar.raw }}</code></div>
+                    <div><span>{{ t('Actuele METAR') }}</span><code>{{ metar.raw }}</code></div>
                 </div>
                 <div class="metar-fields">
                     <div class="field-group"><label for="wind_direction">{{ t('Windrichting') }} (° of VRB{% if metar.wind_direction_variation %}; variabel {{ metar.wind_direction_variation }}°{% endif %})</label><input id="wind_direction" name="wind_direction" placeholder="270" autocomplete="off"></div>
@@ -46,7 +46,7 @@
                 </div>
                 <button type="submit" name="action" value="check" class="primary-btn">{{ t('Controleer METAR') }}</button>
             {% else %}
-                <p class="helper-text">{{ t('Selecteer een luchthaven om de dagelijkse METAR te laden.') }}</p>
+                <p class="helper-text">{{ t('Selecteer een luchthaven om de actuele METAR te laden.') }}</p>
                 <button type="submit" name="action" value="load" class="primary-btn">{{ t('METAR laden') }}</button>
             {% endif %}
         </form>
