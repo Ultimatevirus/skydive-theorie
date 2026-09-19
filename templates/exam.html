@@ -207,8 +207,39 @@
             progressText.textContent = answered + " / " + totalQuestions;
         }
 
-        document.querySelectorAll('input[type="radio"]').forEach(input => {
-            input.addEventListener("change", updateProgress);
+        // Cache selected answers client-side so a submit with unanswered
+        // questions doesn't wipe out previously chosen answers on reload.
+        const answerInputs = Array.from(document.querySelectorAll('#exam-form input[type="radio"]'));
+        const questionIds = Array.from(new Set(answerInputs.map(input => input.name))).sort();
+        const answerStorageKey = "examAnswers:" + questionIds.join(",");
+
+        function loadSavedAnswers() {
+            try {
+                return JSON.parse(localStorage.getItem(answerStorageKey) || "{}");
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function saveAnswer(name, value) {
+            const saved = loadSavedAnswers();
+            saved[name] = value;
+            try {
+                localStorage.setItem(answerStorageKey, JSON.stringify(saved));
+            } catch (e) {
+                // Ignore storage errors (e.g. private browsing quota).
+            }
+        }
+
+        const savedAnswers = loadSavedAnswers();
+        answerInputs.forEach(input => {
+            if (savedAnswers[input.name] === input.value) {
+                input.checked = true;
+            }
+            input.addEventListener("change", () => {
+                saveAnswer(input.name, input.value);
+                updateProgress();
+            });
         });
 
         updateProgress();

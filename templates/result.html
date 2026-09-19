@@ -143,6 +143,11 @@
     </footer>
 
     <script>
+        // The exam is complete, so drop any cached in-progress answers.
+        Object.keys(localStorage)
+            .filter(key => key.startsWith('examAnswers:'))
+            .forEach(key => localStorage.removeItem(key));
+
         const root = document.documentElement;
         const themeToggle = document.querySelector('.theme-toggle');
 
