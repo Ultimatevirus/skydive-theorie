@@ -1,190 +1,64 @@
-<!DOCTYPE html>
-<html lang="{{ 'en' if language == 'EN' else 'nl' }}">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
-    <link rel="shortcut icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
-    <title>{{ t('Leren voor het examen') }}</title>
-    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.jpg') }}" fetchpriority="high">
-    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.png') }}">
-    <script src="{{ asset_url('theme.js') }}"></script>
-    <script src="{{ asset_url('page-transition.js') }}"></script>
-    <link rel="stylesheet" href="{{ asset_url('style.css') }}">
-    <script src="{{ asset_url('language.js') }}" defer></script>
-    <script src="{{ asset_url('nav-toggle.js') }}" defer></script>
-</head>
-<body>
-    <header class="site-header">
-        <div class="container header-inner">
-            <div class="brand"><img src="{{ url_for('static', filename='branding/logo.png') }}" alt="Skydive-theorie.nl"></div>
-            <button type="button" class="nav-toggle" aria-label="Menu" aria-expanded="false" aria-controls="main-nav"><span class="nav-toggle-bar"></span><span class="nav-toggle-label">{{ t('Menu') }}</span></button>
-            <nav class="main-nav" id="main-nav">
-                <a href="{{ url_for('index') }}" class="nav-link">
-                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/></svg>
-                    <span>{{ t('Home') }}</span>
-                </a>
-                <a href="{{ url_for('practice') }}" class="nav-link">
-                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
-                    <span>{{ t('Oefenexamen') }}</span>
-                </a>
-                <a href="{{ url_for('metar_practice') }}" class="nav-link"><img class="nav-icon" src="{{ url_for('static', filename='icons/plane.svg') }}" alt=""><span>{{ t('METAR oefenen') }}</span></a>
-                <a href="{{ url_for('learn') }}" class="nav-link active">
-                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
-                    <span>{{ t('Leren voor het examen') }}</span>
-                </a>
-                <a href="{{ url_for('contact') }}" class="nav-link">
-                    <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/><path d="M3 7l9 6l9 -6"/></svg>
-                    <span>{{ t('Contact') }}</span>
-                </a>
-                <form method="post" action="{{ url_for('set_language') }}" class="language-picker">
-                    <input type="hidden" name="language" value="{{ language }}">
-                    <button type="button" class="language-trigger" aria-expanded="false" aria-label="Language">{{ language }}</button>
-                    <div class="language-menu" role="listbox" aria-label="Language">
-                        <button type="button" class="language-option {% if language == 'NL' %}is-selected{% endif %}" data-language="NL" role="option" aria-selected="{{ language == 'NL' }}">NL</button>
-                        <button type="button" class="language-option {% if language == 'EN' %}is-selected{% endif %}" data-language="EN" role="option" aria-selected="{{ language == 'EN' }}">EN</button>
-                    </div>
-                </form>
-                <button class="theme-toggle" type="button" aria-label="{{ t('Wissel tussen licht en donker thema') }}">
-                    <svg class="theme-icon is-light" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
-                        <path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3"/>
-                        <path d="M9.7 17h4.6"/>
-                    </svg>
-                    <svg class="theme-icon is-dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
-                        <path d="M11.089 7.083a5 5 0 0 1 5.826 5.84m-1.378 2.611a5.012 5.012 0 0 1 -.537 .466a3.5 3.5 0 0 0 -1 3a2 2 0 1 1 -4 0a3.5 3.5 0 0 0 -1 -3a5 5 0 0 1 -.528 -7.544"/>
-                        <path d="M9.7 17h4.6"/>
-                        <path d="M3 3l18 18"/>
-                    </svg>
-                </button>
-            </nav>
-        </div>
-    </header>
+{% extends "base.html" %}
 
-    <main class="page-shell">
-        <div class="container">
-            <div class="card exam-card">
-                <div class="page-header">
-                    <div>
-                        <p class="eyebrow">{{ t('Studiepagina') }}</p>
-                        <h1>{{ t('Leren voor het examen') }}</h1>
-                    </div>
-                </div>
+{% block title %}{{ t('Leren voor het examen') }}{% endblock %}
 
-                {% if language == 'EN' %}
-                    <p>For your KNVVL theory exam, it is important to practice questions and study the supporting documentation carefully. Read the BVR and its appendices, watch videos about weather, and talk to a rigger about equipment. You can use this website as an overview of possible learning points, a preview of the exam, or a starting point for further study.</p>
-                    <p>The theory exam covers four subjects: general knowledge, regulations, equipment and weather. Regular revision and connecting theory to practical situations will prepare you better for the exam.</p>
-                {% else %}
-                    <p>Voor je KNVVL theorie-examen is het belangrijk om niet alleen vragen te oefenen, maar ook de achterliggende documentatie goed door te nemen. Neem eerst een keer het BVR en haar bijlagen door. Kijk wat video's over hoe het weer werkt en praat met een rigger over materiaal. Gebruik daarna eventueel deze website als een overzicht van mogelijke leerpunten, een voorproef op het examen of als startpunt voor verdere verdieping.</p>
-                    <p>Houd er rekening mee dat het theorie examen bestaat uit een 4 tal onderwerpen: algemeen, voorschriften, materiaal en meteo. Door regelmatig te herhalen en de theorie ook in verband te brengen met praktische situaties, word je beter voorbereid op het examen.</p>
-                {% endif %}
+{% set page_name = 'learn' %}
 
-                <div class="topic-summary">
-                    <h2>{{ t('De vakken') }}</h2>
-                    <div class="topic-row">
-                        <div class="topic-label-row">
-                            <span>{% if language == 'EN' %}General{% else %}Algemeen{% endif %}</span>
-                        </div>
-                        <p>{% if language == 'EN' %}General knowledge for the exam level{% else %}Gaat over algemene kennis bijbehorend aan het niveau van het examen.{% endif %}</p>
-                    </div>
-
-                    <div class="topic-row">
-                        <div class="topic-label-row">
-                            <span>{% if language == 'EN' %}Equipment{% else %}Materiaal{% endif %}</span>
-                        </div>
-                        <p>{% if language == 'EN' %}Skydiving equipment such as rigs, deployment systems and altimeters{% else %}Gaat over springmateriaal, zoals rigs, openingssystemen, hoogtemeters etc.{% endif %}</p>
-                    </div>
-
-                    <div class="topic-row">
-                        <div class="topic-label-row">
-                            <span>{% if language == 'EN' %}Weather{% else %}Meteo{% endif %}</span>
-                        </div>
-                        <p>{% if language == 'EN' %}Weather and its influence on skydiving activities.{% else %}Gaat over het weer en de invloed die dit kan hebben op para activiteiten.{% endif %}</p>
-                    </div>
-                    <div class="topic-row">
-                        <div class="topic-label-row">
-                            <span>{% if language == 'EN' %}Regulations{% else %}Voorschriften{% endif %}</span>
-                        </div>
-                        <p>{% if language == 'EN' %}Rules and regulations for skydiving in the Netherlands.{% else %}Gaat over de regels en voorschriften die gelden voor parachutespringen in Nederland.{% endif %}</p>
-                </div>
-
-                <div class="topic-summary">
-                    <h2>{{ t('Externe documentatie') }}</h2>
-                    <ul>
-                        <li><a href="https://www.parachute.nl/" target="_blank" rel="noopener noreferrer">Parachute.nl</a> – officiële KNVVL informatie over skydiven in Nederland (BVR, BBR etc.).</li>
-                        <li><a href="https://skydivekompasroos.nl/" target="_blank" rel="noopener noreferrer">Skydive Kompasroos</a> – Hulpmiddel voor het navigeren van de skydive kompasroos.</li>
-                        <li><a href="https://www.skydivesupplies.nl/brevet/" target="_blank" rel="noopener noreferrer">Skydive Supplies</a> – Externe informatie over het halen van het KNVVL brevet. & theorie avonden</li>
-                    </ul>
-                </div>
-
-                <div class="button-row">
-                    <a href="{{ url_for('practice') }}" class="primary-btn">{{ t('Naar oefenexamen') }}</a>
-                    <a href="{{ url_for('index') }}" class="secondary-btn">{{ t('Home') }}</a>
-                </div>
+{% block content %}
+    <div class="card exam-card">
+        <div class="page-header">
+            <div>
+                <p class="eyebrow">{{ t('Studiepagina') }}</p>
+                <h1>{{ t('Leren voor het examen') }}</h1>
             </div>
         </div>
-    </main>
 
-    <footer class="site-footer">
-        <div class="container footer-inner">
-            <span>{{ t('gemaakt door Alex Brittmann') }}</span>
+        <p>{{ t('Voor je KNVVL theorie-examen is het belangrijk om niet alleen vragen te oefenen, maar ook de achterliggende documentatie goed door te nemen. Neem eerst een keer het BVR en haar bijlagen door. Kijk wat video’s over hoe het weer werkt en praat met een rigger over materiaal. Gebruik daarna eventueel deze website als een overzicht van mogelijke leerpunten, een voorproef op het examen of als startpunt voor verdere verdieping.') }}</p>
+        <p>{{ t('Houd er rekening mee dat het theorie examen bestaat uit een 4 tal onderwerpen: algemeen, voorschriften, materiaal en meteo. Door regelmatig te herhalen en de theorie ook in verband te brengen met praktische situaties, word je beter voorbereid op het examen.') }}</p>
+
+        <div class="topic-summary">
+            <h2>{{ t('De vakken') }}</h2>
+            <div class="topic-row">
+                <div class="topic-label-row">
+                    <span>{{ t('Algemeen') }}</span>
+                </div>
+                <p>{{ t('Gaat over algemene kennis bijbehorend aan het niveau van het examen.') }}</p>
+            </div>
+
+            <div class="topic-row">
+                <div class="topic-label-row">
+                    <span>{{ t('Materiaal') }}</span>
+                </div>
+                <p>{{ t('Gaat over springmateriaal, zoals rigs, openingssystemen, hoogtemeters etc.') }}</p>
+            </div>
+
+            <div class="topic-row">
+                <div class="topic-label-row">
+                    <span>{{ t('Meteo') }}</span>
+                </div>
+                <p>{{ t('Gaat over het weer en de invloed die dit kan hebben op para activiteiten.') }}</p>
+            </div>
+
+            <div class="topic-row">
+                <div class="topic-label-row">
+                    <span>{{ t('Voorschriften') }}</span>
+                </div>
+                <p>{{ t('Gaat over de regels en voorschriften die gelden voor parachutespringen in Nederland.') }}</p>
+            </div>
         </div>
-    </footer>
 
-    <script>
-        const root = document.documentElement;
-        const themeToggle = document.querySelector('.theme-toggle');
+        <div class="topic-summary">
+            <h2>{{ t('Externe documentatie') }}</h2>
+            <ul>
+                <li><a href="https://www.parachute.nl/" target="_blank" rel="noopener noreferrer">Parachute.nl</a> – officiële KNVVL informatie over skydiven in Nederland (BVR, BBR etc.).</li>
+                <li><a href="https://skydivekompasroos.nl/" target="_blank" rel="noopener noreferrer">Skydive Kompasroos</a> – Hulpmiddel voor het navigeren van de skydive kompasroos.</li>
+                <li><a href="https://www.skydivesupplies.nl/brevet/" target="_blank" rel="noopener noreferrer">Skydive Supplies</a> – Externe informatie over het halen van het KNVVL brevet. & theorie avonden</li>
+            </ul>
+        </div>
 
-        function makeThemeButtonMarkup() {
-            return `
-                <svg class="theme-icon is-light" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
-                    <path d="M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3"/>
-                    <path d="M9.7 17h4.6"/>
-                </svg>
-                <svg class="theme-icon is-dark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path d="M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7"/>
-                    <path d="M11.089 7.083a5 5 0 0 1 5.826 5.84m-1.378 2.611a5.012 5.012 0 0 1 -.537 .466a3.5 3.5 0 0 0 -1 3a2 2 0 1 1 -4 0a3.5 3.5 0 0 0 -1 -3a5 5 0 0 1 -.528 -7.544"/>
-                    <path d="M9.7 17h4.6"/>
-                    <path d="M3 3l18 18"/>
-                </svg>
-            `;
-        }
-
-        function ensureThemeIcon() {
-            if (!themeToggle) return;
-            const hasSvg = themeToggle.querySelector('svg');
-            if (!hasSvg || themeToggle.textContent.includes('💡')) {
-                themeToggle.innerHTML = makeThemeButtonMarkup();
-            }
-        }
-
-        function applyTheme(theme) {
-            const isDark = theme === 'dark';
-            root.setAttribute('data-theme', isDark ? 'dark' : 'light');
-            if (themeToggle) {
-                themeToggle.setAttribute('aria-label', isDark ? '{{ t("Schakel naar licht thema") }}' : '{{ t("Schakel naar donker thema") }}');
-            }
-        }
-
-        ensureThemeIcon();
-
-        const savedTheme = localStorage.getItem('theme-preference');
-        const preferredTheme = savedTheme || 'light';
-        applyTheme(preferredTheme);
-
-        if (themeToggle) {
-            themeToggle.addEventListener('click', () => {
-                const currentTheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-                const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
-                localStorage.setItem('theme-preference', nextTheme);
-                applyTheme(nextTheme);
-            });
-        }
-    </script>
-</body>
-</html>
+        <div class="button-row">
+            <a href="{{ url_for('practice') }}" class="primary-btn">{{ t('Naar oefenexamen') }}</a>
+            <a href="{{ url_for('index') }}" class="secondary-btn">{{ t('Home') }}</a>
+        </div>
+    </div>
+{% endblock %}
