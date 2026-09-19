@@ -3,10 +3,10 @@ import logging
 import os
 import random
 import re
+import secrets
 import sqlite3
 import time
 from datetime import timedelta
-from pathlib import Path
 
 from flask import (
     Flask,
@@ -17,6 +17,7 @@ from flask import (
     session,
     url_for,
 )
+from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
 from metar import DUTCH_AIRPORTS, MetarError, get_daily_metar, grade_answers
 from quiz import (
     build_option_list,
@@ -60,6 +61,27 @@ GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "static"}
 _missing_access_code_warned = False
 
 
+def ensure_csrf_token():
+    """Return the current session CSRF token, creating one when absent."""
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session["csrf_token"] = token
+    return token
+
+
+def csrf_token():
+    """Expose the current CSRF token to templates."""
+    return ensure_csrf_token()
+
+
+def validate_csrf():
+    """Check whether the submitted CSRF token matches the session token."""
+    expected = session.get("csrf_token")
+    provided = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
+    return bool(expected and provided) and hmac.compare_digest(provided, expected)
+
+
 @app.template_global()
 def asset_url(filename):
     """Build a static asset URL with a mtime query string, busting the 1-year static cache on changes."""
@@ -100,6 +122,7 @@ def is_safe_redirect_target(target):
 @app.before_request
 def enforce_access_gate():
     """Redirect unauthenticated visitors to the access gate while it is enabled."""
+    ensure_csrf_token()
     if not access_gate_enabled():
         return None
     if request.endpoint is None or request.endpoint in GATE_EXEMPT_ENDPOINTS:
@@ -108,9 +131,7 @@ def enforce_access_gate():
         return None
     return redirect(url_for("access_gate", next=request.full_path))
 
-BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
-PRODUCTION_DB = Path("/data/data.db")
+
 ALLOWED_LEVELS = ("A", "B")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
 
@@ -121,11 +142,30 @@ def translate(text, language="NL", **values):
     return translated.format(**values) if values else translated
 
 
+@app.before_request
+def enforce_csrf():
+    """Reject unsafe requests that do not include a valid CSRF token."""
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not validate_csrf():
+        return translate("Je formulier is verlopen. Vernieuw de pagina en probeer het opnieuw.", session.get("language")), 400
+    return None
+
+
+@app.after_request
+def add_security_headers(response):
+    """Attach baseline security headers to every response."""
+    response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    return response
+
+
 @app.context_processor
 def inject_language_context():
     language = normalize_language(session.get("language", "NL"))
     return {
         "language": language,
+        "csrf_token": csrf_token,
         "t": lambda text, **values: translate(text, language, **values),
     }
 
@@ -144,38 +184,13 @@ def language_filter(conn, language, prefix=""):
 
 
 def get_db_path():
-    """Resolve a stable SQLite database path for local and container use."""
-    configured_path = os.getenv("DB_PATH")
-    if configured_path:
-        db_path = Path(configured_path)
-    elif PRODUCTION_DB.exists():
-        db_path = PRODUCTION_DB
-    elif PRODUCTION_DB.parent.exists():
-        db_path = PRODUCTION_DB
-        if DEFAULT_LOCAL_DB.exists() and not PRODUCTION_DB.exists():
-            try:
-                PRODUCTION_DB.write_bytes(DEFAULT_LOCAL_DB.read_bytes())
-            except OSError:
-                pass
-    elif DEFAULT_LOCAL_DB.exists():
-        db_path = DEFAULT_LOCAL_DB
-    else:
-        db_path = DEFAULT_LOCAL_DB
-
-    try:
-        db_path.parent.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
-    return str(db_path)
+    """Expose the shared database path resolver for tests and callers."""
+    return shared_get_db_path()
 
 
 def get_db_connection():
     """Create and return a SQLite database connection for the quiz data."""
-    conn = sqlite3.connect(get_db_path(), timeout=30)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=30000")
-    return conn
+    return connect_db(path=get_db_path(), row_factory=sqlite3.Row)
 
 
 def get_available_topics(level, language="NL"):
@@ -502,7 +517,6 @@ def practice_select():
     if level is None:
         return translate("Ongeldige keuze. Kies A of B.", session.get("language")), 400
 
-    session["selected_level"] = level
     return redirect(url_for("practice_mode", level=level))
 
 
@@ -522,7 +536,6 @@ def practice_mode(level):
             return redirect(url_for("practice_free", level=normalized_level))
         return translate("Ongeldige keuze. Kies een oefenmodus.", session.get("language")), 400
 
-    session["selected_level"] = normalized_level
     return render_template(
         "practice.html",
         stage="mode",
@@ -610,7 +623,6 @@ def metar_practice():
         try:
             metar = get_daily_metar(selected_airport, wait_for_rate_limit=False)
             session["metar_airport"] = selected_airport
-            session["metar_report"] = metar["raw"]
         except MetarError as exc:
             metar = None
             error = str(exc)

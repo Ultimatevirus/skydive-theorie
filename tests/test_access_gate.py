@@ -11,6 +11,15 @@ PROTECTED_PATHS = ["/", "/practice", "/leren", "/metar", "/contact", "/exam"]
 GATE_ENV = {"ACCESS_GATE_ENABLED": "1", "ACCESS_CODE": "s3cret-test-code"}
 
 
+def csrf_data(client, **data):
+    with client.session_transaction() as session:
+        token = session.get("csrf_token")
+        if not token:
+            token = "test-csrf-token"
+            session["csrf_token"] = token
+    return {"csrf_token": token, **data}
+
+
 class AccessGateTests(unittest.TestCase):
     def test_protected_pages_redirect_to_gate_when_enabled(self):
         client = app.test_client()
@@ -38,7 +47,7 @@ class AccessGateTests(unittest.TestCase):
 
             unlock_response = client.post(
                 next_target,
-                data={"code": GATE_ENV["ACCESS_CODE"], "next": "/practice"},
+                data=csrf_data(client, code=GATE_ENV["ACCESS_CODE"], next="/practice"),
                 follow_redirects=False,
             )
             self.assertEqual(unlock_response.status_code, 302)
@@ -52,7 +61,7 @@ class AccessGateTests(unittest.TestCase):
         with patch.dict(os.environ, GATE_ENV):
             response = client.post(
                 "/access-gate",
-                data={"code": "wrong-code", "next": "/"},
+                data=csrf_data(client, code="wrong-code", next="/"),
             )
             self.assertEqual(response.status_code, 401)
             html = response.get_data(as_text=True)
@@ -66,7 +75,7 @@ class AccessGateTests(unittest.TestCase):
         with patch.dict(os.environ, GATE_ENV):
             response = client.post(
                 "/access-gate",
-                data={"code": GATE_ENV["ACCESS_CODE"], "next": "https://evil.example.com/phish"},
+                data=csrf_data(client, code=GATE_ENV["ACCESS_CODE"], next="https://evil.example.com/phish"),
                 follow_redirects=False,
             )
             self.assertEqual(response.status_code, 302)
@@ -138,6 +147,16 @@ class AccessGateTests(unittest.TestCase):
                 self.assertEqual(reloaded.app.config["SESSION_COOKIE_SAMESITE"], "Lax")
         finally:
             importlib.reload(app_module)
+
+    def test_missing_csrf_token_rejects_gate_submission(self):
+        with patch.dict(os.environ, GATE_ENV):
+            response = app.test_client().post(
+                "/access-gate",
+                data={"code": GATE_ENV["ACCESS_CODE"], "next": "/"},
+            )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("formulier", response.get_data(as_text=True))
 
 
 if __name__ == "__main__":

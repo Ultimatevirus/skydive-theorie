@@ -4,15 +4,15 @@ from datetime import date, datetime, timezone
 import json
 import logging
 import os
-import sqlite3
 import re
 import time
-from pathlib import Path
 from threading import Event
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 from xml.etree import ElementTree
+
+from db import connect_db, get_db_path
 
 
 DUTCH_AIRPORTS = {
@@ -26,9 +26,6 @@ DEFAULT_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 METAR_DATASET = os.getenv("KNMI_METAR_DATASET", "metar")
 METAR_VERSION = os.getenv("KNMI_METAR_VERSION", "1.0")
 _CACHE = {}
-BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
-PRODUCTION_DB = Path("/data/data.db")
 API_CALL_LIMIT = 3
 API_CALL_WINDOW = 60
 CLAIM_TIMEOUT = 600
@@ -239,24 +236,9 @@ def _signed_number(value):
     return -float(value[1:]) if value.startswith("M") else float(value)
 
 
-def _get_db_path():
-    configured_path = os.getenv("DB_PATH")
-    if configured_path:
-        db_path = Path(configured_path)
-    elif PRODUCTION_DB.exists():
-        db_path = PRODUCTION_DB
-    else:
-        db_path = DEFAULT_LOCAL_DB
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    return str(db_path)
-
-
 def _connect_db():
     """Open a connection with WAL mode so metar writes don't lock out other readers."""
-    conn = sqlite3.connect(_get_db_path(), timeout=30)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA busy_timeout=30000")
-    return conn
+    return connect_db(path=get_db_path())
 
 
 def _ensure_metar_tables(conn):
@@ -315,7 +297,7 @@ def _wait_for_api_slot(wait=True):
         time.sleep(max(0.01, oldest + API_CALL_WINDOW - time.time()))
 
 
-def _claim_metar_fetch(day, code):
+def _claim_metar_fetch(day, code, wait=True):
     while True:
         conn = _connect_db()
         try:
@@ -342,6 +324,8 @@ def _claim_metar_fetch(day, code):
                 return True
         finally:
             conn.close()
+        if not wait:
+            return None
         time.sleep(0.2)
 
 
@@ -438,7 +422,8 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
         result = _build_result(report, code, day)
         _CACHE[cache_key] = result
         return result
-    if not _claim_metar_fetch(day, code):
+    claimed = _claim_metar_fetch(day, code, wait=wait_for_rate_limit)
+    if claimed is False:
         report = _get_cached_metar(day, code)
         if report is None:
             raise MetarError("De METAR-ophaling is onverwacht gestopt.")
@@ -448,6 +433,16 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
         result = _build_result(normalised_report, code, day)
         _CACHE[cache_key] = result
         return result
+    if claimed is None:
+        report = _get_cached_metar(day, code)
+        if report is not None:
+            normalised_report = _normalise_report(report)
+            if normalised_report != report:
+                _store_metar(day, code, normalised_report)
+            result = _build_result(normalised_report, code, day)
+            _CACHE[cache_key] = result
+            return result
+        raise MetarError("Er wordt al een METAR opgehaald. Probeer het zo opnieuw.")
     api_key = os.getenv("KNMI_API_KEY", "").strip()
     try:
         legacy_template = os.getenv("KNMI_METAR_URL", "")

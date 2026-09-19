@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 import tempfile
+import time
 import unittest
 from datetime import date
 from unittest.mock import patch
@@ -20,6 +21,15 @@ from metar import (
 
 
 REPORT = "EHAM 021255Z 27012G20KT 9999 -RA SCT020 BKN035 12/08 Q1013"
+
+
+def csrf_data(client, **data):
+    with client.session_transaction() as session:
+        token = session.get("csrf_token")
+        if not token:
+            token = "test-csrf-token"
+            session["csrf_token"] = token
+    return {"csrf_token": token, **data}
 
 
 class MetarServiceTests(unittest.TestCase):
@@ -171,6 +181,24 @@ class MetarServiceTests(unittest.TestCase):
         self.assertEqual(calls, list(dict.fromkeys(DUTCH_AIRPORTS)))
         self.assertEqual(calls.count("EHAM"), 1)
 
+    def test_foreground_fetch_returns_busy_error_when_another_worker_holds_claim(self):
+        conn = sqlite3.connect(self.database.name)
+        conn.execute(
+            "CREATE TABLE metar_fetch_claim (datetime TEXT, airport TEXT, claimed_at REAL, PRIMARY KEY (datetime, airport))"
+        )
+        conn.execute(
+            "INSERT INTO metar_fetch_claim VALUES (?, ?, ?)",
+            ("2026-09-02", "EHAM", time.time()),
+        )
+        conn.commit()
+        conn.close()
+
+        with patch.dict("os.environ", {"KNMI_API_KEY": "test-key", "KNMI_METAR_URL": "https://example.test/{airport}"}):
+            with self.assertRaises(MetarError) as context:
+                get_daily_metar("EHAM", date(2026, 9, 2), opener=unittest.mock.Mock(), wait_for_rate_limit=False)
+
+        self.assertEqual(str(context.exception), "Er wordt al een METAR opgehaald. Probeer het zo opnieuw.")
+
     def test_grading_allows_small_numeric_difference(self):
         parsed = parse_metar(REPORT)
         result = grade_answers(
@@ -235,19 +263,20 @@ class MetarRouteTests(unittest.TestCase):
 
             response = client.post(
                 "/metar",
-                data={
-                    "airport": "EHAM",
-                    "action": "check",
-                    "wind_direction": "270",
-                    "wind_speed": "12",
-                    "wind_gust": "20",
-                    "visibility": "9999",
-                    "temperature": "12",
-                    "dew_point": "8",
-                    "qnh": "1013",
-                    "weather": "-RA",
-                    "clouds": "SCT 020, BKN 035",
-                },
+                data=csrf_data(
+                    client,
+                    airport="EHAM",
+                    action="check",
+                    wind_direction="270",
+                    wind_speed="12",
+                    wind_gust="20",
+                    visibility="9999",
+                    temperature="12",
+                    dew_point="8",
+                    qnh="1013",
+                    weather="-RA",
+                    clouds="SCT 020, BKN 035",
+                ),
             )
 
         self.assertEqual(response.status_code, 200)
@@ -261,8 +290,8 @@ class MetarRouteTests(unittest.TestCase):
         client = app.test_client()
 
         with patch.object(app_module, "get_daily_metar", side_effect=[eham, ehrd]) as get_metar:
-            client.post("/metar", data={"airport": "EHAM", "action": "load"})
-            response = client.post("/metar", data={"airport": "EHRD", "action": "load"})
+            client.post("/metar", data=csrf_data(client, airport="EHAM", action="load"))
+            response = client.post("/metar", data=csrf_data(client, airport="EHRD", action="load"))
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("EHRD · Rotterdam The Hague", response.get_data(as_text=True))
