@@ -60,6 +60,16 @@ GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "static"}
 _missing_access_code_warned = False
 
 
+@app.template_global()
+def asset_url(filename):
+    """Build a static asset URL with a mtime query string, busting the 1-year static cache on changes."""
+    try:
+        mtime = int(os.path.getmtime(os.path.join(app.static_folder, filename)))
+    except OSError:
+        mtime = 0
+    return url_for("static", filename=filename) + f"?v={mtime}"
+
+
 def access_gate_enabled():
     """Return whether the access gate should be enforced right now."""
     global _missing_access_code_warned

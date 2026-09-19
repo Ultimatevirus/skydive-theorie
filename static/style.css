@@ -275,6 +275,53 @@ img {
     vertical-align: middle;
 }
 
+.nav-toggle {
+    display: none;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid var(--toggle-border);
+    background: var(--toggle-bg);
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+}
+
+.nav-toggle .nav-toggle-bar {
+    display: block;
+    width: 20px;
+    height: 2px;
+    background: #fff;
+    border-radius: 2px;
+    position: relative;
+}
+
+.nav-toggle .nav-toggle-bar::before,
+.nav-toggle .nav-toggle-bar::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 20px;
+    height: 2px;
+    background: #fff;
+    border-radius: 2px;
+}
+
+.nav-toggle .nav-toggle-bar::before {
+    top: -6px;
+}
+
+.nav-toggle .nav-toggle-bar::after {
+    top: 6px;
+}
+
+.nav-toggle-label {
+    display: none;
+}
+
 .main-nav a {
     display: inline-flex;
     align-items: center;
@@ -1443,20 +1490,71 @@ body {
         position: static;
     }
 
-    .header-inner,
     .footer-inner {
         flex-direction: column;
         align-items: center;
         text-align: center;
     }
 
-    .header-inner {
-        display: flex;
+    .site-header .header-inner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 14px;
+        padding: 20px 0 24px;
     }
 
-    .main-nav {
-        justify-content: center;
-        gap: 10px;
+    .site-header .brand {
+        align-self: center;
+    }
+
+    .site-header .brand img {
+        width: 140px;
+    }
+
+    .nav-toggle {
+        display: inline-flex;
+        align-self: stretch;
+        width: auto;
+        margin: 0 18px;
+        height: auto;
+        padding: 13px 22px;
+        border-radius: 12px;
+        gap: 8px;
+        font: inherit;
+        font-size: 1rem;
+        font-weight: 700;
+    }
+
+    .nav-toggle-label {
+        display: inline-block;
+    }
+
+    .site-header .main-nav {
+        display: none;
+        width: 100%;
+        flex-basis: 100%;
+        margin-left: 0;
+    }
+
+    .site-header .main-nav.is-open {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 4px;
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .site-header .main-nav.is-open .nav-link {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .site-header .main-nav.is-open .language-picker,
+    .site-header .main-nav.is-open .theme-toggle {
+        margin: 6px auto 0;
     }
 
     .page-shell {
