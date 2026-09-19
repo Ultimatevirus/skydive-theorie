@@ -1,6 +1,5 @@
 services:
   app:
-    image: ${APP_IMAGE:-skydive-theorie:latest}
     build:
       context: .
     restart: unless-stopped

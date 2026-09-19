@@ -58,7 +58,7 @@ docker compose down
 
 Point DNS at the server and deploy `/home/runner/work/skydive-theorie/skydive-theorie/compose.production.yml` as the production stack. The file is standalone: it includes the app, Traefik, network, and volume definitions, and it does not expose Gunicorn directly on port `5000`.
 
-When Portainer builds from the checked-out repository on the VPS, `APP_IMAGE` is optional and can be omitted. Only set `APP_IMAGE` when you intentionally want the stack to pull a prebuilt image instead of building from source.
+When Portainer builds from the checked-out repository on the VPS, `APP_IMAGE` is not used. The standalone production stack builds from source by default.
 
 Create a protected `.env` containing a long random `SECRET_KEY`, the public `TRAEFIK_HOST`, `ACME_EMAIL`, and the access gate settings:
 
@@ -81,11 +81,11 @@ docker compose -f compose.production.yml up -d --build --remove-orphans
 docker compose -f compose.production.yml ps
 ```
 
-If you prefer immutable image deployments instead of on-host builds, set `APP_IMAGE` and use:
+If you prefer immutable image deployments instead of on-host builds, set `APP_IMAGE` and use the checked-in image override:
 
 ```powershell
-docker compose -f compose.production.yml pull
-docker compose -f compose.production.yml up -d --remove-orphans
+docker compose -f compose.production.yml -f compose.production.image.yml pull
+docker compose -f compose.production.yml -f compose.production.image.yml up -d --remove-orphans
 ```
 
 Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Docker network. HTTP redirects to HTTPS, and Let's Encrypt state is stored in the named `letsencrypt` volume. Production session cookies are marked `Secure`, `HttpOnly`, and `SameSite=Lax`.
@@ -114,6 +114,5 @@ The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML fi
 
 ### Visit the currently live build
 1. visit www.skydive-theorie.nl
-
 
 
