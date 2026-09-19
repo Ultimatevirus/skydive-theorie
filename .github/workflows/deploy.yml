@@ -28,7 +28,8 @@ jobs:
         env:
           APP_IMAGE: ghcr.io/ultimatevirus/skydive-theorie:${{ github.sha }}
           SECRET_KEY: ci-validation-secret
-          TRAEFIK_HOST: theorie.example.com
+          TRAEFIK_HOST: www.theorie.example.com
+          TRAEFIK_APEX_HOST: theorie.example.com
           ACME_EMAIL: ci@example.com
           ACCESS_GATE_ENABLED: "1"
           ACCESS_CODE: ci-validation-access-code
@@ -72,6 +73,7 @@ jobs:
       APP_IMAGE: ghcr.io/ultimatevirus/skydive-theorie:${{ github.sha }}
       SECRET_KEY: ${{ secrets.APP_SECRET_KEY }}
       TRAEFIK_HOST: ${{ secrets.TRAEFIK_HOST }}
+      TRAEFIK_APEX_HOST: ${{ secrets.TRAEFIK_APEX_HOST }}
       ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
       ACCESS_GATE_ENABLED: ${{ secrets.ACCESS_GATE_ENABLED }}
       ACCESS_CODE: ${{ secrets.ACCESS_CODE }}
@@ -88,6 +90,7 @@ jobs:
             SERVER_SSH_KEY
             APP_SECRET_KEY
             TRAEFIK_HOST
+            TRAEFIK_APEX_HOST
             ACME_EMAIL
             KNMI_API_KEY
             KNMI_OPEN_DATA_URL
@@ -117,7 +120,7 @@ jobs:
           host: ${{ env.SERVER_HOST }}
           username: ${{ env.SERVER_USER }}
           key: ${{ env.SERVER_SSH_KEY }}
-          envs: APP_IMAGE,SECRET_KEY,TRAEFIK_HOST,ACME_EMAIL,ACCESS_GATE_ENABLED,ACCESS_CODE,KNMI_API_KEY,KNMI_OPEN_DATA_URL
+          envs: APP_IMAGE,SECRET_KEY,TRAEFIK_HOST,TRAEFIK_APEX_HOST,ACME_EMAIL,ACCESS_GATE_ENABLED,ACCESS_CODE,KNMI_API_KEY,KNMI_OPEN_DATA_URL
           script: |
             set -e
             mkdir -p /opt/skydive-theorie
@@ -128,6 +131,7 @@ jobs:
             APP_IMAGE=$APP_IMAGE
             SECRET_KEY=$SECRET_KEY
             TRAEFIK_HOST=$TRAEFIK_HOST
+            TRAEFIK_APEX_HOST=$TRAEFIK_APEX_HOST
             ACME_EMAIL=$ACME_EMAIL
             ACCESS_GATE_ENABLED=${ACCESS_GATE_ENABLED:-1}
             ACCESS_CODE=$ACCESS_CODE

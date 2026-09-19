@@ -25,6 +25,16 @@ services:
       - traefik.http.services.skydive.loadbalancer.server.port=5000
       - traefik.http.services.skydive.loadbalancer.healthcheck.path=/healthz
       - traefik.http.services.skydive.loadbalancer.healthcheck.interval=10s
+      # Redirect the bare/apex domain to the canonical TRAEFIK_HOST (e.g. apex -> www)
+      - traefik.http.middlewares.skydive-www-redirect.redirectregex.regex=^https?://${TRAEFIK_APEX_HOST:?TRAEFIK_APEX_HOST must be set}/(.*)
+      - traefik.http.middlewares.skydive-www-redirect.redirectregex.replacement=https://${TRAEFIK_HOST:?TRAEFIK_HOST must be set}/$${1}
+      - traefik.http.middlewares.skydive-www-redirect.redirectregex.permanent=true
+      - traefik.http.routers.skydive-apex.rule=Host(`${TRAEFIK_APEX_HOST:?TRAEFIK_APEX_HOST must be set}`)
+      - traefik.http.routers.skydive-apex.entrypoints=websecure
+      - traefik.http.routers.skydive-apex.tls=true
+      - traefik.http.routers.skydive-apex.tls.certresolver=letsencrypt
+      - traefik.http.routers.skydive-apex.middlewares=skydive-www-redirect
+      - traefik.http.routers.skydive-apex.service=skydive
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=3)"]
       interval: 10s
@@ -41,8 +51,8 @@ services:
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=skydive-proxy
       - --entrypoints.web.address=:80
-#      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-#      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
       - --entrypoints.websecure.address=:443
       - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:?ACME_EMAIL must be set}
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json

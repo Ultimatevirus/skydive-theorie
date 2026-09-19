@@ -64,13 +64,16 @@ Create a protected `.env` containing a long random `SECRET_KEY`, the public `TRA
 
 ```dotenv
 SECRET_KEY=replace-with-a-long-random-secret
-TRAEFIK_HOST=theorie.example.com
+TRAEFIK_HOST=www.theorie.example.com
+TRAEFIK_APEX_HOST=theorie.example.com
 ACME_EMAIL=admin@example.com
 ACCESS_GATE_ENABLED=1
 ACCESS_CODE=replace-with-a-long-random-access-code
 KNMI_API_KEY=your-rotated-knmi-key
 KNMI_OPEN_DATA_URL=https://api.dataplatform.knmi.nl/open-data
 ```
+
+`TRAEFIK_HOST` is the canonical hostname the app is served on; `TRAEFIK_APEX_HOST` is the bare domain, which Traefik redirects to `TRAEFIK_HOST`. Make sure DNS records exist for both hostnames and point at the server.
 
 If you want to publish the site immediately without the gate, set `ACCESS_GATE_ENABLED=0` and leave `ACCESS_CODE` empty.
 
