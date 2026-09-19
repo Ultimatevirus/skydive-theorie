@@ -1,6 +1,7 @@
 services:
   app:
     image: ${APP_IMAGE:?APP_IMAGE must be set to an immutable image tag or digest}
+    restart: always
     build: !reset null
     environment:
       APP_ENV: production
@@ -10,13 +11,6 @@ services:
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
       KNMI_API_KEY: ${KNMI_API_KEY:-}
       KNMI_OPEN_DATA_URL: ${KNMI_OPEN_DATA_URL:-https://api.dataplatform.knmi.nl/open-data}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
-      CONTACT_RECIPIENT_EMAIL: ${CONTACT_RECIPIENT_EMAIL:-}
-      CONTACT_SENDER_EMAIL: ${CONTACT_SENDER_EMAIL:-}
     labels:
       - traefik.http.routers.skydive.tls.certresolver=letsencrypt
 

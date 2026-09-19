@@ -3,11 +3,9 @@ import logging
 import os
 import random
 import re
-import smtplib
 import sqlite3
 import time
 from datetime import timedelta
-from email.message import EmailMessage
 from pathlib import Path
 
 from flask import (
@@ -98,49 +96,6 @@ DEFAULT_LOCAL_DB = BASE_DIR / "data.db"
 PRODUCTION_DB = Path("/data/data.db")
 ALLOWED_LEVELS = ("A", "B")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
-EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
-HEADER_INJECTION_PATTERN = re.compile(r"[\r\n]")
-
-
-def send_contact_email(name, email, message):
-    """Send a contact form submission via SMTP; returns True on success."""
-    host = os.getenv("SMTP_HOST")
-    recipient = os.getenv("CONTACT_RECIPIENT_EMAIL")
-    if not host or not recipient:
-        logger.error("Contact email not sent: SMTP_HOST or CONTACT_RECIPIENT_EMAIL not configured")
-        return False
-
-    if HEADER_INJECTION_PATTERN.search(name) or HEADER_INJECTION_PATTERN.search(email):
-        logger.error("Contact email not sent: rejected header injection attempt")
-        return False
-    if not EMAIL_PATTERN.match(email):
-        logger.error("Contact email not sent: invalid submitted email address")
-        return False
-
-    port = int(os.getenv("SMTP_PORT", "587"))
-    username = os.getenv("SMTP_USERNAME")
-    password = os.getenv("SMTP_PASSWORD")
-    use_tls = os.getenv("SMTP_USE_TLS", "1").lower() not in {"0", "false", "no"}
-    sender = os.getenv("CONTACT_SENDER_EMAIL", username or recipient)
-
-    msg = EmailMessage()
-    msg["Subject"] = f"New contact form message from {name}"
-    msg["From"] = sender
-    msg["To"] = recipient
-    msg["Reply-To"] = email
-    msg.set_content(f"Name: {name}\nEmail: {email}\n\n{message}")
-
-    try:
-        with smtplib.SMTP(host, port, timeout=10) as smtp:
-            if use_tls:
-                smtp.starttls()
-            if username and password:
-                smtp.login(username, password)
-            smtp.send_message(msg)
-    except (smtplib.SMTPException, OSError):
-        logger.exception("Failed to send contact form email")
-        return False
-    return True
 
 
 def translate(text, language="NL", **values):
@@ -656,43 +611,10 @@ def metar_practice():
     )
 
 
-@app.route("/contact", methods=["GET", "POST"])
+@app.route("/contact")
 def contact():
-    """Handle contact form display and validation."""
-    if request.method == "POST":
-        name = request.form.get("name", "").strip()
-        email = request.form.get("email", "").strip()
-        message = request.form.get("message", "").strip()
-
-        if not name or not email or not message:
-            contact_context = {
-                "success": False,
-                "error": "Vul alle velden in om contact op te nemen.",
-                "name": name,
-            }
-            return render_template("contact.html", **contact_context)
-
-        if not send_contact_email(name, email, message):
-            contact_context = {
-                "success": False,
-                "error": "Er ging iets mis bij het verzenden van je bericht. Probeer het later opnieuw.",
-                "name": name,
-            }
-            return render_template("contact.html", **contact_context)
-
-        contact_context = {
-            "success": True,
-            "error": None,
-            "name": name,
-        }
-        return render_template("contact.html", **contact_context)
-
-    contact_context = {
-        "success": False,
-        "error": None,
-        "name": "",
-    }
-    return render_template("contact.html", **contact_context)
+    """Show the contact page with a mailto link."""
+    return render_template("contact.html")
 
 
 @app.route("/start", methods=["POST"])

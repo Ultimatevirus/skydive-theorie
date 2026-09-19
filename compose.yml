@@ -15,13 +15,6 @@ services:
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
       KNMI_API_KEY: ${KNMI_API_KEY:-}
       KNMI_OPEN_DATA_URL: ${KNMI_OPEN_DATA_URL:-https://api.dataplatform.knmi.nl/open-data}
-      SMTP_HOST: ${SMTP_HOST:-}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USERNAME: ${SMTP_USERNAME:-}
-      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
-      CONTACT_RECIPIENT_EMAIL: ${CONTACT_RECIPIENT_EMAIL:-}
-      CONTACT_SENDER_EMAIL: ${CONTACT_SENDER_EMAIL:-}
     networks:
       - proxy
     labels:

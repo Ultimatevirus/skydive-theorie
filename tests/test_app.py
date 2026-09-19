@@ -310,50 +310,13 @@ class PracticeFlowTests(unittest.TestCase):
                 os.remove(db_path)
 
 
-class ContactFormTests(unittest.TestCase):
-    smtp_env = {
-        "SMTP_HOST": "smtp.example.com",
-        "CONTACT_RECIPIENT_EMAIL": "owner@example.com",
-    }
-
-    def test_contact_form_sends_email_on_success(self):
+class ContactPageTests(unittest.TestCase):
+    def test_contact_page_shows_mailto_link(self):
         client = app.test_client()
 
-        with patch.dict(os.environ, self.smtp_env), patch("app.smtplib.SMTP") as smtp_cls:
-            smtp = smtp_cls.return_value.__enter__.return_value
-            response = client.post(
-                "/contact",
-                data={"name": "Jane", "email": "jane@example.com", "message": "Hello there"},
-            )
+        response = client.get("/contact")
 
-        smtp.send_message.assert_called_once()
-        sent_message = smtp.send_message.call_args[0][0]
-        self.assertEqual(sent_message["Reply-To"], "jane@example.com")
-        self.assertIn("Je bericht is verzonden", response.get_data(as_text=True))
-
-    def test_contact_form_shows_error_when_smtp_fails(self):
-        client = app.test_client()
-
-        with patch.dict(os.environ, self.smtp_env), patch("app.smtplib.SMTP") as smtp_cls:
-            smtp_cls.return_value.__enter__.side_effect = OSError("connection refused")
-            response = client.post(
-                "/contact",
-                data={"name": "Jane", "email": "jane@example.com", "message": "Hello there"},
-            )
-
-        self.assertIn("Er ging iets mis bij het verzenden", response.get_data(as_text=True))
-
-    def test_contact_form_rejects_header_injection(self):
-        client = app.test_client()
-
-        with patch.dict(os.environ, self.smtp_env), patch("app.smtplib.SMTP") as smtp_cls:
-            response = client.post(
-                "/contact",
-                data={"name": "Jane\r\nBcc: attacker@example.com", "email": "jane@example.com", "message": "Hello"},
-            )
-
-        smtp_cls.return_value.__enter__.return_value.send_message.assert_not_called()
-        self.assertIn("Er ging iets mis bij het verzenden", response.get_data(as_text=True))
+        self.assertIn("mailto:skydive-theorie.domain177@passinbox.com", response.get_data(as_text=True))
 
     def test_get_db_path_resolves_local_db_when_production_db_unavailable(self):
         with patch.dict(os.environ, {}, clear=False):
