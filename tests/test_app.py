@@ -9,6 +9,15 @@ import app as app_module
 from app import app
 
 
+def csrf_data(client, **data):
+    with client.session_transaction() as session:
+        token = session.get("csrf_token")
+        if not token:
+            token = "test-csrf-token"
+            session["csrf_token"] = token
+    return {"csrf_token": token, **data}
+
+
 class PracticeFlowTests(unittest.TestCase):
     def test_recent_template_strings_are_in_english_translation_map(self):
         required = [
@@ -48,6 +57,14 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
 
+    def test_security_headers_are_added_to_html_responses(self):
+        response = app.test_client().get("/")
+
+        self.assertEqual(response.headers["Cross-Origin-Opener-Policy"], "same-origin")
+        self.assertEqual(response.headers["Referrer-Policy"], "strict-origin-when-cross-origin")
+        self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        self.assertEqual(response.headers["X-Frame-Options"], "DENY")
+
     def test_production_compose_keeps_knmi_metar_configuration(self):
         compose_path = Path(app_module.BASE_DIR) / "compose.production.yml"
         compose_text = compose_path.read_text(encoding="utf-8")
@@ -61,7 +78,7 @@ class PracticeFlowTests(unittest.TestCase):
     def test_language_selection_persists_and_localizes_pages(self):
         client = app.test_client()
 
-        response = client.post("/language", data={"language": "EN"})
+        response = client.post("/language", data=csrf_data(client, language="EN"))
 
         self.assertEqual(response.status_code, 302)
         with client.session_transaction() as session:
@@ -128,7 +145,7 @@ class PracticeFlowTests(unittest.TestCase):
         client = app.test_client()
         response = client.post(
             "/practice/select",
-            data={"level": "A"},
+            data=csrf_data(client, level="A"),
             follow_redirects=False,
         )
 
@@ -149,7 +166,7 @@ class PracticeFlowTests(unittest.TestCase):
         client = app.test_client()
         response = client.post(
             "/practice/mode/A",
-            data={"practice_type": "exam"},
+            data=csrf_data(client, practice_type="exam"),
             follow_redirects=False,
         )
 
@@ -163,7 +180,7 @@ class PracticeFlowTests(unittest.TestCase):
         client = app.test_client()
         response = client.post(
             "/practice/mode/A",
-            data={"practice_type": "free"},
+            data=csrf_data(client, practice_type="free"),
             follow_redirects=False,
         )
 
@@ -334,8 +351,8 @@ class ContactPageTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=False):
             if "DB_PATH" in os.environ:
                 del os.environ["DB_PATH"]
-            client.post("/practice/select", data={"level": "B"})
-            response = client.post("/practice/mode/B", data={"practice_type": "exam"})
+            client.post("/practice/select", data=csrf_data(client, level="B"))
+            response = client.post("/practice/mode/B", data=csrf_data(client, practice_type="exam"))
             self.assertEqual(response.status_code, 302)
             exam_response = client.get("/exam")
             self.assertEqual(exam_response.status_code, 200)

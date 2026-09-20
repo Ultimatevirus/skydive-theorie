@@ -1,5 +1,8 @@
 /pycache/* 
 /.venv/*
 __pycache__/*
+/tests/__pycache__/*
+/tests/__pycache__/
+/tests/__pycache__
 .vscode/*
 .env
