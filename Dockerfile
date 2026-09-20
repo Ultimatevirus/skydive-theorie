@@ -12,6 +12,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app.py ./
+COPY db.py ./
 COPY quiz.py ./
 COPY metar.py ./
 COPY translations.py ./
