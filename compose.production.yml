@@ -70,6 +70,13 @@ services:
     networks:
       - proxy
 
+  logrotate:
+    build:
+      context: ./logrotate
+    restart: unless-stopped
+    volumes:
+      - traefik-logs:/logs
+
 networks:
   proxy:
     name: skydive-proxy
