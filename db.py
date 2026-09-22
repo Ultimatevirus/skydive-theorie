@@ -14,6 +14,8 @@ def get_db_path():
     """Resolve a stable SQLite database path for local and container use."""
     configured_path = os.getenv("DB_PATH")
     if configured_path:
+        if configured_path.startswith("/") and os.name == "nt":
+            return configured_path
         db_path = Path(configured_path)
     elif PRODUCTION_DB.exists():
         db_path = PRODUCTION_DB

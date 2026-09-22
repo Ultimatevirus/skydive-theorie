@@ -579,6 +579,41 @@ button.theme-toggle {
     margin-bottom: 30px;
 }
 
+.roadmap-panel {
+    width: 100%;
+    margin: -8px auto 30px;
+    border: 1px solid rgba(15, 118, 110, 0.16);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--primary-soft);
+    text-align: left;
+}
+
+.roadmap-panel h3 {
+    margin: 0;
+    padding: 11px 20px;
+    background: rgba(15, 118, 110, 0.1);
+    color: var(--primary-dark);
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+.roadmap-list {
+    margin: 0;
+    padding: 14px 20px 14px 42px;
+    color: var(--muted);
+}
+
+.roadmap-list li {
+    padding: 4px 0 4px 6px;
+}
+
+.roadmap-list li::marker {
+    color: var(--primary);
+    font-size: 0.85em;
+}
+
 .button-row {
     display: flex;
     gap: 14px;
@@ -883,6 +918,7 @@ textarea {
     border: 1px solid rgba(15, 118, 110, 0.2);
     background: linear-gradient(135deg, var(--primary) 0%, #0f9a9c 100%);
     color: #ffffff;
+    text-decoration: none;
     box-shadow: 0 14px 26px rgba(15, 118, 110, 0.18);
     font-size: 1.5rem;
     font-weight: 800;
@@ -1424,6 +1460,20 @@ body {
 :root[data-theme="dark"] .topic-summary ul,
 :root[data-theme="dark"] .topic-status,
 :root[data-theme="dark"] .timer-box span {
+    color: var(--muted);
+}
+
+:root[data-theme="dark"] .roadmap-panel {
+    border-color: rgba(39, 199, 194, 0.22);
+    background: rgba(39, 199, 194, 0.1);
+}
+
+:root[data-theme="dark"] .roadmap-panel h3 {
+    background: rgba(39, 199, 194, 0.14);
+    color: var(--primary);
+}
+
+:root[data-theme="dark"] .roadmap-list {
     color: var(--muted);
 }
 
