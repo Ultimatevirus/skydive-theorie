@@ -9,16 +9,24 @@
         <div class="home-hero">
             <p class="eyebrow">{{ t('Welkom') }}</p>
             <h1>{{ t('Oefenen voor je KNVVL A/B brevet') }}</h1>
-            <p>{{ t('Deze website is ontworpen om je te helpen bij het leren voor de KNVVL theorie examens voor het A of B brevet. Toen ik zelf aan het leren was voor mijn A brevet, merkte ik dat er weinig online oefenmateriaal beschikbaar was. Daarom besloot ik om deze site te maken, zodat andere skydivers een handige plek hebben om te oefenen en zich voor te bereiden op hun examens.') }}</p>
-            <p><b>{{ t('Let op!: Dit zijn geen officiële KNVVL (oefen)examenvragen!') }}</b></p>
-            <p><b>{{ t('Op dit moment zijn de vragen nog NIET gevalideerd!') }}</b></p>
-            <p>{{ t('De vragen op deze site zijn ontworpen om je te helpen met de voorbereiding op de theorie examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Ik ben daarnaast slechts een enthousiaste skydiver en geen instructeur. Als je vragen hebt over de inhoud van de examens, raad ik aan om contact op te nemen met een (door de KNVVL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet.') }}</p>
-            <p>{{ t('Deze site is nog volop in ontwikkeling, mocht je tips of ideeën willen delen neem dan vooral contact op via het contactformulier op de site. Voor de technici onder ons kan je de Github repo inkijken op de volgende locatie.') }}</p>
+            <p>{{ t('Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVVL theorie-examens, voornamelijk voor het A of B brevet.') }}</p>
+            <p><b>{{ t('Let op!: Dit zijn geen officiële KNVVL (oefen)examenvragen en ze zijn tevens NIET gevalideerd!') }}</b></p>
+            <p>{{ t('De vragen op deze site zijn ontworpen om beginnende skydivers te helpen met de voorbereiding op de theorie-examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Als je vragen hebt over de inhoud van de examens, is het aan te raden om contact op te nemen met een (door de KNVVL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet. Voor algemene leertips en adviezen kan je de pagina "leren voor het examen" bezoeken') }}</p>
+            <div class="roadmap-panel">
+                <h3>{{ t('Ontwikkelings roadmap') }}</h3>
+                <ul class="roadmap-list">
+                    <li>C-brevetvragen</li>
+                    <li>Circuitplanningmodus</li>
+                    <li>Meer dynamisch gegenereerde vragen</li>
+                </ul>
+            </div>
+            <p>{{ t('Deze site is nog volop in ontwikkeling. Mocht je tips of ideeën willen delen, neem dan vooral contact op via het contactformulier op de site. Ideeën die op de planning staan om geïmplementeerd te worden, kun je boven terugvinden op de ontwikkelings roadmap. Het gehele project is open-source; mocht je willen bijdragen of de technische details willen inzien, dan kan je via de GitHub Repo knop de openbare repository bezoeken.') }}</p>
+  
             <div class="button-row">
                 <a href="{{ url_for('practice') }}" class="primary-btn">{{ t('Naar examen') }}</a>
                 <a href="{{ url_for('metar_practice') }}" class="secondary-btn">{{ t('METAR oefenen') }}</a>
                 <a href="{{ url_for('contact') }}" class="secondary-btn">{{ t('Contact') }}</a>
-                <a href="https://github.com/Ultimatevirus/skydive-theorie" target="_blank" rel="noopener noreferrer" class="secondary-btn">{{ t('Github Repo') }}</a>
+                <a href="https://github.com/Ultimatevirus/skydive-theorie" target="_blank" rel="noopener noreferrer" class="secondary-btn">{{ t('GitHub Repo') }}</a>
             </div>
         </div>
     </div>

@@ -27,6 +27,10 @@ class PracticeFlowTests(unittest.TestCase):
             "METAR mode",
             "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.",
             "Selecteer een luchthaven om de dagelijkse METAR te laden.",
+            "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVVL theorie-examens, voornamelijk voor het A of B brevet.",
+            "De vragen op deze site zijn ontworpen om beginnende skydivers te helpen met de voorbereiding op de theorie-examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Als je vragen hebt over de inhoud van de examens, is het aan te raden om contact op te nemen met een (door de KNVVL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet. Voor algemene leertips en adviezen kan je de pagina \"leren voor het examen\" bezoeken",
+            "Voor de KNVVL theorie-examens is het belangrijk om niet alleen vragen te oefenen, maar ook de achterliggende stof goed door te nemen. Manieren om dit aan te pakken zijn bijvoorbeeld het doornemen van het BVR en de bijlagen, uitgebreidere weerberichten lezen, praten met instructeurs, hulpinstructeurs en riggers en documentatie van fabricanten lezen. Deze website kan je daarnaast gebruiken als een overzicht van mogelijke leerpunten, een voorproef op het examen of als startpunt voor verdere verdieping.",
+            "Ontwikkelings roadmap",
         ]
 
         for key in required:
@@ -47,6 +51,8 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('fetchpriority="high"', html)
         self.assertIn("branding/background.jpg", html)
         self.assertIn("branding/logo.png", html)
+        self.assertIn('href="/"', html)
+        self.assertIn('class="brand-link"', html)
         self.assertEqual(background_response.status_code, 200)
         self.assertIn("public", background_response.headers["Cache-Control"])
         self.assertIn("max-age=31536000", background_response.headers["Cache-Control"])
@@ -90,6 +96,25 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('data-language="EN"', html)
         self.assertIn('language-option is-selected', html)
         self.assertIn('<html lang="en">', html)
+
+    def test_gdpr_notice_is_bilingual_and_linked_from_footer(self):
+        client = app.test_client()
+
+        dutch_response = client.get("/gdpr")
+        dutch_html = dutch_response.get_data(as_text=True)
+
+        self.assertEqual(dutch_response.status_code, 200)
+        self.assertIn("Server- en websitebezoeklogs", dutch_html)
+        self.assertIn('href="/gdpr"', dutch_html)
+        self.assertIn(">EU GDPR</a>", dutch_html)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        english_response = client.get("/gdpr")
+        english_html = english_response.get_data(as_text=True)
+
+        self.assertEqual(english_response.status_code, 200)
+        self.assertIn("Server and website access logs", english_html)
+        self.assertIn("Server access logs are retained for a maximum of <strong>30 days</strong>", english_html)
 
     def test_questions_are_filtered_by_language(self):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:

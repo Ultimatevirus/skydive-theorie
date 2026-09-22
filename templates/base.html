@@ -22,7 +22,9 @@
 <body>
     <header class="site-header">
         <div class="container header-inner">
-            <div class="brand"><img src="{{ url_for('static', filename='branding/logo.png') }}" alt="Skydive-theorie.nl"></div>
+            <a href="{{ url_for('index') }}" class="brand-link" aria-label="Skydive-theorie.nl home">
+                <div class="brand"><img src="{{ url_for('static', filename='branding/logo.png') }}" alt="Skydive-theorie.nl"></div>
+            </a>
             {% if show_nav | default(True) %}
                 <button type="button" class="nav-toggle" aria-label="{{ t('Menu') }}" aria-expanded="false" aria-controls="main-nav"><span class="nav-toggle-bar"></span><span class="nav-toggle-label">{{ t('Menu') }}</span></button>
                 <nav class="main-nav" id="main-nav">
@@ -78,7 +80,8 @@
 
     <footer class="site-footer">
         <div class="container footer-inner">
-            <span>{{ t('gemaakt door Alex Brittmann') }}</span>
+            <span>{{ t('Gemaakt door Alex Brittmann') }}</span>
+            <a class="footer-legal-link" href="{{ url_for('gdpr') }}">EU GDPR</a>
         </div>
     </footer>
 

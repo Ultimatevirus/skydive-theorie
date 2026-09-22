@@ -40,12 +40,9 @@
                         <span class="choice-label">{{ t('Oefenexamen maken') }}</span>
                     </button>
                 </form>
-                <form method="POST" action="{{ url_for('practice_mode', level=level) }}" class="choice-form">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" name="practice_type" value="free" class="choice-card option-card">
-                        <span class="choice-label">{{ t('Vrij oefenen') }}</span>
-                    </button>
-                </form>
+                <a href="{{ url_for('practice_free', level=level) }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t('Vrij oefenen') }}</span>
+                </a>
             </div>
         {% elif stage == 'free' %}
             <form method="POST" action="{{ url_for('practice_free', level=level) }}" class="start-form">

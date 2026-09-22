@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}EU GDPR | Skydive-theorie.nl{% endblock %}
+
+{% set page_name = 'gdpr' %}
+
+{% block content %}
+    <article class="card gdpr-card">
+        {% if language == 'EN' %}
+            <p class="eyebrow">EU GDPR</p>
+            <h1>Server and website access logs</h1>
+
+            <p>When you visit skydive-theorie.nl, the web server automatically records limited technical information about requests made to the website. This information is collected for the purposes of operating, securing, troubleshooting and improving the website.</p>
+
+            <p>The information recorded consists of the following:</p>
+            <ul>
+                <li>IP address;</li>
+                <li>date and time of the request;</li>
+                <li>requested URL and HTTP method;</li>
+                <li>HTTP response status code;</li>
+                <li>amount of data transferred;</li>
+                <li>technical information relating to the connection, such as the HTTP protocol and TLS version.</li>
+            </ul>
+
+            <p>These logs are used to monitor the availability and security of the website, investigate technical problems, detect abuse and obtain basic, aggregated statistics about website usage.</p>
+
+            <p>The processing is based on the legitimate interest in operating and securing the website and maintaining its reliability (Article 6(1)(f) GDPR). The information is not used to identify individual visitors, create personal profiles, or provide targeted advertising.</p>
+
+            <p>Server access logs are retained for a maximum of <strong>30 days</strong>, after which they are automatically deleted or overwritten. These logs are not retained longer than necessary for the purposes described above, except where a longer retention period is necessary to investigate or document a security incident or to comply with a legal obligation.</p>
+
+            <p>Access to server logs is restricted to authorised persons responsible for operating and maintaining the website. The logs are not publicly accessible.</p>
+
+            <p>For website statistics, we use the open-source GoAccess software to analyse the server access logs. GoAccess processes the server log data locally on the server; the access-log data is not sent to an external analytics provider.</p>
+
+            <p>Because server logs can contain IP addresses, they may constitute personal data under the GDPR. You have the rights provided by the GDPR, including the right to request access to your personal data, rectification where applicable, erasure where applicable, and to lodge a complaint with the Dutch Data Protection Authority (Autoriteit Persoonsgegevens). If you wish to file a GDPR request please use the contact page on the website to file a request.</p>
+        {% else %}
+            <p class="eyebrow">EU GDPR</p>
+            <h1>Server- en websitebezoeklogs</h1>
+
+            <p>Wanneer je skydive-theorie.nl bezoekt, registreert de webserver automatisch beperkte technische informatie over verzoeken aan de website. Deze informatie wordt verzameld voor het functioneren, beveiligen, oplossen van problemen en verbeteren van de website.</p>
+
+            <p>De geregistreerde informatie bevat het volgende:</p>
+            <ul>
+                <li>IP-adres;</li>
+                <li>datum en tijd van het verzoek;</li>
+                <li>de opgevraagde URL en HTTP-methode;</li>
+                <li>HTTP-responscode;</li>
+                <li>hoeveelheid overgedragen gegevens;</li>
+                <li>technische informatie over de verbinding, zoals het HTTP-protocol en de TLS-versie.</li>
+            </ul>
+
+            <p>Deze logs worden gebruikt om de beschikbaarheid en veiligheid van de website te bewaken, technische problemen te onderzoeken, misbruik te detecteren en eenvoudige, geaggregeerde statistieken over het websitegebruik te verkrijgen.</p>
+
+            <p>De verwerking is gebaseerd gerechtvaardigd belang bij het beheren en beveiligen van de website en het waarborgen van de betrouwbaarheid ervan (artikel 6 lid 1 onder f AVG). De informatie wordt niet gebruikt om individuele bezoekers te identificeren, persoonlijke profielen aan te maken of gerichte advertenties te tonen.</p>
+
+            <p>Serverbezoeklogs worden maximaal <strong>30 dagen</strong> bewaard, waarna ze automatisch worden verwijderd of overschreven. Deze logs worden niet langer dan nodig is dan voor de hierboven beschreven doeleinden bewaard, behalve wanneer een langere bewaartermijn nodig is om een beveiligingsincident te onderzoeken of vast te leggen, of om aan een wettelijke verplichting te voldoen.</p>
+
+            <p>Toegang tot serverlogs is beperkt tot bevoegde personen die verantwoordelijk zijn voor het beheren en onderhouden van de website. De logs zijn niet openbaar toegankelijk.</p>
+
+            <p>Voor website-statistieken wordt de opensource-software GoAccess gebruikt om de serverbezoeklogs te analyseren. GoAccess verwerkt de serverloggegevens lokaal op de server; de gegevens uit de bezoeklogs worden niet naar een externe analyticsprovider gestuurd.</p>
+
+            <p>Omdat serverlogs IP-adressen kunnen bevatten, kunnen ze onder de AVG persoonsgegevens vormen. Je hebt de rechten die de AVG biedt, waaronder het recht om inzage in je persoonsgegevens te vragen, om rectificatie waar van toepassing en om gegevens te laten wissen waar van toepassing. Ook kun je een klacht indienen bij de Autoriteit Persoonsgegevens. Mocht je een AVG verzoek willen indienen dan kan je het contactformulier op de website gebruiken om dit verzoek in te dienen.</p>
+        {% endif %}
+    </article>
+{% endblock %}

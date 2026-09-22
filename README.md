@@ -84,6 +84,8 @@ docker compose -f compose.production.yml up -d --build --remove-orphans
 docker compose -f compose.production.yml ps
 ```
 
+The production stack also runs a separate log rotation container. It rotates Traefik logs daily and retains the latest 30 rotations in the shared `traefik-logs` volume.
+
 If you prefer immutable image deployments instead of on-host builds, set `APP_IMAGE` and use the checked-in image override:
 
 ```powershell
