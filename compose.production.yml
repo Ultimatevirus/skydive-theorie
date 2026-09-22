@@ -59,7 +59,7 @@ services:
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
       - --accesslog=true
       - --accesslog.filepath=/logs/access.log
-      - --acceslog.format=json
+      - --accesslog.format=json
     ports:
       - "80:80"
       - "443:443"
