@@ -91,6 +91,25 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('language-option is-selected', html)
         self.assertIn('<html lang="en">', html)
 
+    def test_gdpr_notice_is_bilingual_and_linked_from_footer(self):
+        client = app.test_client()
+
+        dutch_response = client.get("/gdpr")
+        dutch_html = dutch_response.get_data(as_text=True)
+
+        self.assertEqual(dutch_response.status_code, 200)
+        self.assertIn("Server- en websitebezoeklogs", dutch_html)
+        self.assertIn('href="/gdpr"', dutch_html)
+        self.assertIn(">EU GDPR</a>", dutch_html)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        english_response = client.get("/gdpr")
+        english_html = english_response.get_data(as_text=True)
+
+        self.assertEqual(english_response.status_code, 200)
+        self.assertIn("Server and website access logs", english_html)
+        self.assertIn("Server access logs are retained for a maximum of <strong>30 days</strong>", english_html)
+
     def test_questions_are_filtered_by_language(self):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
             db_path = temp_db.name

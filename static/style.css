@@ -639,10 +639,49 @@ button:hover,
 }
 
 .footer-inner {
-    justify-content: center;
+    display: flex;
+    justify-content: space-between;
     font-weight: 600;
     color: var(--muted);
     padding: 22px 0;
+}
+
+.footer-legal-link {
+    color: var(--text);
+    border: 1px solid currentColor;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.86rem;
+    line-height: 1.2;
+    text-decoration: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.footer-legal-link:hover,
+.footer-legal-link:focus-visible {
+    background: var(--text);
+    color: var(--card);
+}
+
+.gdpr-card {
+    max-width: 960px;
+}
+
+.gdpr-card h1 {
+    margin-bottom: 28px;
+}
+
+.gdpr-card p,
+.gdpr-card li {
+    color: var(--muted);
+}
+
+.gdpr-card ul {
+    padding-left: 24px;
+}
+
+.gdpr-card strong {
+    color: var(--text);
 }
 
 .success-box,
@@ -879,6 +918,13 @@ textarea {
     border-radius: 16px;
     box-shadow: var(--shadow);
     padding: 32px;
+}
+
+.contact-card,
+.gdpr-card {
+    width: min(100%, 900px);
+    max-width: 900px;
+    margin: 0 auto;
 }
 
 .card.home-card {

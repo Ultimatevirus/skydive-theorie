@@ -57,7 +57,7 @@ if (
 
 ACCESS_TOKEN_LIFETIME = timedelta(days=int(os.getenv("ACCESS_TOKEN_LIFETIME_DAYS", "7")))
 app.config["PERMANENT_SESSION_LIFETIME"] = ACCESS_TOKEN_LIFETIME
-GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "static"}
+GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "static", "gdpr"}
 _missing_access_code_warned = False
 
 
@@ -644,6 +644,12 @@ def metar_practice():
 def contact():
     """Show the contact page with a mailto link."""
     return render_template("contact.html")
+
+
+@app.route("/gdpr")
+def gdpr():
+    """Show the EU GDPR notice for server and website access logs."""
+    return render_template("gdpr.html")
 
 
 @app.route("/start", methods=["POST"])
