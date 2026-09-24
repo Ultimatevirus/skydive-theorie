@@ -51,6 +51,8 @@ services:
       - --accesslog=true
       - --accesslog.filepath=/logs/access.log
       - --accesslog.format=json
+      - --accesslog.fields.headers.names.User-Agent=keep
+      - --accesslog.fields.headers.names.Referer=keep
     ports:
       - "${TRAEFIK_HTTP_PORT:-8080}:80"
       - "${TRAEFIK_HTTPS_PORT:-8443}:443"

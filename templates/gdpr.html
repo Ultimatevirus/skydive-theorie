@@ -17,6 +17,9 @@
                 <li>IP address;</li>
                 <li>date and time of the request;</li>
                 <li>requested URL and HTTP method;</li>
+                <li>the referring URL, where provided by your browser;</li>
+                <li>the browser's user-agent information, from which the browser and operating system may be inferred;</li>
+                <li>query-string information in the requested or referring URL, where provided;</li>
                 <li>HTTP response status code;</li>
                 <li>amount of data transferred;</li>
                 <li>technical information relating to the connection, such as the HTTP protocol and TLS version.</li>
@@ -30,7 +33,7 @@
 
             <p>Access to server logs is restricted to authorised persons responsible for operating and maintaining the website. The logs are not publicly accessible.</p>
 
-            <p>For website statistics, we use the open-source GoAccess software to analyse the server access logs. GoAccess processes the server log data locally on the server; the access-log data is not sent to an external analytics provider.</p>
+            <p>For website statistics, we use the open-source GoAccess software to analyse the server access logs. GoAccess processes the server log data locally on the server; the access-log data is not sent to an external analytics provider. Browser and operating-system statistics are inferred from user-agent information. Referrals and search phrases are only available when they are included in the referring or requested URL; search engines may omit search phrases.</p>
 
             <p>Because server logs can contain IP addresses, they may constitute personal data under the GDPR. You have the rights provided by the GDPR, including the right to request access to your personal data, rectification where applicable, erasure where applicable, and to lodge a complaint with the Dutch Data Protection Authority (Autoriteit Persoonsgegevens). If you wish to file a GDPR request please use the contact page on the website to file a request.</p>
         {% else %}
@@ -44,6 +47,9 @@
                 <li>IP-adres;</li>
                 <li>datum en tijd van het verzoek;</li>
                 <li>de opgevraagde URL en HTTP-methode;</li>
+                <li>de verwijzende URL, als je browser die meestuurt;</li>
+                <li>user-agentinformatie van de browser, waaruit de browser en het besturingssysteem kunnen worden afgeleid;</li>
+                <li>informatie uit querystrings in de opgevraagde of verwijzende URL, als die wordt meegestuurd;</li>
                 <li>HTTP-responscode;</li>
                 <li>hoeveelheid overgedragen gegevens;</li>
                 <li>technische informatie over de verbinding, zoals het HTTP-protocol en de TLS-versie.</li>
@@ -57,7 +63,7 @@
 
             <p>Toegang tot serverlogs is beperkt tot bevoegde personen die verantwoordelijk zijn voor het beheren en onderhouden van de website. De logs zijn niet openbaar toegankelijk.</p>
 
-            <p>Voor website-statistieken wordt de opensource-software GoAccess gebruikt om de serverbezoeklogs te analyseren. GoAccess verwerkt de serverloggegevens lokaal op de server; de gegevens uit de bezoeklogs worden niet naar een externe analyticsprovider gestuurd.</p>
+            <p>Voor website-statistieken wordt de opensource-software GoAccess gebruikt om de serverbezoeklogs te analyseren. GoAccess verwerkt de serverloggegevens lokaal op de server; de gegevens uit de bezoeklogs worden niet naar een externe analyticsprovider gestuurd. Browser- en besturingssysteemstatistieken worden afgeleid uit user-agentinformatie. Verwijzingen en zoektermen zijn alleen beschikbaar als ze in de verwijzende of opgevraagde URL staan; zoekmachines kunnen zoektermen weglaten.</p>
 
             <p>Omdat serverlogs IP-adressen kunnen bevatten, kunnen ze onder de AVG persoonsgegevens vormen. Je hebt de rechten die de AVG biedt, waaronder het recht om inzage in je persoonsgegevens te vragen, om rectificatie waar van toepassing en om gegevens te laten wissen waar van toepassing. Ook kun je een klacht indienen bij de Autoriteit Persoonsgegevens. Mocht je een AVG verzoek willen indienen dan kan je het contactformulier op de website gebruiken om dit verzoek in te dienen.</p>
         {% endif %}

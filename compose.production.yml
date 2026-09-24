@@ -60,6 +60,8 @@ services:
       - --accesslog=true
       - --accesslog.filepath=/logs/access.log
       - --accesslog.format=json
+      - --accesslog.fields.headers.names.User-Agent=keep
+      - --accesslog.fields.headers.names.Referer=keep
     ports:
       - "80:80"
       - "443:443"
