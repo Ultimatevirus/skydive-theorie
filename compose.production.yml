@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     expose:
       - "5000"
+    volumes:
+      - app-data:/data
     environment:
       APP_ENV: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
@@ -13,6 +15,14 @@ services:
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-*}
       KNMI_API_KEY: ${KNMI_API_KEY:-}
       KNMI_OPEN_DATA_URL: ${KNMI_OPEN_DATA_URL:-https://api.dataplatform.knmi.nl/open-data}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM_EMAIL: ${SMTP_FROM_EMAIL:-}
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-1}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-0}
     networks:
       - proxy
     labels:
@@ -60,6 +70,8 @@ services:
       - --accesslog=true
       - --accesslog.filepath=/logs/access.log
       - --accesslog.format=json
+      - --accesslog.fields.headers.names.User-Agent=keep
+      - --accesslog.fields.headers.names.Referer=keep
     ports:
       - "80:80"
       - "443:443"
@@ -82,5 +94,6 @@ networks:
     name: skydive-proxy
 
 volumes:
+  app-data:
   letsencrypt:
   traefik-logs:

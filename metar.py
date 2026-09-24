@@ -237,7 +237,7 @@ def _signed_number(value):
 
 
 def _connect_db():
-    """Open a connection with WAL mode so metar writes don't lock out other readers."""
+    """Open a connection with the shared SQLite busy handling."""
     return connect_db(path=get_db_path())
 
 

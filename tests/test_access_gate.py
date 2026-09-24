@@ -35,6 +35,8 @@ class AccessGateTests(unittest.TestCase):
             self.assertEqual(client.get("/healthz").status_code, 200)
             self.assertEqual(client.get("/favicon.ico").status_code, 200)
             self.assertEqual(client.get("/favicon.svg").status_code, 200)
+            self.assertEqual(client.get("/robots.txt").status_code, 200)
+            self.assertEqual(client.get("/sitemap.xml").status_code, 200)
             self.assertEqual(
                 client.get("/static/style.css").status_code, 200
             )

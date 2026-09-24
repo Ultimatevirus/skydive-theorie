@@ -3,7 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import app as app_module
 from app import app
@@ -356,12 +356,140 @@ class PracticeFlowTests(unittest.TestCase):
 
 
 class ContactPageTests(unittest.TestCase):
-    def test_contact_page_shows_mailto_link(self):
+    def test_contact_page_shows_message_form(self):
         client = app.test_client()
 
         response = client.get("/contact")
+        html = response.get_data(as_text=True)
 
-        self.assertIn("mailto:skydive-theorie.domain177@passinbox.com", response.get_data(as_text=True))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('name="email"', html)
+        self.assertIn('name="subject"', html)
+        self.assertIn('name="message"', html)
+        self.assertIn("Vraag over de website", html)
+
+    def test_contact_form_rejects_invalid_input(self):
+        client = app.test_client()
+
+        response = client.post(
+            "/contact",
+            data=csrf_data(client, email="not-an-email", subject="Anders", message="Test"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Vul een geldig e-mailadres in.", response.get_data(as_text=True))
+
+    def test_contact_form_sends_email_and_redirects_to_confirmation(self):
+        client = app.test_client()
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        smtp.__exit__.return_value = False
+        environment = {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "mailer@example.test",
+            "SMTP_PASSWORD": "secret",
+            "SMTP_FROM_EMAIL": "mailer@example.test",
+            "CONTACT_EMAIL": "owner@example.test",
+            "SMTP_USE_TLS": "1",
+        }
+
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        try:
+            with patch.object(app_module, "get_db_path", return_value=db_path), patch.dict(
+                os.environ, environment, clear=False
+            ), patch.object(app_module.smtplib, "SMTP", return_value=smtp) as smtp_factory, patch.object(
+                app_module,
+                "start_contact_message_delivery",
+                side_effect=lambda **values: app_module.send_contact_message(**values),
+            ):
+                response = client.post(
+                    "/contact",
+                    data=csrf_data(
+                        client,
+                        email="visitor@example.test",
+                        subject="Suggestie",
+                        message="Een nuttige suggestie.",
+                    ),
+                )
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("sent=1", response.headers["Location"])
+        smtp_factory.assert_called_once_with("smtp.example.test", 587, timeout=20)
+        smtp.starttls.assert_called_once_with()
+        smtp.login.assert_called_once_with("mailer@example.test", "secret")
+        sent_email = smtp.send_message.call_args.args[0]
+        self.assertEqual(sent_email["To"], "owner@example.test")
+        self.assertEqual(sent_email["Reply-To"], "visitor@example.test")
+        self.assertIn("Een nuttige suggestie.", sent_email.get_content())
+
+        confirmation = client.get(response.headers["Location"])
+        self.assertIn("Je bericht is verzonden.", confirmation.get_data(as_text=True))
+
+    def test_contact_usage_allows_three_messages_and_cleans_old_rows(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        try:
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                conn = sqlite3.connect(db_path)
+                conn.execute(
+                    "CREATE TABLE contact_form_usage (date TEXT, ip TEXT)"
+                )
+                conn.execute(
+                    "INSERT INTO contact_form_usage (date, ip) VALUES (datetime('now', '-31 days'), ?)",
+                    ("203.0.113.10",),
+                )
+                conn.executemany(
+                    "INSERT INTO contact_form_usage (date, ip) VALUES (datetime('now', '-1 hour'), ?)",
+                    [("203.0.113.10",), ("203.0.113.10",)],
+                )
+                conn.commit()
+                conn.close()
+
+                self.assertTrue(
+                    app_module.reserve_contact_form_usage("203.0.113.10")
+                )
+                self.assertFalse(
+                    app_module.reserve_contact_form_usage("203.0.113.10")
+                )
+
+                conn = sqlite3.connect(db_path)
+                rows = conn.execute(
+                    "SELECT date, ip FROM contact_form_usage ORDER BY date"
+                ).fetchall()
+                conn.close()
+
+            self.assertEqual(len(rows), 3)
+            self.assertTrue(all(row[1] == "203.0.113.10" for row in rows))
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
+    def test_contact_form_shows_rate_limit_warning_without_sending(self):
+        client = app.test_client()
+
+        with patch.object(
+            app_module, "reserve_contact_form_usage", return_value=False
+        ), patch.object(app_module, "send_contact_message") as send_message:
+            response = client.post(
+                "/contact",
+                data=csrf_data(
+                    client,
+                    email="visitor@example.test",
+                    subject="Suggestie",
+                    message="Een nuttige suggestie.",
+                ),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("limiet van 3 berichten per dag", response.get_data(as_text=True))
+        send_message.assert_not_called()
 
     def test_get_db_path_resolves_local_db_when_production_db_unavailable(self):
         with patch.dict(os.environ, {}, clear=False):
