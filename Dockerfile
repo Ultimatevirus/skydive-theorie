@@ -17,6 +17,8 @@ COPY quiz.py ./
 COPY metar.py ./
 COPY translations.py ./
 COPY gunicorn_config.py ./
+COPY robots.txt ./
+COPY sitemap.xml ./
 COPY static ./static
 COPY templates ./templates
 COPY data.db /data/data.db
