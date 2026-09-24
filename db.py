@@ -40,13 +40,14 @@ def get_db_path():
     return str(db_path)
 
 
-def connect_db(path=None, row_factory=None):
+def connect_db(path=None, row_factory=None, configure_journal=False):
     """Open a configured SQLite connection with consistent busy handling."""
     conn = sqlite3.connect(path or get_db_path(), timeout=30)
     if row_factory is not None:
         conn.row_factory = row_factory
     conn.execute("PRAGMA busy_timeout=30000")
-    conn.execute("PRAGMA journal_mode=WAL")
+    if configure_journal:
+        conn.execute("PRAGMA journal_mode=WAL")
     return conn
 
 
@@ -94,7 +95,7 @@ def initialize_database(seed_path=None, database_path=None):
     if target_path.resolve() == seed_path.resolve():
         return
 
-    conn = connect_db(path=target_path)
+    conn = connect_db(path=target_path, configure_journal=True)
     try:
         conn.execute("ATTACH DATABASE ? AS seed", (str(seed_path),))
         seed_objects = _schema_objects(conn, "seed")

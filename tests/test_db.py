@@ -18,7 +18,11 @@ class DatabaseHelperTests(unittest.TestCase):
             db_path = temp_db.name
 
         try:
-            conn = db.connect_db(path=db_path, row_factory=sqlite3.Row)
+            conn = db.connect_db(
+                path=db_path,
+                row_factory=sqlite3.Row,
+                configure_journal=True,
+            )
             self.assertIs(conn.row_factory, sqlite3.Row)
             self.assertEqual(conn.execute("PRAGMA busy_timeout").fetchone()[0], 30000)
             journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
