@@ -13,8 +13,42 @@
             </div>
         </div>
 
-        <div class="button-row">
-            <a class="primary-btn" href="mailto:skydive-theorie.domain177@passinbox.com">{{ t('Stuur een e-mail') }}</a>
-        </div>
+        {% if sent %}
+            <div class="success-box" role="status">
+                {{ t('Je bericht is verzonden. Bedankt voor je bericht!') }}
+            </div>
+            <div class="button-row">
+                <a class="secondary-btn" href="{{ url_for('index') }}">{{ t('Terug naar home') }}</a>
+                <a class="secondary-btn" href="{{ url_for('contact') }}">{{ t('Nieuw bericht') }}</a>
+            </div>
+        {% else %}
+            {% if error %}
+                <div class="error-box" role="alert">{{ t(error) }}</div>
+            {% endif %}
+
+            <form method="POST" action="{{ url_for('contact') }}" class="contact-form">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="field-group">
+                    <label for="email">{{ t('Jouw e-mailadres') }}</label>
+                    <input id="email" name="email" type="email" value="{{ form_data.email }}" autocomplete="email" required>
+                </div>
+                <div class="field-group">
+                    <label for="subject">{{ t('Onderwerp') }}</label>
+                    <select id="subject" name="subject" required>
+                        <option value="" disabled {% if not form_data.subject %}selected{% endif %}>{{ t('Kies een onderwerp') }}</option>
+                        {% for subject in contact_subjects %}
+                            <option value="{{ subject }}" {% if form_data.subject == subject %}selected{% endif %}>{{ t(subject) }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="field-group">
+                    <label for="message">{{ t('Bericht') }}</label>
+                    <textarea id="message" name="message" rows="8" required>{{ form_data.message }}</textarea>
+                </div>
+                <div class="button-row">
+                    <button type="submit" class="primary-btn">{{ t('Bericht verzenden') }}</button>
+                </div>
+            </form>
+        {% endif %}
     </div>
 {% endblock %}

@@ -71,7 +71,19 @@ ACCESS_GATE_ENABLED=1
 ACCESS_CODE=replace-with-a-long-random-access-code
 KNMI_API_KEY=your-rotated-knmi-key
 KNMI_OPEN_DATA_URL=https://api.dataplatform.knmi.nl/open-data
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=mailer@example.com
+SMTP_PASSWORD=replace-with-an-smtp-password
+SMTP_FROM_EMAIL=mailer@example.com
+CONTACT_EMAIL=owner@example.com
+SMTP_USE_TLS=1
+SMTP_USE_SSL=0
 ```
+
+The contact form requires `SMTP_HOST` and `CONTACT_EMAIL`. SMTP authentication is
+used when `SMTP_USERNAME` is set. Use `SMTP_USE_SSL=1` for an SSL connection;
+otherwise the default is STARTTLS on port `587`.
 
 `TRAEFIK_HOST` is the canonical hostname the app is served on; `TRAEFIK_APEX_HOST` is the bare domain, which Traefik redirects to `TRAEFIK_HOST`. Make sure DNS records exist for both hostnames and point at the server.
 

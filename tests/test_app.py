@@ -3,7 +3,7 @@ import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import app as app_module
 from app import app
@@ -356,12 +356,69 @@ class PracticeFlowTests(unittest.TestCase):
 
 
 class ContactPageTests(unittest.TestCase):
-    def test_contact_page_shows_mailto_link(self):
+    def test_contact_page_shows_message_form(self):
         client = app.test_client()
 
         response = client.get("/contact")
+        html = response.get_data(as_text=True)
 
-        self.assertIn("mailto:skydive-theorie.domain177@passinbox.com", response.get_data(as_text=True))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('name="email"', html)
+        self.assertIn('name="subject"', html)
+        self.assertIn('name="message"', html)
+        self.assertIn("Vraag over de website", html)
+
+    def test_contact_form_rejects_invalid_input(self):
+        client = app.test_client()
+
+        response = client.post(
+            "/contact",
+            data=csrf_data(client, email="not-an-email", subject="Anders", message="Test"),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Vul een geldig e-mailadres in.", response.get_data(as_text=True))
+
+    def test_contact_form_sends_email_and_redirects_to_confirmation(self):
+        client = app.test_client()
+        smtp = MagicMock()
+        smtp.__enter__.return_value = smtp
+        smtp.__exit__.return_value = False
+        environment = {
+            "SMTP_HOST": "smtp.example.test",
+            "SMTP_PORT": "587",
+            "SMTP_USERNAME": "mailer@example.test",
+            "SMTP_PASSWORD": "secret",
+            "SMTP_FROM_EMAIL": "mailer@example.test",
+            "CONTACT_EMAIL": "owner@example.test",
+            "SMTP_USE_TLS": "1",
+        }
+
+        with patch.dict(os.environ, environment, clear=False), patch.object(
+            app_module.smtplib, "SMTP", return_value=smtp
+        ) as smtp_factory:
+            response = client.post(
+                "/contact",
+                data=csrf_data(
+                    client,
+                    email="visitor@example.test",
+                    subject="Suggestie",
+                    message="Een nuttige suggestie.",
+                ),
+            )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("sent=1", response.headers["Location"])
+        smtp_factory.assert_called_once_with("smtp.example.test", 587, timeout=20)
+        smtp.starttls.assert_called_once_with()
+        smtp.login.assert_called_once_with("mailer@example.test", "secret")
+        sent_email = smtp.send_message.call_args.args[0]
+        self.assertEqual(sent_email["To"], "owner@example.test")
+        self.assertEqual(sent_email["Reply-To"], "visitor@example.test")
+        self.assertIn("Een nuttige suggestie.", sent_email.get_content())
+
+        confirmation = client.get(response.headers["Location"])
+        self.assertIn("Je bericht is verzonden.", confirmation.get_data(as_text=True))
 
     def test_get_db_path_resolves_local_db_when_production_db_unavailable(self):
         with patch.dict(os.environ, {}, clear=False):

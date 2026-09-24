@@ -4,9 +4,11 @@ import os
 import random
 import re
 import secrets
+import smtplib
 import sqlite3
 import time
 from datetime import timedelta
+from email.message import EmailMessage
 
 from flask import (
     Flask,
@@ -134,6 +136,13 @@ def enforce_access_gate():
 
 ALLOWED_LEVELS = ("A", "B")
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+CONTACT_SUBJECTS = (
+    "Vraag over de website",
+    "Suggestie",
+    "Foutmelding",
+    "Privacy / AVG",
+    "Anders",
+)
 
 
 def translate(text, language="NL", **values):
@@ -652,10 +661,74 @@ def metar_practice():
     )
 
 
-@app.route("/contact")
+def send_contact_message(sender_email, subject, message):
+    """Send a contact message using SMTP settings supplied through the environment."""
+    smtp_host = os.getenv("SMTP_HOST")
+    recipient = os.getenv("CONTACT_EMAIL")
+    if not smtp_host or not recipient:
+        raise RuntimeError("SMTP_HOST and CONTACT_EMAIL must be configured")
+
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username = os.getenv("SMTP_USERNAME")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    sender = os.getenv("SMTP_FROM_EMAIL") or smtp_username or recipient
+    use_ssl = os.getenv("SMTP_USE_SSL", "0").lower() in {"1", "true", "yes"}
+    use_tls = os.getenv("SMTP_USE_TLS", "1").lower() in {"1", "true", "yes"}
+
+    email = EmailMessage()
+    email["From"] = sender
+    email["To"] = recipient
+    email["Reply-To"] = sender_email
+    email["Subject"] = f"Contactformulier: {subject}"
+    email.set_content(f"Afzender: {sender_email}\nOnderwerp: {subject}\n\n{message}")
+
+    smtp_class = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
+    with smtp_class(smtp_host, smtp_port, timeout=20) as smtp:
+        if use_tls and not use_ssl:
+            smtp.starttls()
+        if smtp_username:
+            smtp.login(smtp_username, smtp_password or "")
+        smtp.send_message(email)
+
+
+@app.route("/contact", methods=["GET", "POST"])
 def contact():
-    """Show the contact page with a mailto link."""
-    return render_template("contact.html")
+    """Render and handle the contact form."""
+    form_data = {"email": "", "subject": "", "message": ""}
+    error = None
+
+    if request.method == "POST":
+        form_data = {
+            "email": request.form.get("email", "").strip(),
+            "subject": request.form.get("subject", "").strip(),
+            "message": request.form.get("message", "").strip(),
+        }
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", form_data["email"]):
+            error = "Vul een geldig e-mailadres in."
+        elif form_data["subject"] not in CONTACT_SUBJECTS:
+            error = "Kies een onderwerp uit de lijst."
+        elif not form_data["message"]:
+            error = "Vul een bericht in."
+        else:
+            try:
+                send_contact_message(
+                    sender_email=form_data["email"],
+                    subject=form_data["subject"],
+                    message=form_data["message"],
+                )
+            except (OSError, smtplib.SMTPException, ValueError, RuntimeError):
+                logger.exception("Unable to send contact message")
+                error = "Je bericht kon niet worden verzonden. Probeer het later opnieuw."
+            else:
+                return redirect(url_for("contact", sent="1"))
+
+    return render_template(
+        "contact.html",
+        contact_subjects=CONTACT_SUBJECTS,
+        form_data=form_data,
+        error=error,
+        sent=request.args.get("sent") == "1",
+    )
 
 
 @app.route("/gdpr")
