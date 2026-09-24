@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+
+# Optional: block crawlers from admin-like or internal paths if needed
+# Disallow: /admin/
+# Disallow: /private/
+
+Sitemap: https://www.skydive-theorie.nl/sitemap.xml

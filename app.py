@@ -57,7 +57,7 @@ if (
 
 ACCESS_TOKEN_LIFETIME = timedelta(days=int(os.getenv("ACCESS_TOKEN_LIFETIME_DAYS", "7")))
 app.config["PERMANENT_SESSION_LIFETIME"] = ACCESS_TOKEN_LIFETIME
-GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "static", "gdpr"}
+GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "robots_txt", "sitemap_xml", "static", "gdpr"}
 _missing_access_code_warned = False
 
 
@@ -453,6 +453,18 @@ def favicon():
 @app.route("/healthz")
 def healthz():
     return {"status": "ok"}, 200
+
+
+@app.route("/robots.txt")
+def robots_txt():
+    """Serve crawler instructions without triggering the access gate."""
+    return send_file("robots.txt", mimetype="text/plain")
+
+
+@app.route("/sitemap.xml")
+def sitemap_xml():
+    """Serve the sitemap without triggering the access gate."""
+    return send_file("sitemap.xml", mimetype="application/xml")
 
 
 @app.route("/language", methods=["POST"])
