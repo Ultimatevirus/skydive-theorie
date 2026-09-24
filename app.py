@@ -9,6 +9,7 @@ import sqlite3
 import time
 from datetime import timedelta
 from email.message import EmailMessage
+from threading import Thread
 
 from flask import (
     Flask,
@@ -691,6 +692,82 @@ def send_contact_message(sender_email, subject, message):
         smtp.send_message(email)
 
 
+def start_contact_message_delivery(sender_email, subject, message):
+    """Deliver a contact message outside the request so SMTP cannot block the page."""
+    def deliver():
+        try:
+            send_contact_message(
+                sender_email=sender_email,
+                subject=subject,
+                message=message,
+            )
+        except (OSError, smtplib.SMTPException, ValueError, RuntimeError):
+            logger.exception("Unable to send contact message")
+
+    Thread(target=deliver, name="contact-message-delivery", daemon=True).start()
+
+
+def reserve_contact_form_usage(ip_address):
+    """Reserve one contact message for an IP address within the daily limit."""
+    conn = get_db_connection()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS contact_form_usage (
+                date TEXT,
+                ip TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS contact_form_usage_ip_date
+            ON contact_form_usage (ip, date)
+            """
+        )
+        conn.commit()
+        conn.execute(
+            "DELETE FROM contact_form_usage WHERE date < datetime('now', '-30 days')"
+        )
+        conn.commit()
+        usage_count = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM contact_form_usage
+            WHERE ip = ? AND date >= datetime('now', '-24 hours')
+            """,
+            (ip_address,),
+        ).fetchone()[0]
+        if usage_count >= 3:
+            return False
+
+        conn.execute("BEGIN IMMEDIATE")
+        usage_count = conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM contact_form_usage
+            WHERE ip = ? AND date >= datetime('now', '-24 hours')
+            """,
+            (ip_address,),
+        ).fetchone()[0]
+        if usage_count >= 3:
+            conn.commit()
+            return False
+
+        conn.execute(
+            "INSERT INTO contact_form_usage (date, ip) VALUES (datetime('now'), ?)",
+            (ip_address,),
+        )
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 @app.route("/contact", methods=["GET", "POST"])
 def contact():
     """Render and handle the contact form."""
@@ -709,18 +786,15 @@ def contact():
             error = "Kies een onderwerp uit de lijst."
         elif not form_data["message"]:
             error = "Vul een bericht in."
+        elif not reserve_contact_form_usage(request.remote_addr or ""):
+            error = "Je hebt de limiet van 3 berichten per dag bereikt. Probeer het morgen opnieuw."
         else:
-            try:
-                send_contact_message(
-                    sender_email=form_data["email"],
-                    subject=form_data["subject"],
-                    message=form_data["message"],
-                )
-            except (OSError, smtplib.SMTPException, ValueError, RuntimeError):
-                logger.exception("Unable to send contact message")
-                error = "Je bericht kon niet worden verzonden. Probeer het later opnieuw."
-            else:
-                return redirect(url_for("contact", sent="1"))
+            start_contact_message_delivery(
+                sender_email=form_data["email"],
+                subject=form_data["subject"],
+                message=form_data["message"],
+            )
+            return redirect(url_for("contact", sent="1"))
 
     return render_template(
         "contact.html",

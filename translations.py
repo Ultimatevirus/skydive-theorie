@@ -52,6 +52,7 @@ TRANSLATIONS = {
         "Vul een geldig e-mailadres in.": "Enter a valid email address.",
         "Kies een onderwerp uit de lijst.": "Choose a subject from the list.",
         "Vul een bericht in.": "Enter a message.",
+        "Je hebt de limiet van 3 berichten per dag bereikt. Probeer het morgen opnieuw.": "You have reached the limit of 3 messages per day. Please try again tomorrow.",
         "Je bericht kon niet worden verzonden. Probeer het later opnieuw.": "Your message could not be sent. Please try again later.",
         "Vragen": "Questions",
         "Verstreken tijd": "Elapsed time",
