@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     expose:
       - "5000"
+    volumes:
+      - app-data:/data
     environment:
       APP_ENV: production
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
@@ -92,5 +94,6 @@ networks:
     name: skydive-proxy
 
 volumes:
+  app-data:
   letsencrypt:
   traefik-logs:

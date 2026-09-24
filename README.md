@@ -107,7 +107,7 @@ docker compose -f compose.production.yml -f compose.production.image.yml up -d -
 
 Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Docker network. HTTP redirects to HTTPS, and Let's Encrypt state is stored in the named `letsencrypt` volume. Production session cookies are marked `Secure`, `HttpOnly`, and `SameSite=Lax`.
 
-The SQLite `data.db` file contains versioned application content and the daily METAR cache. It is baked into each image. Do not bind-mount a host database over `/data/data.db`; release a new image when question content changes.
+The SQLite `data.db` file contains versioned application content and the daily METAR cache. The image contains the latest seed database, while `/data/data.db` is stored in the persistent `app-data` volume. On startup, the latest questions are synchronized from the image seed; existing runtime data is preserved and new or changed seed schema objects are applied.
 
 ### KNMI METAR configuration
 
@@ -121,7 +121,7 @@ $env:KNMI_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 docker compose up --build -d
 ```
 
-The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for each airport on the current UTC day. METAR data is stored in the SQLite `metar` table and reused per airport and UTC day; same-day fetch claims prevent duplicate API calls across Gunicorn processes. The image contains the initial database, but `/data/data.db` is ephemeral unless a deployment explicitly mounts persistent storage. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
+The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for each airport on the current UTC day. METAR data is stored in the SQLite `metar` table and reused per airport and UTC day; same-day fetch claims prevent duplicate API calls across Gunicorn processes. The `/data/data.db` volume persists this cache across deployments. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
 
 ### Build and run the image directly
 
