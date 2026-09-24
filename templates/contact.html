@@ -30,7 +30,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field-group">
                     <label for="email">{{ t('Jouw e-mailadres') }}</label>
-                    <input id="email" name="email" type="email" value="{{ form_data.email }}" autocomplete="email" required>
+                    <input id="email" name="email" type="email" value="{{ form_data.email }}" autocomplete="email" pattern="[^\s@]+@[^\s@]+\.[^\s@]+" required>
                 </div>
                 <div class="field-group">
                     <label for="subject">{{ t('Onderwerp') }}</label>
