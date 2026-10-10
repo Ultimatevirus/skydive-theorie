@@ -1081,16 +1081,16 @@ def get_question_image_url(image_link):
     if normalized.startswith("/"):
         if normalized.startswith("/static/"):
             return normalized
-        return url_for("static", filename=normalized.lstrip("/"))
+        return asset_url(normalized.lstrip("/"))
 
     if normalized.startswith("static/"):
-        return url_for("static", filename=normalized.replace("static/", "", 1))
+        return asset_url(normalized.replace("static/", "", 1))
 
     if normalized.startswith("./"):
-        return url_for("static", filename=normalized.lstrip("./"))
+        return asset_url(normalized.lstrip("./"))
 
     if normalized.startswith("images/") or normalized.startswith("question_images/"):
-        return url_for("static", filename=normalized)
+        return asset_url(normalized)
 
     return None
 

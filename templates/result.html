@@ -53,7 +53,7 @@
 
                 {% if result.image_url %}
                     <div class="result-image">
-                        <img src="{{ result.image_url }}" alt="{{ t('Vraagafbeelding') }}" style="max-width: 100%; height: auto; margin: 10px 0;">
+                        <img src="{{ result.image_url }}" loading="lazy" decoding="async" alt="{{ t('Vraagafbeelding') }}" style="max-width: 100%; height: auto; margin: 10px 0;">
                     </div>
                 {% endif %}
 
