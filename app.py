@@ -885,31 +885,6 @@ def exam():
         session["exam_question_ids"] = [row["id"] for row in questions]
 
     if request.method == "POST":
-        rendered_questions = [render_question(row, level, language) for row in questions]
-        submitted_ids = {
-            key.split("_", 1)[1]
-            for key, value in request.form.items()
-            if key.startswith("answer_") and str(value).strip()
-        }
-
-        missing_answers = [
-            str(row["id"]) for row in questions if str(row["id"]) not in submitted_ids
-        ]
-
-        if missing_answers:
-            exam_context = {
-                "questions": rendered_questions,
-                "question_groups": build_question_groups(rendered_questions),
-                "total_questions": len(rendered_questions),
-                "started_at": session.get("started_at", time.time()),
-                "level": level,
-                "error": (
-                    "Niet alle vragen zijn ingevuld. Kies voor elke vraag een "
-                    "antwoord voordat je verder gaat."
-                ),
-            }
-            return render_template("exam.html", **exam_context)
-
         started_at = session.get("started_at")
         elapsed_seconds = time.time() - started_at if started_at else 0
 
@@ -933,7 +908,8 @@ def exam():
             submitted_value = request.form.get(f"answer_{row['id']}", "")
             selected_value = normalize_answer_value(submitted_value)
 
-            is_correct = selected_value == correct_answer
+            is_unanswered = not str(submitted_value).strip()
+            is_correct = not is_unanswered and selected_value == correct_answer
             if is_correct:
                 score += 1
                 topic_scores[topic]["correct"] += 1
@@ -947,6 +923,7 @@ def exam():
                     "selected": display_answer_value(submitted_value, language),
                     "correct": display_answer_value(row["true_answer"], language),
                     "is_correct": is_correct,
+                    "is_unanswered": is_unanswered,
                     "options": option_map,
                     "image_url": get_question_image_url(
                         get_row_value(row, "image_link")

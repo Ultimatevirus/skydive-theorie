@@ -1195,6 +1195,72 @@ button.topic-dropdown-trigger .topic-dropdown-caret {
     border-left: 6px solid var(--border);
 }
 
+.modal-backdrop[hidden] {
+    display: none;
+}
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(3px);
+}
+
+.modal-box {
+    width: 100%;
+    max-width: 460px;
+    padding: 28px;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+}
+
+.modal-box h3 {
+    margin: 0 0 10px;
+}
+
+.modal-box p {
+    margin: 0 0 20px;
+    color: var(--muted);
+}
+
+.question-heading {
+    display: flex;
+    align-items: stretch;
+    margin: 0 0 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.question-number {
+    flex: 0 0 auto;
+    min-width: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+    font-weight: 800;
+    border-right: 1px solid var(--border);
+}
+
+.question-title {
+    flex: 1;
+    margin: 0;
+    padding: 10px 14px;
+    font-size: inherit;
+    line-height: 1.4;
+}
+
 .result-item.result-correct {
     background: linear-gradient(180deg, #f0fff5, #f7fffb);
     border-color: rgba(19, 138, 93, 0.24);
@@ -1229,6 +1295,30 @@ button.topic-dropdown-trigger .topic-dropdown-caret {
 .answer-wrong {
     background: rgba(214, 59, 80, 0.08);
     color: var(--error);
+}
+
+.result-item.result-unanswered {
+    background: linear-gradient(180deg, #fff8e8, #fffcf3);
+    border-color: rgba(217, 119, 6, 0.25);
+    border-left-color: #f59e0b;
+}
+
+.answer-unanswered,
+.status-unanswered {
+    color: #b45309;
+}
+
+.answer-unanswered {
+    background: rgba(245, 158, 11, 0.14);
+}
+
+:root[data-theme="dark"] .result-item.result-unanswered {
+    background: rgba(245, 158, 11, 0.1);
+}
+
+:root[data-theme="dark"] .answer-unanswered,
+:root[data-theme="dark"] .status-unanswered {
+    color: #fbbf24;
 }
 
 .result-status {
