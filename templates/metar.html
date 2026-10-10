@@ -67,6 +67,7 @@
                     <div><span>{{ t('Luchthaven') }}</span><strong>{{ metar.airport }} · {{ metar.airport_name }}</strong></div>
                     <div><span>{{ t('Actuele METAR') }}</span><code>{{ metar.raw }}</code></div>
                 </div>
+                <input type="hidden" name="question_airport" value="{{ metar.airport }}">
                 <div class="metar-questions">
                     {% for q in questions %}
                         <div class="question-card">
