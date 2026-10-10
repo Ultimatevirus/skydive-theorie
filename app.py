@@ -454,7 +454,7 @@ def start_exam(level, question_amount, selected_topics=None):
 @app.route("/favicon.ico")
 def favicon():
     """Serve a high-contrast favicon for the browser tab."""
-    icon_path = os.path.join(app.root_path, "static", "icons", "plane-favicon.svg")
+    icon_path = os.path.join(app.root_path, "static", "branding", "skydive-theorie-favicon.svg")
     response = send_file(icon_path, mimetype="image/svg+xml")
     response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
