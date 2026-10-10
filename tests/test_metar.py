@@ -24,6 +24,17 @@ from metar import (
 )
 
 
+_access_gate_patcher = patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "0"})
+
+
+def setUpModule():
+    _access_gate_patcher.start()
+
+
+def tearDownModule():
+    _access_gate_patcher.stop()
+
+
 REPORT = "EHAM 021255Z 27012G20KT 9999 -RA SCT020 BKN035 12/08 Q1013"
 DEFINITIONS = load_weather_definitions(DEFAULT_LOCAL_DB)
 

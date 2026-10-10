@@ -9,6 +9,17 @@ import app as app_module
 from app import app
 
 
+_access_gate_patcher = patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "0"})
+
+
+def setUpModule():
+    _access_gate_patcher.start()
+
+
+def tearDownModule():
+    _access_gate_patcher.stop()
+
+
 def csrf_data(client, **data):
     with client.session_transaction() as session:
         token = session.get("csrf_token")
@@ -350,6 +361,55 @@ class PracticeFlowTests(unittest.TestCase):
                     "Weather": {"Wind": 2, "Clouds": 2},
                 },
             )
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
+    def test_selection_redistributes_questions_from_topics_at_capacity(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE questions (
+                id INTEGER PRIMARY KEY,
+                level TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT
+            )
+            """
+        )
+        conn.executemany(
+            """
+            INSERT INTO questions
+                (level, topic, subtopic, is_active, question, true_answer, false_answers)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("A", "Small", "Only", 1, f"Small {index}", "Ja", "[]")
+                for index in range(2)
+            ]
+            + [
+                ("A", "Large", "Only", 1, f"Large {index}", "Ja", "[]")
+                for index in range(10)
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        try:
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                counts, selected_total = app_module.get_topic_counts_for_level("A", 8)
+
+            self.assertEqual(selected_total, 8)
+            self.assertEqual(sum(sum(subtopics.values()) for subtopics in counts.values()), 8)
+            self.assertEqual(counts["Small"]["Only"], 2)
+            self.assertEqual(counts["Large"]["Only"], 6)
         finally:
             if os.path.exists(db_path):
                 os.remove(db_path)

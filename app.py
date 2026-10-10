@@ -310,9 +310,7 @@ def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL
     used = sum(topic_targets.values())
     if used < selected_total:
         for topic in topic_names:
-            free_space = sum(available_by_topic[topic].values()) - sum(
-                counts[topic].values()
-            )
+            free_space = sum(available_by_topic[topic].values()) - topic_targets[topic]
             if free_space > 0:
                 extra = min(selected_total - used, free_space)
                 topic_targets[topic] += extra
