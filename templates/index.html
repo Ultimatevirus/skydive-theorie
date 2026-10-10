@@ -1,8 +1,28 @@
 {% extends "base.html" %}
 
 {% block title %}Skydive-theorie.nl{% endblock %}
+{% block meta_description %}Oefen voor je KNVvL A/B brevet met duidelijke theorievragen, snelle oefenexamens en METAR-oefeningen voor skydivers in Nederland.{% endblock %}
+{% block og_description %}Oefen voor je KNVvL A/B brevet met duidelijke theorievragen, snelle oefenexamens en METAR-oefeningen voor skydivers in Nederland.{% endblock %}
+{% block twitter_description %}Oefen voor je KNVvL A/B brevet met duidelijke theorievragen, snelle oefenexamens en METAR-oefeningen voor skydivers in Nederland.{% endblock %}
 
 {% set page_name = 'index' %}
+
+{% block head_extra %}
+    <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "Skydive-theorie.nl",
+          "url": "{{ request.url_root.rstrip('/') }}/",
+          "description": "Online leerplatform voor KNVvL theorie-examens, oefenexamens en METAR-praktijk voor skydivers in Nederland.",
+          "inLanguage": ["nl", "en"],
+          "publisher": {
+            "@type": "Organization",
+            "name": "Skydive-theorie.nl"
+          }
+        }
+    </script>
+{% endblock %}
 
 {% block content %}
     <div class="card home-card">
