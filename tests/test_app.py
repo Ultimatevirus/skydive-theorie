@@ -47,6 +47,27 @@ class PracticeFlowTests(unittest.TestCase):
         for key in required:
             self.assertIn(key, app_module.TRANSLATIONS["EN"])
 
+    def test_metar_practice_shows_report_in_question_and_original_panel(self):
+        metar = MagicMock(airport="EHAM", airport_name="Amsterdam", raw="EHAM 101425Z 24012KT")
+        question = {
+            "question": "What is the wind direction?",
+            "options": ["240 degrees", "120 degrees"],
+            "field": "wind_direction",
+        }
+
+        with (
+            patch.object(app_module, "get_daily_metar", return_value=metar),
+            patch.object(app_module, "load_weather_definitions", return_value={}),
+            patch.object(app_module, "build_questions", return_value=[question]),
+        ):
+            response = app.test_client().get("/metar")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="metar-question-heading"', html)
+        self.assertIn('metar-question-cell metar-question-report', html)
+        self.assertGreaterEqual(html.count(metar.raw), 2)
+
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
         transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()
         stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
