@@ -36,6 +36,8 @@ class PracticeFlowTests(unittest.TestCase):
             "Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen!",
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
+            "Na het kiezen van een luchthaven krijg je de actuele METAR te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de METAR en worden dynamisch gegenereerd. De METAR's worden elke 30 minuten direct via het KNMI bijgewerkt.",
+            "Met een oefenexamen maak je een vaste set van 40 vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.",
             "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.",
             "Selecteer een luchthaven om de dagelijkse METAR te laden.",
             "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.",
@@ -46,6 +48,18 @@ class PracticeFlowTests(unittest.TestCase):
 
         for key in required:
             self.assertIn(key, app_module.TRANSLATIONS["EN"])
+
+    def test_practice_mode_explanation_is_displayed_in_english(self):
+        client = app.test_client()
+        client.post("/language", data=csrf_data(client, language="EN"))
+
+        response = client.get("/practice/mode/A")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "A practice exam gives you a fixed set of 40 questions. In free practice, you choose the number of questions and the topics.",
+            response.get_data(as_text=True),
+        )
 
     def test_metar_practice_shows_report_in_question_and_original_panel(self):
         metar = MagicMock(airport="EHAM", airport_name="Amsterdam", raw="EHAM 101425Z 24012KT")
