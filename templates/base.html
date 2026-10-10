@@ -9,8 +9,8 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
     <link rel="shortcut icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
     <title>{% block title %}Skydive-theorie.nl{% endblock %}</title>
-    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.jpg') }}" fetchpriority="high">
-    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.png') }}">
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.webp') }}" fetchpriority="high">
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.webp') }}">
     <script src="{{ asset_url('theme.js') }}"></script>
     <script src="{{ asset_url('page-transition.js') }}"></script>
     <link rel="stylesheet" href="{{ asset_url('style.css') }}">
@@ -23,7 +23,7 @@
     <header class="site-header">
         <div class="container header-inner">
             <a href="{{ url_for('index') }}" class="brand-link" aria-label="Skydive-theorie.nl home">
-                <div class="brand"><img src="{{ url_for('static', filename='branding/logo.png') }}" alt="Skydive-theorie.nl"></div>
+                <div class="brand"><img src="{{ url_for('static', filename='branding/logo.webp') }}" alt="Skydive-theorie.nl"></div>
             </a>
             {% if show_nav | default(True) %}
                 <button type="button" class="nav-toggle" aria-label="{{ t('Menu') }}" aria-expanded="false" aria-controls="main-nav"><span class="nav-toggle-bar"></span><span class="nav-toggle-label">{{ t('Menu') }}</span></button>

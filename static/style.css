@@ -69,14 +69,14 @@ html {
     min-height: 100%;
     background:
         linear-gradient(rgba(238, 246, 251, 0.78), rgba(248, 250, 252, 0.84)),
-        url("branding/background.jpg") center center / cover fixed no-repeat;
+        url("branding/background.webp") center center / cover fixed no-repeat;
     background-color: #eef6fb;
 }
 
 :root[data-theme="dark"] {
     background:
         linear-gradient(rgba(7, 18, 31, 0.78), rgba(10, 20, 34, 0.86)),
-        url("branding/background.jpg") center center / cover fixed no-repeat;
+        url("branding/background.webp") center center / cover fixed no-repeat;
     background-color: #07121f;
 }
 

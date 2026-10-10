@@ -144,7 +144,7 @@ def enforce_access_gate():
 
 
 ALLOWED_LEVELS = ("A", "B")
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 CONTACT_SUBJECTS = (
     "Vraag over de website",
     "Suggestie",
