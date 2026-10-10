@@ -985,12 +985,6 @@ def exam():
                 topic_scores[topic] = {"correct": 0, "total": 0}
 
             correct_answer = normalize_answer_value(row["true_answer"])
-            option_map = build_option_list(
-                row["false_answers"],
-                row["true_answer"],
-                level=level,
-                language=language,
-            )
 
             submitted_value = request.form.get(f"answer_{row['id']}", "")
             selected_value = normalize_answer_value(submitted_value)
@@ -1011,7 +1005,6 @@ def exam():
                     "correct": display_answer_value(row["true_answer"], language),
                     "is_correct": is_correct,
                     "is_unanswered": is_unanswered,
-                    "options": option_map,
                     "image_url": get_question_image_url(
                         get_row_value(row, "image_link")
                     ),

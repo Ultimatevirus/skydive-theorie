@@ -109,6 +109,29 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
 
+    def test_favicon_keeps_compatibility_urls_and_is_small(self):
+        client = app.test_client()
+        svg_response = client.get("/favicon.svg")
+        ico_response = client.get("/favicon.ico")
+        home_html = client.get("/").get_data(as_text=True)
+        static_response = client.get(
+            "/static/branding/skydive-theorie-favicon.svg"
+        )
+
+        self.assertEqual(svg_response.status_code, 200)
+        self.assertEqual(svg_response.mimetype, "image/svg+xml")
+        self.assertLess(len(svg_response.data), 10_000)
+        self.assertIn(b"<svg ", svg_response.data)
+        self.assertEqual(ico_response.status_code, 200)
+        self.assertIn(
+            'href="/static/branding/skydive-theorie-favicon.svg?v=',
+            home_html,
+        )
+        self.assertEqual(static_response.status_code, 200)
+        self.assertEqual(static_response.mimetype, "image/svg+xml")
+        self.assertLess(len(static_response.data), 10_000)
+        self.assertIn("max-age=31536000", static_response.headers["Cache-Control"])
+
     def test_security_headers_are_added_to_html_responses(self):
         response = app.test_client().get("/")
 
@@ -211,6 +234,40 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("Welk brevet wil je voor oefenen?", html)
         self.assertIn("A", html)
         self.assertIn("B", html)
+
+    def test_exam_submission_does_not_rebuild_options_for_result_page(self):
+        client = app.test_client()
+        questions = app_module.fetch_questions("A", 3)
+        question_ids = [int(row["id"]) for row in questions]
+        with client.session_transaction() as session:
+            session.update(
+                {
+                    "csrf_token": "test-csrf-token",
+                    "level": "A",
+                    "question_amount": len(question_ids),
+                    "selected_topics": None,
+                    "language": "NL",
+                    "exam_question_ids": question_ids,
+                    "started_at": 1000,
+                }
+            )
+        answers = {
+            f"answer_{row['id']}": str(row["true_answer"])
+            for row in questions
+        }
+
+        with patch.object(
+            app_module,
+            "build_option_list",
+            side_effect=AssertionError("Result page does not need answer options"),
+        ):
+            response = client.post(
+                "/exam",
+                data={"csrf_token": "test-csrf-token", **answers},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Je score:", response.get_data(as_text=True))
 
     def test_level_selection_redirects_to_mode_selection(self):
         client = app.test_client()

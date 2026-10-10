@@ -146,18 +146,26 @@
         const confirmModal = document.getElementById("confirm-modal");
         const confirmCancel = document.getElementById("confirm-cancel");
         const confirmContinue = document.getElementById("confirm-continue");
+        let submitting = false;
 
         function closeConfirmModal() {
             confirmModal.hidden = true;
         }
 
         examForm.addEventListener("submit", (event) => {
+            if (submitting) {
+                event.preventDefault();
+                return;
+            }
             const answered = document.querySelectorAll('#exam-form input[type="radio"]:checked').length;
             if (answered < questionIds.length) {
                 event.preventDefault();
                 confirmModal.hidden = false;
                 confirmContinue.focus();
+                return;
             }
+            submitting = true;
+            if (event.submitter) event.submitter.disabled = true;
         });
 
         confirmCancel.addEventListener("click", closeConfirmModal);
@@ -168,6 +176,10 @@
             if (event.key === "Escape" && !confirmModal.hidden) closeConfirmModal();
         });
         confirmContinue.addEventListener("click", () => {
+            if (submitting) return;
+            submitting = true;
+            confirmContinue.disabled = true;
+            examForm.querySelector('button[type="submit"]').disabled = true;
             examForm.submit();
         });
 

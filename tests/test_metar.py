@@ -8,6 +8,7 @@ from datetime import date
 from unittest.mock import patch
 
 import app as app_module
+import metar as metar_module
 from app import app
 from db import DEFAULT_LOCAL_DB
 from metar import (
@@ -277,6 +278,53 @@ class MetarServiceTests(unittest.TestCase):
         definitions = load_weather_definitions(DEFAULT_LOCAL_DB)
 
         self.assertEqual(definitions["FZFG"], ("Onderkoelde mist", "Freezing fog"))
+
+    def test_weather_definitions_are_cached_and_refresh_when_database_changes(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE metar_weather_codes (
+                METAR_abreviation TEXT,
+                NL_definition TEXT,
+                EN_definition TEXT
+            )
+            """
+        )
+        conn.execute(
+            "INSERT INTO metar_weather_codes VALUES (?, ?, ?)",
+            ("RA", "Regen", "Rain"),
+        )
+        conn.commit()
+        conn.close()
+
+        try:
+            with patch.object(
+                metar_module,
+                "connect_db",
+                wraps=metar_module.connect_db,
+            ) as connect:
+                first = load_weather_definitions(db_path)
+                second = load_weather_definitions(db_path)
+
+                self.assertEqual(first, {"RA": ("Regen", "Rain")})
+                self.assertEqual(second, first)
+                connect.assert_called_once()
+
+                conn = sqlite3.connect(db_path)
+                conn.execute(
+                    "INSERT INTO metar_weather_codes VALUES (?, ?, ?)",
+                    ("SN", "Sneeuw", "Snow"),
+                )
+                conn.commit()
+                conn.close()
+
+                updated = load_weather_definitions(db_path)
+                self.assertEqual(updated["SN"], ("Sneeuw", "Snow"))
+                self.assertEqual(connect.call_count, 2)
+        finally:
+            os.remove(db_path)
 
     def test_parser_reads_issue_time(self):
         self.assertEqual(parse_metar(REPORT)["issued_time"], "12:55")
