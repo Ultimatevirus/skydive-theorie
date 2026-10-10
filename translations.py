@@ -36,7 +36,7 @@ TRANSLATIONS = {
         "Kies oefenmodus": "Choose practice mode",
         "Oefenexamen maken": "Take a practice exam",
         "Vrij oefenen": "Free practice",
-        "Met een oefenexamen maak je een vaste set van 40 vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.": "A practice exam gives you a fixed set of 40 questions. In free practice, you choose the number of questions and the topics.",
+        "Met een oefenexamen maak je een vaste set van 40 willekeurige vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.": "A practice exam gives you a fixed set of 40 random questions. In free practice, you choose the number of questions and the topics.",
         "Neem contact op": "Get in touch",
         "Jouw e-mailadres": "Your email address",
         "Onderwerp": "Subject",
