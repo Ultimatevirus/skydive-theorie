@@ -4,12 +4,25 @@ from threading import Event, Thread
 from metar import metar_refresh_loop
 
 
+# Sized for a 4-core host; override per deployment (production compose runs several replicas).
+workers = int(os.environ.get('GUNICORN_PROCESSES', '4'))
 
-workers = int(os.environ.get('GUNICORN_PROCESSES', '2'))
+threads = int(os.environ.get('GUNICORN_THREADS', '6'))
 
-threads = int(os.environ.get('GUNICORN_THREADS', '16'))
+timeout = int(os.environ.get('GUNICORN_TIMEOUT', '60'))
 
-timeout = int(os.environ.get('GUNICORN_TIMEOUT', '120'))
+graceful_timeout = int(os.environ.get('GUNICORN_GRACEFUL_TIMEOUT', '30'))
+
+keepalive = int(os.environ.get('GUNICORN_KEEPALIVE', '5'))
+
+# Recycle workers periodically (staggered by jitter) to cap memory growth.
+max_requests = int(os.environ.get('GUNICORN_MAX_REQUESTS', '2000'))
+
+max_requests_jitter = int(os.environ.get('GUNICORN_MAX_REQUESTS_JITTER', '200'))
+
+# Keep worker heartbeat files in RAM so slow disk I/O cannot make the master kill healthy workers.
+if os.path.isdir('/dev/shm'):
+	worker_tmp_dir = '/dev/shm'
 
 bind = os.environ.get('GUNICORN_BIND', '0.0.0.0:5000')
 

@@ -3,12 +3,18 @@ services:
     build:
       context: .
     restart: unless-stopped
+    # Two replicas so one stalled or restarting container never takes the site offline.
+    deploy:
+      replicas: 2
     expose:
       - "5000"
     volumes:
       - app-data:/data
     environment:
       APP_ENV: production
+      # 2 replicas x 2 workers = 4 worker processes, one per core.
+      GUNICORN_PROCESSES: ${GUNICORN_PROCESSES:-2}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-6}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY must be set}
       ACCESS_GATE_ENABLED: ${ACCESS_GATE_ENABLED:-1}
       ACCESS_CODE: ${ACCESS_CODE:-}
@@ -35,7 +41,9 @@ services:
       - traefik.http.services.skydive.loadbalancer.server.port=5000
       - traefik.http.services.skydive.loadbalancer.healthcheck.path=/healthz
       - traefik.http.services.skydive.loadbalancer.healthcheck.interval=15s
-      - traefik.http.services.skydive.loadbalancer.healthcheck.timeout=8s
+      - traefik.http.services.skydive.loadbalancer.healthcheck.timeout=15s
+      - traefik.http.middlewares.skydive-compress.compress=true
+      - traefik.http.routers.skydive.middlewares=skydive-compress
       # Redirect the bare/apex domain to the canonical TRAEFIK_HOST (e.g. apex -> www)
       - traefik.http.middlewares.skydive-www-redirect.redirectregex.regex=^https?://${TRAEFIK_APEX_HOST:?TRAEFIK_APEX_HOST must be set}/(.*)
       - traefik.http.middlewares.skydive-www-redirect.redirectregex.replacement=https://${TRAEFIK_HOST:?TRAEFIK_HOST must be set}/$${1}
@@ -47,11 +55,36 @@ services:
       - traefik.http.routers.skydive-apex.middlewares=skydive-www-redirect
       - traefik.http.routers.skydive-apex.service=skydive
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=8)"]
-      interval: 15s
-      timeout: 10s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=12)"]
+      interval: 20s
+      timeout: 15s
       retries: 5
       start_period: 20s
+
+  static:
+    build:
+      context: .
+      dockerfile: nginx-static/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "80"
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=skydive-proxy
+      - traefik.http.routers.skydive-static.rule=Host(`${TRAEFIK_HOST:?TRAEFIK_HOST must be set}`) && PathPrefix(`/static/`)
+      - traefik.http.routers.skydive-static.priority=100
+      - traefik.http.routers.skydive-static.entrypoints=websecure
+      - traefik.http.routers.skydive-static.tls=true
+      - traefik.http.routers.skydive-static.tls.certresolver=letsencrypt
+      - traefik.http.routers.skydive-static.service=skydive-static
+      - traefik.http.services.skydive-static.loadbalancer.server.port=80
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   traefik:
     image: traefik:v3.6.2

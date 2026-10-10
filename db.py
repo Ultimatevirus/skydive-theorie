@@ -48,6 +48,7 @@ def connect_db(path=None, row_factory=None, configure_journal=False):
     conn.execute("PRAGMA busy_timeout=30000")
     if configure_journal:
         conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
     return conn
 
 

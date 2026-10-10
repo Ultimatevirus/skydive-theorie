@@ -27,6 +27,7 @@ class DatabaseHelperTests(unittest.TestCase):
             self.assertEqual(conn.execute("PRAGMA busy_timeout").fetchone()[0], 30000)
             journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
             self.assertEqual(journal_mode, "wal")
+            self.assertEqual(conn.execute("PRAGMA synchronous").fetchone()[0], 1)
             conn.close()
         finally:
             if os.path.exists(db_path):
