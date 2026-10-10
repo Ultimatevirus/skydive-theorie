@@ -22,7 +22,7 @@ from flask import (
     url_for,
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
-from metar import DUTCH_AIRPORTS, MetarError, get_daily_metar, grade_answers
+from metar import DUTCH_AIRPORTS, MetarError, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
 from quiz import (
     build_option_list,
     build_question_groups,
@@ -659,6 +659,7 @@ def metar_practice():
     ).strip().upper()
     error = None
     result = None
+    questions = []
 
     if selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
@@ -675,14 +676,26 @@ def metar_practice():
             metar = None
             error = str(exc)
 
-    if request.method == "POST" and request.form.get("action") == "check" and metar and not error:
-        result = grade_answers(metar, request.form)
+    if metar and not error:
+        language = normalize_language(session.get("language", "NL"))
+        definitions = load_weather_definitions()
+        checking = request.method == "POST" and request.form.get("action") == "check"
+        if checking:
+            seed = session.pop("metar_seed", None) or new_question_seed()
+        else:
+            seed = new_question_seed()
+            session["metar_seed"] = seed
+        questions = build_questions(metar, seed, language, definitions)
+        if checking:
+            result = grade_answers(questions, request.form)
 
     return render_template(
         "metar.html",
         airports=DUTCH_AIRPORTS,
         airport=selected_airport,
         metar=metar,
+        questions=questions,
+        submitted=request.form if result else {},
         result=result,
         error=error,
     )

@@ -810,6 +810,13 @@ button:hover,
     align-items: flex-end;
 }
 
+.metar-questions {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
 .metar-results {
     margin-top: 32px;
 }
