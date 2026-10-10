@@ -36,6 +36,8 @@ class PracticeFlowTests(unittest.TestCase):
             "Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen!",
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
+            "Na het kiezen van een luchthaven krijg je de actuele METAR te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de METAR en worden dynamisch gegenereerd. De METAR's worden elke 30 minuten direct via het KNMI bijgewerkt.",
+            "Met een oefenexamen maak je een vaste set van 40 vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.",
             "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.",
             "Selecteer een luchthaven om de dagelijkse METAR te laden.",
             "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.",
@@ -46,6 +48,18 @@ class PracticeFlowTests(unittest.TestCase):
 
         for key in required:
             self.assertIn(key, app_module.TRANSLATIONS["EN"])
+
+    def test_practice_mode_explanation_is_displayed_in_english(self):
+        client = app.test_client()
+        client.post("/language", data=csrf_data(client, language="EN"))
+
+        response = client.get("/practice/mode/A")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            "A practice exam gives you a fixed set of 40 questions. In free practice, you choose the number of questions and the topics.",
+            response.get_data(as_text=True),
+        )
 
     def test_metar_practice_shows_report_in_question_and_original_panel(self):
         metar = MagicMock(airport="EHAM", airport_name="Amsterdam", raw="EHAM 101425Z 24012KT")
@@ -73,7 +87,7 @@ class PracticeFlowTests(unittest.TestCase):
         stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
         client = app.test_client()
         html = client.get("/").get_data(as_text=True)
-        background_response = client.get("/static/branding/background.jpg")
+        background_response = client.get("/static/branding/background.webp")
 
         self.assertNotIn("page-entering", transition_script)
         self.assertIn("page-leaving", transition_script)
@@ -81,8 +95,8 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("background-color: #eef6fb", stylesheet)
         self.assertIn('rel="preload" as="image"', html)
         self.assertIn('fetchpriority="high"', html)
-        self.assertIn("branding/background.jpg", html)
-        self.assertIn("branding/logo.png", html)
+        self.assertIn("branding/background.webp", html)
+        self.assertIn("branding/logo.webp", html)
         self.assertIn('href="/"', html)
         self.assertIn('class="brand-link"', html)
         self.assertEqual(background_response.status_code, 200)
@@ -94,6 +108,29 @@ class PracticeFlowTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
+
+    def test_favicon_keeps_compatibility_urls_and_is_small(self):
+        client = app.test_client()
+        svg_response = client.get("/favicon.svg")
+        ico_response = client.get("/favicon.ico")
+        home_html = client.get("/").get_data(as_text=True)
+        static_response = client.get(
+            "/static/branding/skydive-theorie-favicon.svg"
+        )
+
+        self.assertEqual(svg_response.status_code, 200)
+        self.assertEqual(svg_response.mimetype, "image/svg+xml")
+        self.assertLess(len(svg_response.data), 10_000)
+        self.assertIn(b"<svg ", svg_response.data)
+        self.assertEqual(ico_response.status_code, 200)
+        self.assertIn(
+            'href="/static/branding/skydive-theorie-favicon.svg?v=',
+            home_html,
+        )
+        self.assertEqual(static_response.status_code, 200)
+        self.assertEqual(static_response.mimetype, "image/svg+xml")
+        self.assertLess(len(static_response.data), 10_000)
+        self.assertIn("max-age=31536000", static_response.headers["Cache-Control"])
 
     def test_security_headers_are_added_to_html_responses(self):
         response = app.test_client().get("/")
@@ -197,6 +234,40 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("Welk brevet wil je voor oefenen?", html)
         self.assertIn("A", html)
         self.assertIn("B", html)
+
+    def test_exam_submission_does_not_rebuild_options_for_result_page(self):
+        client = app.test_client()
+        questions = app_module.fetch_questions("A", 3)
+        question_ids = [int(row["id"]) for row in questions]
+        with client.session_transaction() as session:
+            session.update(
+                {
+                    "csrf_token": "test-csrf-token",
+                    "level": "A",
+                    "question_amount": len(question_ids),
+                    "selected_topics": None,
+                    "language": "NL",
+                    "exam_question_ids": question_ids,
+                    "started_at": 1000,
+                }
+            )
+        answers = {
+            f"answer_{row['id']}": str(row["true_answer"])
+            for row in questions
+        }
+
+        with patch.object(
+            app_module,
+            "build_option_list",
+            side_effect=AssertionError("Result page does not need answer options"),
+        ):
+            response = client.post(
+                "/exam",
+                data={"csrf_token": "test-csrf-token", **answers},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Je score:", response.get_data(as_text=True))
 
     def test_level_selection_redirects_to_mode_selection(self):
         client = app.test_client()

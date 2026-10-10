@@ -3,14 +3,30 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="{% block meta_description %}Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.{% endblock %}">
+    <meta name="robots" content="index,follow,max-image-preview:large">
+    <meta name="author" content="Alex Brittmann">
+    <meta name="theme-color" content="#0d1b2a">
+    <meta property="og:site_name" content="Skydive-theorie.nl">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ self.title() }}">
+    <meta property="og:description" content="{% block og_description %}Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.{% endblock %}">
+    <meta property="og:url" content="{{ request.url_root.rstrip('/') + request.path }}">
+    <meta property="og:image" content="{{ request.url_root.rstrip('/') + url_for('static', filename='branding/logo.webp') }}">
+    <meta property="og:image:alt" content="Skydive-theorie.nl logo">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ self.title() }}">
+    <meta name="twitter:description" content="{% block twitter_description %}Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.{% endblock %}">
+    <meta name="twitter:image" content="{{ request.url_root.rstrip('/') + url_for('static', filename='branding/logo.webp') }}">
+    <link rel="canonical" href="{{ request.url_root.rstrip('/') + request.path }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
-    <link rel="shortcut icon" type="image/svg+xml" href="{{ url_for('favicon') }}?v=2">
+    <link rel="icon" type="image/svg+xml" href="{{ asset_url('branding/skydive-theorie-favicon.svg') }}">
+    <link rel="shortcut icon" type="image/svg+xml" href="{{ asset_url('branding/skydive-theorie-favicon.svg') }}">
     <title>{% block title %}Skydive-theorie.nl{% endblock %}</title>
-    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.jpg') }}" fetchpriority="high">
-    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.png') }}">
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.webp') }}" fetchpriority="high">
+    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.webp') }}">
     <script src="{{ asset_url('theme.js') }}"></script>
     <script src="{{ asset_url('page-transition.js') }}"></script>
     <link rel="stylesheet" href="{{ asset_url('style.css') }}">
@@ -23,7 +39,7 @@
     <header class="site-header">
         <div class="container header-inner">
             <a href="{{ url_for('index') }}" class="brand-link" aria-label="Skydive-theorie.nl home">
-                <div class="brand"><img src="{{ url_for('static', filename='branding/logo.png') }}" alt="Skydive-theorie.nl"></div>
+                <div class="brand"><img src="{{ url_for('static', filename='branding/logo.webp') }}" alt="Skydive-theorie.nl"></div>
             </a>
             {% if show_nav | default(True) %}
                 <button type="button" class="nav-toggle" aria-label="{{ t('Menu') }}" aria-expanded="false" aria-controls="main-nav"><span class="nav-toggle-bar"></span><span class="nav-toggle-label">{{ t('Menu') }}</span></button>

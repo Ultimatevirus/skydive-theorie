@@ -9,7 +9,7 @@
         <div class="page-header">
             <div>
                 <h1>{{ t('METAR mode') }}</h1>
-                <p class="metar-subheader">{{ t("Kies een luchthaven en beantwoord de vragen over de actuele METAR. De METAR's worden elke 30 minuten direct via het KNMI bijgewerkt.") }}</p>
+                <p class="metar-subheader">{{ t("Na het kiezen van een luchthaven krijg je de actuele METAR te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de METAR en worden dynamisch gegenereerd. De METAR's worden elke 30 minuten direct via het KNMI bijgewerkt.") }}</p>
             </div>
         </div>
 
@@ -125,20 +125,33 @@
             Array.from(metarForm.querySelectorAll('input[type="radio"]')).map(input => input.name)
         ));
         let submitter = null;
+        let submitting = false;
 
         function closeConfirmModal() {
             confirmModal.hidden = true;
         }
 
         metarForm.addEventListener("submit", (event) => {
+            if (submitting) {
+                event.preventDefault();
+                return;
+            }
             submitter = event.submitter;
-            if (!submitter || submitter.value !== "check") return;
+            if (!submitter) return;
             const answered = metarForm.querySelectorAll('input[type="radio"]:checked').length;
-            if (answered < questionNames.length) {
+            if (submitter.value === "check" && answered < questionNames.length) {
                 event.preventDefault();
                 confirmModal.hidden = false;
                 confirmContinue.focus();
+                return;
             }
+            const action = document.createElement("input");
+            action.type = "hidden";
+            action.name = submitter.name;
+            action.value = submitter.value;
+            metarForm.appendChild(action);
+            submitting = true;
+            submitter.disabled = true;
         });
 
         document.getElementById("confirm-cancel").addEventListener("click", closeConfirmModal);
@@ -149,6 +162,12 @@
             if (event.key === "Escape" && !confirmModal.hidden) closeConfirmModal();
         });
         confirmContinue.addEventListener("click", () => {
+            if (submitting) return;
+            submitting = true;
+            confirmContinue.disabled = true;
+            metarForm.querySelectorAll('button[type="submit"]').forEach(button => {
+                button.disabled = true;
+            });
             const action = document.createElement("input");
             action.type = "hidden";
             action.name = "action";

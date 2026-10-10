@@ -9,7 +9,9 @@ import sqlite3
 import time
 from datetime import timedelta
 from email.message import EmailMessage
-from threading import Lock, Thread
+from threading import Thread
+
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from flask import (
     Flask,
@@ -40,6 +42,10 @@ app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
 logger = logging.getLogger(__name__)
 is_production = os.getenv("APP_ENV", "development").lower() == "production"
+# Behind Traefik the real client address is the last X-Forwarded-For entry; trust only that many proxy hops.
+trusted_proxy_count = int(os.getenv("TRUSTED_PROXY_COUNT", "1" if is_production else "0"))
+if trusted_proxy_count > 0:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=trusted_proxy_count, x_proto=trusted_proxy_count)
 secret_key = os.getenv("SECRET_KEY")
 if is_production and not secret_key:
     raise RuntimeError("SECRET_KEY must be set when APP_ENV=production")
@@ -138,7 +144,7 @@ def enforce_access_gate():
 
 
 ALLOWED_LEVELS = ("A", "B")
-IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png")
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp")
 CONTACT_SUBJECTS = (
     "Vraag over de website",
     "Suggestie",
@@ -525,24 +531,45 @@ def set_language():
 
 GATE_MAX_FAILURES = 5
 GATE_FAILURE_WINDOW = 60
-_gate_failures = {}
-_gate_failures_lock = Lock()
+_gate_table_ready = set()
+
+
+def _ensure_gate_failure_table(conn):
+    """Create the shared failed-attempt table once per database path."""
+    path = get_db_path()
+    if path in _gate_table_ready and os.path.exists(path):
+        return
+    conn.execute("CREATE TABLE IF NOT EXISTS gate_failure (ip TEXT NOT NULL, failed_at REAL NOT NULL)")
+    conn.execute("CREATE INDEX IF NOT EXISTS gate_failure_ip ON gate_failure (ip, failed_at)")
+    conn.commit()
+    _gate_table_ready.add(path)
 
 
 def _gate_attempts_exhausted(ip_address):
-    """Report whether an IP made too many wrong code attempts recently (tracked per worker process)."""
-    now = time.time()
-    with _gate_failures_lock:
-        for key in [k for k, stamps in _gate_failures.items() if not stamps or stamps[-1] < now - GATE_FAILURE_WINDOW]:
-            del _gate_failures[key]
-        recent = [stamp for stamp in _gate_failures.get(ip_address, []) if stamp >= now - GATE_FAILURE_WINDOW]
-        _gate_failures[ip_address] = recent
-        return len(recent) >= GATE_MAX_FAILURES
+    """Report whether an IP made too many wrong code attempts recently, shared across all workers and replicas."""
+    cutoff = time.time() - GATE_FAILURE_WINDOW
+    conn = get_db_connection()
+    try:
+        _ensure_gate_failure_table(conn)
+        conn.execute("DELETE FROM gate_failure WHERE failed_at < ?", (cutoff,))
+        conn.commit()
+        count = conn.execute(
+            "SELECT COUNT(*) FROM gate_failure WHERE ip = ? AND failed_at >= ?",
+            (ip_address, cutoff),
+        ).fetchone()[0]
+        return count >= GATE_MAX_FAILURES
+    finally:
+        conn.close()
 
 
 def _record_gate_failure(ip_address):
-    with _gate_failures_lock:
-        _gate_failures.setdefault(ip_address, []).append(time.time())
+    conn = get_db_connection()
+    try:
+        _ensure_gate_failure_table(conn)
+        conn.execute("INSERT INTO gate_failure (ip, failed_at) VALUES (?, ?)", (ip_address, time.time()))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 @app.route("/access-gate", methods=["GET", "POST"])
@@ -958,12 +985,6 @@ def exam():
                 topic_scores[topic] = {"correct": 0, "total": 0}
 
             correct_answer = normalize_answer_value(row["true_answer"])
-            option_map = build_option_list(
-                row["false_answers"],
-                row["true_answer"],
-                level=level,
-                language=language,
-            )
 
             submitted_value = request.form.get(f"answer_{row['id']}", "")
             selected_value = normalize_answer_value(submitted_value)
@@ -984,7 +1005,6 @@ def exam():
                     "correct": display_answer_value(row["true_answer"], language),
                     "is_correct": is_correct,
                     "is_unanswered": is_unanswered,
-                    "options": option_map,
                     "image_url": get_question_image_url(
                         get_row_value(row, "image_link")
                     ),
@@ -1054,16 +1074,16 @@ def get_question_image_url(image_link):
     if normalized.startswith("/"):
         if normalized.startswith("/static/"):
             return normalized
-        return url_for("static", filename=normalized.lstrip("/"))
+        return asset_url(normalized.lstrip("/"))
 
     if normalized.startswith("static/"):
-        return url_for("static", filename=normalized.replace("static/", "", 1))
+        return asset_url(normalized.replace("static/", "", 1))
 
     if normalized.startswith("./"):
-        return url_for("static", filename=normalized.lstrip("./"))
+        return asset_url(normalized.lstrip("./"))
 
     if normalized.startswith("images/") or normalized.startswith("question_images/"):
-        return url_for("static", filename=normalized)
+        return asset_url(normalized)
 
     return None
 

@@ -8,7 +8,7 @@ import os
 import random
 import re
 import time
-from threading import Event
+from threading import Event, Lock
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
@@ -28,6 +28,8 @@ DEFAULT_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 METAR_DATASET = os.getenv("KNMI_METAR_DATASET", "metar")
 METAR_VERSION = os.getenv("KNMI_METAR_VERSION", "1.0")
 _CACHE = {}
+_WEATHER_DEFINITIONS_CACHE = {}
+_WEATHER_DEFINITIONS_LOCK = Lock()
 API_CALL_LIMIT = 3
 API_CALL_WINDOW = 60
 CLAIM_TIMEOUT = 600
@@ -568,14 +570,24 @@ def _cloud_options(rng, clouds):
 
 def load_weather_definitions(path=None):
     """Read {abbreviation: (NL, EN)} from the metar_weather_codes table."""
-    conn = connect_db(path=path or get_db_path())
-    try:
-        rows = conn.execute(
-            "SELECT METAR_abreviation, NL_definition, EN_definition FROM metar_weather_codes"
-        ).fetchall()
-    finally:
-        conn.close()
-    return {row[0]: (row[1], row[2]) for row in rows}
+    database_path = os.path.abspath(path or get_db_path())
+    stat = os.stat(database_path)
+    cache_key = (database_path, stat.st_mtime_ns, stat.st_size)
+    with _WEATHER_DEFINITIONS_LOCK:
+        if cache_key in _WEATHER_DEFINITIONS_CACHE:
+            return _WEATHER_DEFINITIONS_CACHE[cache_key]
+
+        conn = connect_db(path=database_path)
+        try:
+            rows = conn.execute(
+                "SELECT METAR_abreviation, NL_definition, EN_definition FROM metar_weather_codes"
+            ).fetchall()
+        finally:
+            conn.close()
+        definitions = {row[0]: (row[1], row[2]) for row in rows}
+        _WEATHER_DEFINITIONS_CACHE.clear()
+        _WEATHER_DEFINITIONS_CACHE[cache_key] = definitions
+        return definitions
 
 
 def _describe_group(group, definitions, language):
