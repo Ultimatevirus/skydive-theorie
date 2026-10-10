@@ -7,7 +7,7 @@ from metar import metar_refresh_loop
 
 workers = int(os.environ.get('GUNICORN_PROCESSES', '2'))
 
-threads = int(os.environ.get('GUNICORN_THREADS', '4'))
+threads = int(os.environ.get('GUNICORN_THREADS', '16'))
 
 timeout = int(os.environ.get('GUNICORN_TIMEOUT', '120'))
 

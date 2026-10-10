@@ -45,8 +45,11 @@
         </div>
 
         {% for result in results %}
-            <div class="result-item {% if result.is_correct %}result-correct{% else %}result-wrong{% endif %}">
-                <h3>{{ result.question }}</h3>
+            <div class="result-item {% if result.is_unanswered %}result-unanswered{% elif result.is_correct %}result-correct{% else %}result-wrong{% endif %}">
+                <div class="question-heading">
+                    <span class="question-number">{{ loop.index }}</span>
+                    <h3 class="question-title">{{ result.question }}</h3>
+                </div>
 
                 {% if result.image_url %}
                     <div class="result-image">
@@ -55,13 +58,19 @@
                 {% endif %}
 
                 <div class="answer-row">
-                    <p class="answer-line {% if result.is_correct %}answer-correct{% else %}answer-wrong{% endif %}">
-                        {{ t('Jouw antwoord: {answer}', answer=result.selected) }}
-                    </p>
+                    {% if result.is_unanswered %}
+                        <p class="answer-line answer-unanswered">{{ t('Niet ingevuld') }}</p>
+                    {% else %}
+                        <p class="answer-line {% if result.is_correct %}answer-correct{% else %}answer-wrong{% endif %}">
+                            {{ t('Jouw antwoord: {answer}', answer=result.selected) }}
+                        </p>
+                    {% endif %}
                     <p class="answer-line answer-correct">{{ t('Goed antwoord: {answer}', answer=result.correct) }}</p>
                 </div>
 
-                {% if result.is_correct %}
+                {% if result.is_unanswered %}
+                    <p class="result-status status-unanswered">{{ t('Niet ingevuld') }}</p>
+                {% elif result.is_correct %}
                     <p class="result-status status-pass">{{ t('Correct') }}</p>
                 {% else %}
                     <p class="result-status status-fail">{{ t('Niet correct') }}</p>

@@ -11,6 +11,7 @@ from datetime import timedelta
 from email.message import EmailMessage
 from threading import Thread
 
+from flask_compress import Compress
 from flask import (
     Flask,
     redirect,
@@ -21,7 +22,7 @@ from flask import (
     url_for,
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
-from metar import DUTCH_AIRPORTS, MetarError, get_daily_metar, grade_answers
+from metar import DUTCH_AIRPORTS, MetarError, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
 from quiz import (
     build_option_list,
     build_question_groups,
@@ -38,6 +39,7 @@ from translations import TRANSLATIONS
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
+Compress(app)
 logger = logging.getLogger(__name__)
 is_production = os.getenv("APP_ENV", "development").lower() == "production"
 secret_key = os.getenv("SECRET_KEY")
@@ -170,6 +172,21 @@ def add_security_headers(response):
     return response
 
 
+@app.after_request
+def add_conditional_etag(response):
+    """Let browsers revalidate HTML pages and receive 304 instead of the full body."""
+    if (
+        request.method == "GET"
+        and response.status_code == 200
+        and response.mimetype == "text/html"
+        and not response.direct_passthrough
+    ):
+        response.headers.setdefault("Cache-Control", "private, no-cache")
+        response.add_etag()
+        response.make_conditional(request)
+    return response
+
+
 @app.context_processor
 def inject_language_context():
     language = normalize_language(session.get("language", "NL"))
@@ -293,9 +310,7 @@ def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL
     used = sum(topic_targets.values())
     if used < selected_total:
         for topic in topic_names:
-            free_space = sum(available_by_topic[topic].values()) - sum(
-                counts[topic].values()
-            )
+            free_space = sum(available_by_topic[topic].values()) - topic_targets[topic]
             if free_space > 0:
                 extra = min(selected_total - used, free_space)
                 topic_targets[topic] += extra
@@ -454,7 +469,7 @@ def start_exam(level, question_amount, selected_topics=None):
 @app.route("/favicon.ico")
 def favicon():
     """Serve a high-contrast favicon for the browser tab."""
-    icon_path = os.path.join(app.root_path, "static", "icons", "plane-favicon.svg")
+    icon_path = os.path.join(app.root_path, "static", "branding", "skydive-theorie-favicon.svg")
     response = send_file(icon_path, mimetype="image/svg+xml")
     response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
@@ -629,6 +644,11 @@ def learn():
     return render_template("learn.html")
 
 
+def metar_refresh_enabled():
+    """Request threads only read cached METARs when the background refresher fills the cache."""
+    return os.getenv("KNMI_METAR_REFRESH", "1").lower() not in {"0", "false", "no"}
+
+
 @app.route("/metar", methods=["GET", "POST"])
 def metar_practice():
     """Show and grade the daily METAR exercise for a Dutch airport."""
@@ -637,26 +657,43 @@ def metar_practice():
     ).strip().upper()
     error = None
     result = None
+    questions = []
 
     if selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
         metar = None
     else:
         try:
-            metar = get_daily_metar(selected_airport, wait_for_rate_limit=False)
+            metar = get_daily_metar(
+                selected_airport,
+                wait_for_rate_limit=False,
+                cache_only=metar_refresh_enabled(),
+            )
             session["metar_airport"] = selected_airport
         except MetarError as exc:
             metar = None
             error = str(exc)
 
-    if request.method == "POST" and request.form.get("action") == "check" and metar and not error:
-        result = grade_answers(metar, request.form)
+    if metar and not error:
+        language = normalize_language(session.get("language", "NL"))
+        definitions = load_weather_definitions()
+        checking = request.method == "POST" and request.form.get("action") == "check"
+        if checking:
+            seed = session.pop("metar_seed", None) or new_question_seed()
+        else:
+            seed = new_question_seed()
+            session["metar_seed"] = seed
+        questions = build_questions(metar, seed, language, definitions)
+        if checking:
+            result = grade_answers(questions, request.form)
 
     return render_template(
         "metar.html",
         airports=DUTCH_AIRPORTS,
         airport=selected_airport,
         metar=metar,
+        questions=questions,
+        submitted=request.form if result else {},
         result=result,
         error=error,
     )
@@ -859,31 +896,6 @@ def exam():
         session["exam_question_ids"] = [row["id"] for row in questions]
 
     if request.method == "POST":
-        rendered_questions = [render_question(row, level, language) for row in questions]
-        submitted_ids = {
-            key.split("_", 1)[1]
-            for key, value in request.form.items()
-            if key.startswith("answer_") and str(value).strip()
-        }
-
-        missing_answers = [
-            str(row["id"]) for row in questions if str(row["id"]) not in submitted_ids
-        ]
-
-        if missing_answers:
-            exam_context = {
-                "questions": rendered_questions,
-                "question_groups": build_question_groups(rendered_questions),
-                "total_questions": len(rendered_questions),
-                "started_at": session.get("started_at", time.time()),
-                "level": level,
-                "error": (
-                    "Niet alle vragen zijn ingevuld. Kies voor elke vraag een "
-                    "antwoord voordat je verder gaat."
-                ),
-            }
-            return render_template("exam.html", **exam_context)
-
         started_at = session.get("started_at")
         elapsed_seconds = time.time() - started_at if started_at else 0
 
@@ -907,7 +919,8 @@ def exam():
             submitted_value = request.form.get(f"answer_{row['id']}", "")
             selected_value = normalize_answer_value(submitted_value)
 
-            is_correct = selected_value == correct_answer
+            is_unanswered = not str(submitted_value).strip()
+            is_correct = not is_unanswered and selected_value == correct_answer
             if is_correct:
                 score += 1
                 topic_scores[topic]["correct"] += 1
@@ -921,6 +934,7 @@ def exam():
                     "selected": display_answer_value(submitted_value, language),
                     "correct": display_answer_value(row["true_answer"], language),
                     "is_correct": is_correct,
+                    "is_unanswered": is_unanswered,
                     "options": option_map,
                     "image_url": get_question_image_url(
                         get_row_value(row, "image_link")

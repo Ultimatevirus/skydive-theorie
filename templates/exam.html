@@ -30,6 +30,7 @@
 
         <form method="post" action="/exam" id="exam-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% set counter = namespace(n=0) %}
             {% for group in question_groups %}
                 <div class="topic-group">
                     <div class="topic-group-header">
@@ -37,8 +38,12 @@
                     </div>
 
                     {% for question in group.questions %}
+                        {% set counter.n = counter.n + 1 %}
                         <div class="question-card">
-                            <h4>{{ question.question }}</h4>
+                            <div class="question-heading">
+                                <span class="question-number">{{ counter.n }}</span>
+                                <h4 class="question-title">{{ question.question }}</h4>
+                            </div>
 
                             {% if question.image_url %}
                                 <div class="question-image">
@@ -68,6 +73,17 @@
 
             <button type="submit" class="primary-button">{{ t('Controleer antwoorden') }}</button>
         </form>
+
+        <div id="confirm-modal" class="modal-backdrop" hidden>
+            <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+                <h3 id="confirm-title">{{ t('Niet alle vragen zijn ingevuld') }}</h3>
+                <p>{{ t('Niet alle vragen zijn ingevuld. Weet je zeker dat je wilt doorgaan? Niet ingevulde vragen tellen als fout.') }}</p>
+                <div class="button-row">
+                    <button type="button" id="confirm-continue" class="primary-btn">{{ t('Doorgaan') }}</button>
+                    <button type="button" id="confirm-cancel" class="secondary-btn">{{ t('Terug naar examen') }}</button>
+                </div>
+            </div>
+        </div>
     </div>
 {% endblock %}
 
@@ -125,6 +141,35 @@
         });
 
         updateProgress();
+
+        const examForm = document.getElementById("exam-form");
+        const confirmModal = document.getElementById("confirm-modal");
+        const confirmCancel = document.getElementById("confirm-cancel");
+        const confirmContinue = document.getElementById("confirm-continue");
+
+        function closeConfirmModal() {
+            confirmModal.hidden = true;
+        }
+
+        examForm.addEventListener("submit", (event) => {
+            const answered = document.querySelectorAll('#exam-form input[type="radio"]:checked').length;
+            if (answered < questionIds.length) {
+                event.preventDefault();
+                confirmModal.hidden = false;
+                confirmContinue.focus();
+            }
+        });
+
+        confirmCancel.addEventListener("click", closeConfirmModal);
+        confirmModal.addEventListener("click", (event) => {
+            if (event.target === confirmModal) closeConfirmModal();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && !confirmModal.hidden) closeConfirmModal();
+        });
+        confirmContinue.addEventListener("click", () => {
+            examForm.submit();
+        });
 
         setInterval(() => {
             const elapsed = Math.floor((Date.now() / 1000) - startedAt);

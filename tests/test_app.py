@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sqlite3
 import tempfile
 import unittest
@@ -7,6 +7,17 @@ from unittest.mock import MagicMock, patch
 
 import app as app_module
 from app import app
+
+
+_access_gate_patcher = patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "0"})
+
+
+def setUpModule():
+    _access_gate_patcher.start()
+
+
+def tearDownModule():
+    _access_gate_patcher.stop()
 
 
 def csrf_data(client, **data):
@@ -21,15 +32,15 @@ def csrf_data(client, **data):
 class PracticeFlowTests(unittest.TestCase):
     def test_recent_template_strings_are_in_english_translation_map(self):
         required = [
-            "Oefenen voor je KNVVL A/B brevet",
-            "Let op!: Dit zijn geen officiële KNVVL (oefen)examenvragen!",
+            "Oefenen voor je KNVvL A/B brevet",
+            "Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen!",
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
             "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.",
             "Selecteer een luchthaven om de dagelijkse METAR te laden.",
-            "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVVL theorie-examens, voornamelijk voor het A of B brevet.",
-            "De vragen op deze site zijn ontworpen om beginnende skydivers te helpen met de voorbereiding op de theorie-examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Als je vragen hebt over de inhoud van de examens, is het aan te raden om contact op te nemen met een (door de KNVVL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet. Voor algemene leertips en adviezen kan je de pagina \"leren voor het examen\" bezoeken",
-            "Voor de KNVVL theorie-examens is het belangrijk om niet alleen vragen te oefenen, maar ook de achterliggende stof goed door te nemen. Manieren om dit aan te pakken zijn bijvoorbeeld het doornemen van het BVR en de bijlagen, uitgebreidere weerberichten lezen, praten met instructeurs, hulpinstructeurs en riggers en documentatie van fabricanten lezen. Deze website kan je daarnaast gebruiken als een overzicht van mogelijke leerpunten, een voorproef op het examen of als startpunt voor verdere verdieping.",
+            "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.",
+            "De vragen op deze site zijn ontworpen om beginnende skydivers te helpen met de voorbereiding op de theorie-examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Als je vragen hebt over de inhoud van de examens, is het aan te raden om contact op te nemen met een (door de KNVvL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet. Voor algemene leertips en adviezen kan je de pagina \"leren voor het examen\" bezoeken",
+            "Voor de KNVvL theorie-examens is het belangrijk om niet alleen vragen te oefenen, maar ook de achterliggende stof goed door te nemen. Manieren om dit aan te pakken zijn bijvoorbeeld het doornemen van het BVR en de bijlagen, uitgebreidere weerberichten lezen, praten met instructeurs, hulpinstructeurs en riggers en documentatie van fabricanten lezen. Deze website kan je daarnaast gebruiken als een overzicht van mogelijke leerpunten, een voorproef op het examen of als startpunt voor verdere verdieping.",
             "Ontwikkelings roadmap",
         ]
 
@@ -350,6 +361,55 @@ class PracticeFlowTests(unittest.TestCase):
                     "Weather": {"Wind": 2, "Clouds": 2},
                 },
             )
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
+    def test_selection_redistributes_questions_from_topics_at_capacity(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE questions (
+                id INTEGER PRIMARY KEY,
+                level TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT
+            )
+            """
+        )
+        conn.executemany(
+            """
+            INSERT INTO questions
+                (level, topic, subtopic, is_active, question, true_answer, false_answers)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("A", "Small", "Only", 1, f"Small {index}", "Ja", "[]")
+                for index in range(2)
+            ]
+            + [
+                ("A", "Large", "Only", 1, f"Large {index}", "Ja", "[]")
+                for index in range(10)
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        try:
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                counts, selected_total = app_module.get_topic_counts_for_level("A", 8)
+
+            self.assertEqual(selected_total, 8)
+            self.assertEqual(sum(sum(subtopics.values()) for subtopics in counts.values()), 8)
+            self.assertEqual(counts["Small"]["Only"], 2)
+            self.assertEqual(counts["Large"]["Only"], 6)
         finally:
             if os.path.exists(db_path):
                 os.remove(db_path)

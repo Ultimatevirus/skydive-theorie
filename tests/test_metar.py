@@ -9,19 +9,38 @@ from unittest.mock import patch
 
 import app as app_module
 from app import app
+from db import DEFAULT_LOCAL_DB
 from metar import (
     DUTCH_AIRPORTS,
     MetarError,
     _CACHE,
+    build_questions,
     get_daily_metar,
     grade_answers,
+    load_weather_definitions,
     metar_refresh_loop,
     parse_metar,
     refresh_daily_metars,
 )
 
 
+_access_gate_patcher = patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "0"})
+
+
+def setUpModule():
+    _access_gate_patcher.start()
+
+
+def tearDownModule():
+    _access_gate_patcher.stop()
+
+
 REPORT = "EHAM 021255Z 27012G20KT 9999 -RA SCT020 BKN035 12/08 Q1013"
+DEFINITIONS = load_weather_definitions(DEFAULT_LOCAL_DB)
+
+
+def make_questions(parsed, seed, language="NL"):
+    return build_questions(parsed, seed, language, DEFINITIONS)
 
 
 def csrf_data(client, **data):
@@ -212,55 +231,55 @@ class MetarServiceTests(unittest.TestCase):
 
         self.assertEqual(str(context.exception), "Er wordt al een METAR opgehaald. Probeer het zo opnieuw.")
 
-    def test_grading_allows_small_numeric_difference(self):
-        parsed = parse_metar(REPORT)
-        result = grade_answers(
-            parsed,
-            {
-                "wind_direction": "270",
-                "wind_direction_variation": "",
-                "wind_speed": "13",
-                "wind_gust": "19",
-                "visibility": "10000",
-                "temperature": "12",
-                "dew_point": "8",
-                "qnh": "1014",
-                "weather": "-RA",
-                "clouds": "SCT 020, BKN 035",
-            },
-        )
+    def test_questions_have_four_unique_options_with_the_correct_one(self):
+        for report in (
+            REPORT,
+            "EHRD 022125Z AUTO VRB03KT CAVOK 19/14 Q1018",
+            "EHRD 022125Z 23013KT 200V260 3000 +SHRA BKN033 M02/M04 Q0998",
+        ):
+            parsed = parse_metar(report)
+            for seed in range(30):
+                for question in make_questions(parsed, str(seed)):
+                    self.assertEqual(len(question["options"]), 4, question)
+                    self.assertEqual(len(set(question["options"])), 4, question)
+                    self.assertIn(question["correct"], question["options"])
 
-        self.assertTrue(all(item["correct"] for item in result))
+    def test_questions_cover_issue_time_and_wind_with_close_distractors(self):
+        questions = {q["field"]: q for q in make_questions(parse_metar(REPORT), "abc")}
 
-    def test_grading_accepts_empty_weather_and_missing_gust(self):
-        parsed = parse_metar("EHRD 022125Z 23013KT 9999 BKN033 19/14 Q1018")
+        self.assertEqual(questions["issued_time"]["correct"], "12:55 UTC")
+        self.assertEqual(questions["wind_speed"]["correct"], "12 kt")
+        speeds = {int(option.split()[0]) for option in questions["wind_speed"]["options"]}
+        self.assertTrue(all(abs(speed - 12) <= 5 for speed in speeds))
+        self.assertEqual(make_questions(parse_metar(REPORT), "abc"), list(questions.values()))
 
-        result = grade_answers(
-            parsed,
-            {
-                "wind_direction": "230",
-                "wind_speed": "13",
-                "wind_direction_variation": "",
-                "visibility": "9999",
-                "temperature": "19",
-                "dew_point": "14",
-                "qnh": "1018",
-                "clouds": "BKN 033",
-                "weather": "",
-                "wind_gust": "",
-            },
-        )
+    def test_grading_marks_selected_options(self):
+        questions = make_questions(parse_metar(REPORT), "seed")
+        answers = {f"q_{q['field']}": q["correct"] for q in questions}
+        self.assertTrue(all(item["correct"] for item in grade_answers(questions, answers)))
 
-        self.assertTrue(all(item["correct"] for item in result))
+        answers["q_wind_speed"] = next(o for o in questions[2]["options"] if o != questions[2]["correct"])
+        result = grade_answers(questions, answers)
+        self.assertFalse(next(item for item in result if item["field"] == "wind_speed")["correct"])
+        self.assertEqual(sum(not item["correct"] for item in result), 1)
 
-    def test_grading_accepts_v_notation_for_wind_variation(self):
-        parsed = parse_metar("EHRD 022125Z 23013KT 200V260 9999 19/14 Q1018")
-        result = grade_answers(
-            parsed,
-            {"wind_direction": "230", "wind_direction_variation": "200V260", "wind_speed": "13"},
-        )
+    def test_weather_question_asks_for_the_meaning(self):
+        parsed = parse_metar("EHRD 022125Z 23013KT 3000 -SHRA BR BKN033 19/14 Q1018")
+        nl = next(q for q in make_questions(parsed, "x") if q["field"] == "weather")
+        en = next(q for q in make_questions(parsed, "x", "EN") if q["field"] == "weather")
 
-        self.assertTrue(next(item for item in result if item["field"] == "wind_direction_variation")["correct"])
+        self.assertIn("Wat betekent", nl["question"])
+        self.assertEqual(nl["correct"], "Lichte regenbui; Nevel (zicht 1000-5000 m)")
+        self.assertEqual(en["correct"], "Light rain shower; Mist (visibility 1000-5000 m)")
+        self.assertNotIn("-SHRA", " ".join(nl["options"]))
+
+    def test_weather_definitions_come_from_the_database(self):
+        definitions = load_weather_definitions(DEFAULT_LOCAL_DB)
+
+        self.assertEqual(definitions["FZFG"], ("Onderkoelde mist", "Freezing fog"))
+
+    def test_parser_reads_issue_time(self):
+        self.assertEqual(parse_metar(REPORT)["issued_time"], "12:55")
 
 
 class MetarRouteTests(unittest.TestCase):
@@ -269,31 +288,42 @@ class MetarRouteTests(unittest.TestCase):
         parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
         client = app.test_client()
 
-        with patch.object(app_module, "get_daily_metar", return_value=parsed):
+        with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
             response = client.get("/metar?airport=EHAM")
             self.assertEqual(response.status_code, 200)
             self.assertIn(REPORT, response.get_data(as_text=True))
+            self.assertIn("Hoe laat is deze METAR uitgegeven?", response.get_data(as_text=True))
+            with client.session_transaction() as session:
+                seed = session["metar_seed"]
 
+            answers = {f"q_{q['field']}": q["correct"] for q in make_questions(parsed, seed)}
             response = client.post(
                 "/metar",
-                data=csrf_data(
-                    client,
-                    airport="EHAM",
-                    action="check",
-                    wind_direction="270",
-                    wind_speed="12",
-                    wind_gust="20",
-                    visibility="9999",
-                    temperature="12",
-                    dew_point="8",
-                    qnh="1013",
-                    weather="-RA",
-                    clouds="SCT 020, BKN 035",
-                ),
+                data=csrf_data(client, airport="EHAM", action="check", **answers),
             )
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn("10 / 10", response.get_data(as_text=True))
+        self.assertIn(f"{len(answers)} / {len(answers)}", response.get_data(as_text=True))
+        self.assertIn("result-correct", response.get_data(as_text=True))
+        self.assertNotIn("result-wrong", response.get_data(as_text=True))
+
+    def test_unanswered_questions_are_marked_and_counted_wrong(self):
+        parsed = parse_metar(REPORT)
+        parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
+        client = app.test_client()
+
+        with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            client.get("/metar?airport=EHAM")
+            response = client.post("/metar", data=csrf_data(client, airport="EHAM", action="check"))
+
+        html = response.get_data(as_text=True)
+        self.assertIn("result-unanswered", html)
+        self.assertIn("answer-unanswered", html)
+        self.assertIn("0 / ", html)
 
     def test_loading_another_airport_uses_that_selection(self):
         eham = parse_metar(REPORT)

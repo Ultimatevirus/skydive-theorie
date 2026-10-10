@@ -1,9 +1,11 @@
 """KNMI METAR retrieval, parsing, and answer grading."""
 
 from datetime import date, datetime, timezone
+from difflib import SequenceMatcher
 import json
 import logging
 import os
+import random
 import re
 import time
 from threading import Event
@@ -170,6 +172,7 @@ def parse_metar(report):
     tokens = report.upper().split()
     parsed = {
         "raw": report,
+        "issued_time": None,
         "wind_direction": None,
         "wind_direction_variation": None,
         "wind_speed": None,
@@ -184,6 +187,10 @@ def parse_metar(report):
     cloud_groups = []
     weather_groups = []
     for token in tokens:
+        issued = re.fullmatch(r"\d{2}([01]\d|2[0-3])([0-5]\d)Z", token)
+        if issued:
+            parsed["issued_time"] = f"{issued.group(1)}:{issued.group(2)}"
+            continue
         wind = re.fullmatch(r"(\d{3}|VRB)(\d{2})(G(\d{2}))?(KT|MPS|KMH)", token)
         if wind:
             parsed["wind_direction"] = wind.group(1)
@@ -405,7 +412,7 @@ def _build_result(report, code, day):
     return result
 
 
-def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=True):
+def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=True, cache_only=False):
     code = str(airport or "").strip().upper()
     if code not in DUTCH_AIRPORTS:
         raise MetarError("Kies een Nederlandse luchthaven uit de lijst.")
@@ -414,6 +421,8 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
     if cache_key in _CACHE:
         return _CACHE[cache_key]
     report = _get_cached_metar(day, code)
+    if report is None and cache_only:
+        raise MetarError("De METAR wordt nog opgehaald. Probeer het over een minuut opnieuw.")
     if report is not None:
         normalised_report = _normalise_report(report)
         if normalised_report != report:
@@ -483,46 +492,261 @@ def metar_refresh_loop(stop_event=None, opener=urlopen):
         stop_event.wait(1800)
 
 
-def _submitted_number(value):
-    try:
-        return float(str(value).replace(",", ".").strip())
-    except (TypeError, ValueError):
-        return None
+NO_GUSTS = "Geen windstoten"
+NO_VARIATION = "Geen variatie"
+NO_WEATHER = "Geen significant weer"
+NO_CLOUDS = "Geen bewolking gemeld"
+OPTION_COUNT = 4
+CLOUD_AMOUNTS = ("FEW", "SCT", "BKN", "OVC")
+WEATHER_DESCRIPTORS = {"MI", "BC", "PR", "DR", "BL", "SH", "FZ"}
 
 
-def grade_answers(metar, submitted):
-    results = []
-    fields = (
-        ("wind_direction", "Windrichting", 0),
-        ("wind_direction_variation", "Variatie windrichting", 0),
-        ("wind_speed", "Windsnelheid", 2),
-        ("wind_gust", "Windstoot", 2),
-        ("visibility", "Zicht", 100),
-        ("temperature", "Temperatuur", 1),
-        ("dew_point", "Dauwpunt", 1),
-        ("qnh", "QNH", 2),
+def new_question_seed():
+    return os.urandom(8).hex()
+
+
+def _fmt_number(value):
+    value = float(value)
+    return str(int(value)) if value == int(value) else f"{value:.1f}"
+
+
+def _near_numbers(rng, value, step, lo=None, hi=None, wrap=None, count=3):
+    """Pick `count` distinct numbers close to `value`, spaced in multiples of `step`."""
+    candidates = []
+    for k in range(1, 9):
+        for sign in (-1, 1):
+            candidate = value + sign * k * step
+            if wrap:
+                candidate %= wrap
+            if candidate == value or candidate in candidates:
+                continue
+            if (lo is not None and candidate < lo) or (hi is not None and candidate > hi):
+                continue
+            candidates.append(candidate)
+    near = candidates[: count + 2]
+    rng.shuffle(near)
+    return near[:count]
+
+
+def _similar_text(rng, correct, pool, count=3):
+    """Pick `count` pool entries, favouring those that look most like `correct`."""
+    ranked = sorted(
+        (item for item in dict.fromkeys(pool) if item != correct),
+        key=lambda item: -(SequenceMatcher(None, correct, item).ratio() + rng.random() * 0.3),
     )
-    for field, label, tolerance in fields:
-        expected = metar.get(field)
-        answer = str(submitted.get(field, "")).strip()
-        if field == "wind_direction":
-            correct = expected is not None and answer.upper() == str(expected).upper()
-        elif field == "wind_direction_variation":
-            normalised_answer = answer.upper().replace("V", "-")
-            correct = (
-                not answer if expected is None else normalised_answer == str(expected).upper()
-            )
-        elif expected is None:
-            correct = not answer
+    return ranked[:count]
+
+
+def _mutate_clouds(rng, groups):
+    mutated = list(groups)
+    for _ in range(rng.choice((1, 1, 2))):
+        index = rng.randrange(len(mutated))
+        amount, height = mutated[index].split()
+        if height.isdigit() and rng.random() < 0.6:
+            new_height = max(1, int(height) + rng.choice((-3, -2, -1, 1, 2, 3)) * 5)
+            mutated[index] = f"{amount} {new_height:03d}"
         else:
-            value = _submitted_number(answer)
-            correct = value is not None and abs(value - expected) <= tolerance
-        results.append({"field": field, "label": label, "answer": answer or "-", "expected": expected if expected is not None else "-", "correct": correct})
-    for field, label in (("weather", "Weer"), ("clouds", "Bewolking")):
-        answer = str(submitted.get(field, "")).strip().upper()
-        expected = str(metar.get(field) or "").upper()
-        correct = answer == expected
-        if field == "weather" and not answer and expected == "GEEN SIGNIFICANT WEER":
-            correct = True
-        results.append({"field": field, "label": label, "answer": answer or "-", "expected": expected or "-", "correct": correct})
+            options = [a for a in CLOUD_AMOUNTS if a != amount]
+            mutated[index] = f"{rng.choice(options)} {height}"
+    return ", ".join(mutated)
+
+
+def _cloud_options(rng, clouds):
+    if clouds in ("CAVOK", NO_CLOUDS) or not clouds:
+        pool = [f"{a} {h:03d}" for a in CLOUD_AMOUNTS for h in (15, 20, 25, 30, 40)]
+        return rng.sample(pool, 3)
+    groups = clouds.split(", ")
+    distractors = []
+    for _ in range(40):
+        candidate = _mutate_clouds(rng, groups)
+        if candidate != clouds and candidate not in distractors:
+            distractors.append(candidate)
+        if len(distractors) == 3:
+            break
+    return distractors
+
+
+def load_weather_definitions(path=None):
+    """Read {abbreviation: (NL, EN)} from the metar_weather_codes table."""
+    conn = connect_db(path=path or get_db_path())
+    try:
+        rows = conn.execute(
+            "SELECT METAR_abreviation, NL_definition, EN_definition FROM metar_weather_codes"
+        ).fetchall()
+    finally:
+        conn.close()
+    return {row[0]: (row[1], row[2]) for row in rows}
+
+
+def _describe_group(group, definitions, language):
+    """Explain one weather group, composing it from its parts when it has no row of its own."""
+    index = 1 if str(language).upper() == "EN" else 0
+    if group in definitions:
+        return definitions[group][index]
+    parts = []
+    rest = group
+    if rest[:1] in ("-", "+") and rest[:1] in definitions:
+        parts.append(definitions[rest[:1]][index])
+        rest = rest[1:]
+    for position in range(0, len(rest), 2):
+        code = rest[position:position + 2]
+        parts.append(definitions[code][index] if code in definitions else code)
+    return " ".join(parts)
+
+
+def _standalone_codes(definitions):
+    """Codes that can be reported on their own (not intensity or descriptor prefixes)."""
+    return sorted(
+        code for code in definitions
+        if len(code) > 1 and code not in WEATHER_DESCRIPTORS
+    )
+
+
+def _weather_options(rng, weather, definitions, language):
+    """Return (correct meaning, wrong meanings) for the reported weather groups."""
+    describe = lambda groups: "; ".join(_describe_group(g, definitions, language) for g in groups)
+    pool = _standalone_codes(definitions)
+    if weather == NO_WEATHER:
+        return NO_WEATHER, [describe([code]) for code in rng.sample(pool, 3)]
+
+    groups = weather.split()
+    correct = describe(groups)
+    candidates = []
+    for index, group in enumerate(groups):
+        for alt in _similar_text(rng, group, [c for c in pool if c not in groups], count=4):
+            candidates.append(describe(groups[:index] + [alt] + groups[index + 1:]))
+    if len(groups) > 1:
+        rng.shuffle(candidates)
+    candidates += [describe([code]) for code in rng.sample(pool, min(len(pool), 6))]
+    return correct, [c for c in dict.fromkeys(candidates) if c != correct]
+
+
+def _build_question(rng, field, label, text, correct, distractors):
+    distractors = [d for d in dict.fromkeys(distractors) if d != correct][: OPTION_COUNT - 1]
+    options = distractors + [correct]
+    rng.shuffle(options)
+    return {"field": field, "label": label, "question": text, "options": options, "correct": correct}
+
+
+def build_questions(metar, seed, language="NL", definitions=None):
+    """Build multiple-choice questions for a METAR; the same seed yields the same questions."""
+    definitions = definitions if definitions is not None else load_weather_definitions()
+    rng = random.Random(f"{seed}:{metar.get('raw', '')}")
+    questions = []
+
+    def add(field, label, text, correct, distractors):
+        questions.append(_build_question(rng, field, label, text, correct, distractors))
+
+    issued = metar.get("issued_time")
+    if issued:
+        hours, minutes = (int(part) for part in issued.split(":"))
+        total = hours * 60 + minutes
+        add(
+            "issued_time", "Uitgiftetijd", "Hoe laat is deze METAR uitgegeven?",
+            f"{issued} UTC",
+            [f"{v // 60:02d}:{v % 60:02d} UTC" for v in _near_numbers(rng, total, 5, wrap=1440)],
+        )
+
+    direction = metar.get("wind_direction")
+    if direction is not None:
+        if direction == "VRB":
+            correct = "Variabel (VRB)"
+            others = [f"{d:03d}°" for d in rng.sample(range(10, 361, 10), 3)]
+        else:
+            degrees = int(direction)
+            correct = f"{degrees:03d}°"
+            others = [f"{(v - 1) % 360 + 1:03d}°" for v in _near_numbers(rng, degrees, 10, wrap=360)]
+        add("wind_direction", "Windrichting", "Uit welke richting waait de wind op de grond?", correct, others)
+
+    speed = metar.get("wind_speed")
+    if speed is not None:
+        add(
+            "wind_speed", "Windsnelheid", "Hoeveel wind is er op de grond?",
+            f"{_fmt_number(speed)} kt",
+            [f"{_fmt_number(v)} kt" for v in _near_numbers(rng, speed, 1, lo=0)],
+        )
+        gust = metar.get("wind_gust")
+        if gust is None:
+            others = [f"{_fmt_number(speed + rng.randint(5, 15))} kt" for _ in range(8)]
+            add("wind_gust", "Windstoot", "Wat is de maximale windstoot?", NO_GUSTS, others)
+        else:
+            add(
+                "wind_gust", "Windstoot", "Wat is de maximale windstoot?",
+                f"{_fmt_number(gust)} kt",
+                [f"{_fmt_number(v)} kt" for v in _near_numbers(rng, gust, 1, lo=speed + 1)] + [NO_GUSTS],
+            )
+
+    if direction is not None:
+        variation = metar.get("wind_direction_variation")
+        text = "Varieert de windrichting? Zo ja, tussen welke richtingen?"
+        if variation is None:
+            others = []
+            for _ in range(8):
+                low = rng.randrange(10, 361, 10)
+                others.append(f"{low:03d}°–{(low + rng.choice((40, 50, 60, 70)) - 1) % 360 + 1:03d}°")
+            add("wind_direction_variation", "Variatie windrichting", text, NO_VARIATION, others)
+        else:
+            low, high = (int(part) for part in variation.split("-"))
+            shift = lambda v: (v - 1) % 360 + 1
+            correct = f"{low:03d}°–{high:03d}°"
+            others = [
+                f"{shift(low + a):03d}°–{shift(high + b):03d}°"
+                for a, b in ((10, 10), (-10, -10), (10, 0), (0, -10), (-20, 0), (0, 20), (20, 20), (-10, 10))
+            ]
+            rng.shuffle(others)
+            add("wind_direction_variation", "Variatie windrichting", text, correct, others[:2] + [NO_VARIATION])
+
+    visibility = metar.get("visibility")
+    if visibility is not None:
+        if visibility >= 9999:
+            correct = "10 km of meer"
+            others = [f"{v} m" for v in rng.sample((9000, 8000, 7000, 6000, 5000), 3)]
+        else:
+            correct = f"{int(visibility)} m"
+            step = max(100, round(visibility / 10, -2))
+            others = [f"{int(v)} m" for v in _near_numbers(rng, visibility, step, lo=100, hi=9000)]
+        add("visibility", "Zicht", "Wat is het zicht?", correct, others)
+
+    for field, label, text in (
+        ("temperature", "Temperatuur", "Wat is de temperatuur?"),
+        ("dew_point", "Dauwpunt", "Wat is het dauwpunt?"),
+    ):
+        value = metar.get(field)
+        if value is not None:
+            add(field, label, text, f"{_fmt_number(value)} °C",
+                [f"{_fmt_number(v)} °C" for v in _near_numbers(rng, value, 1)])
+
+    qnh = metar.get("qnh")
+    if qnh is not None:
+        add("qnh", "QNH", "Wat is de QNH?", f"{_fmt_number(qnh)} hPa",
+            [f"{_fmt_number(v)} hPa" for v in _near_numbers(rng, qnh, 1)])
+
+    weather = metar.get("weather") or NO_WEATHER
+    correct, others = _weather_options(rng, weather, definitions, language)
+    if weather == NO_WEATHER:
+        text = "Welk significant weer wordt gemeld?"
+    elif str(language).upper() == "EN":
+        text = f"What does the weather group \"{weather}\" in this METAR mean?"
+    else:
+        text = f"Wat betekent het weer \"{weather}\" in deze METAR?"
+    add("weather", "Weer", text, correct, others)
+
+    clouds = metar.get("clouds") or NO_CLOUDS
+    add("clouds", "Bewolking", "Welke bewolking wordt gemeld?", clouds, _cloud_options(rng, clouds))
+    return questions
+
+
+def grade_answers(questions, submitted):
+    results = []
+    for question in questions:
+        answer = str(submitted.get(f"q_{question['field']}", "")).strip()
+        results.append({
+            "field": question["field"],
+            "label": question["label"],
+            "question": question["question"],
+            "answer": answer or "-",
+            "expected": question["correct"],
+            "is_unanswered": not answer,
+            "correct": answer == question["correct"],
+        })
     return results
