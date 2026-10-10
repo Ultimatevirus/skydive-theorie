@@ -882,9 +882,9 @@ textarea:focus {
     box-shadow: 0 0 0 4px rgba(15, 118, 110, 0.12);
 }
 
-input:invalid:not(:placeholder-shown),
-select:invalid:not(:focus),
-textarea:invalid:not(:placeholder-shown) {
+input:user-invalid,
+select:user-invalid,
+textarea:user-invalid {
     border-color: var(--error);
 }
 
