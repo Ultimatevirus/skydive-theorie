@@ -729,8 +729,15 @@ def metar_refresh_enabled():
 @app.route("/metar", methods=["GET", "POST"])
 def metar_practice():
     """Show and grade the daily METAR exercise for a Dutch airport."""
+    checking = request.method == "POST" and request.form.get("action") == "check"
+    # Grade against the airport the questions were generated for; the dropdown may
+    # hold a stale value (e.g. restored by the browser) from a previous exercise.
     selected_airport = str(
-        request.form.get("airport") or request.args.get("airport") or session.get("metar_airport") or "EHAM"
+        (checking and request.form.get("question_airport"))
+        or request.form.get("airport")
+        or request.args.get("airport")
+        or session.get("metar_airport")
+        or "EHAM"
     ).strip().upper()
     error = None
     result = None
@@ -754,7 +761,6 @@ def metar_practice():
     if metar and not error:
         language = normalize_language(session.get("language", "NL"))
         definitions = load_weather_definitions()
-        checking = request.method == "POST" and request.form.get("action") == "check"
         if checking:
             seed = session.pop("metar_seed", None) or new_question_seed()
         else:
