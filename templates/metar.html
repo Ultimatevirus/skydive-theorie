@@ -70,9 +70,19 @@
                 <div class="metar-questions">
                     {% for q in questions %}
                         <div class="question-card">
-                            <div class="question-heading">
-                                <span class="question-number">{{ loop.index }}</span>
-                                <h4 class="question-title">{{ t(q.question) }}</h4>
+                            <div class="metar-question-heading">
+                                <div class="metar-question-cell metar-question-number">
+                                    <span>NR</span>
+                                    <strong>{{ loop.index }}</strong>
+                                </div>
+                                <div class="metar-question-cell metar-question-report">
+                                    <span>{{ t('METAR') }}</span>
+                                    <code>{{ metar.raw }}</code>
+                                </div>
+                                <div class="metar-question-cell metar-question-prompt">
+                                    <span>{{ t('Vraag') }}</span>
+                                    <h4 class="question-title">{{ t(q.question) }}</h4>
+                                </div>
                             </div>
                             {% for option in q.options %}
                                 <label class="option-label">

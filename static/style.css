@@ -817,6 +817,55 @@ button:hover,
     margin-bottom: 20px;
 }
 
+.metar-question-heading {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1.2fr) minmax(0, 1fr);
+    margin-bottom: 12px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.metar-question-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+    padding: 10px 14px;
+}
+
+.metar-question-cell + .metar-question-cell {
+    border-left: 1px solid var(--border);
+}
+
+.metar-question-cell > span {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.metar-question-number {
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-soft);
+    color: var(--primary-dark);
+}
+
+.metar-question-number strong {
+    font-size: 1.1rem;
+}
+
+.metar-question-report code {
+    overflow-wrap: anywhere;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+.metar-question-prompt .question-title {
+    padding: 0;
+}
+
 .metar-results {
     margin-top: 32px;
 }
@@ -1784,6 +1833,19 @@ body {
     .metar-fields,
     .metar-result-row {
         grid-template-columns: 1fr;
+    }
+
+    .metar-question-heading {
+        grid-template-columns: 1fr;
+    }
+
+    .metar-question-cell + .metar-question-cell {
+        border-top: 1px solid var(--border);
+        border-left: 0;
+    }
+
+    .metar-question-number {
+        align-items: flex-start;
     }
 
     .metar-fields label {

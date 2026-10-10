@@ -57,6 +57,7 @@ TRANSLATIONS = {
         "Vragen": "Questions",
         "Verstreken tijd": "Elapsed time",
         "Vraagafbeelding": "Question image",
+        "Vraag": "Question",
         "Controleer antwoorden": "Check answers",
         "Resultaat": "Result",
         "Je score: {score} / {total}": "Your score: {score} / {total}",
