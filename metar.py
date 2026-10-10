@@ -405,7 +405,7 @@ def _build_result(report, code, day):
     return result
 
 
-def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=True):
+def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=True, cache_only=False):
     code = str(airport or "").strip().upper()
     if code not in DUTCH_AIRPORTS:
         raise MetarError("Kies een Nederlandse luchthaven uit de lijst.")
@@ -414,6 +414,8 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
     if cache_key in _CACHE:
         return _CACHE[cache_key]
     report = _get_cached_metar(day, code)
+    if report is None and cache_only:
+        raise MetarError("De METAR wordt nog opgehaald. Probeer het over een minuut opnieuw.")
     if report is not None:
         normalised_report = _normalise_report(report)
         if normalised_report != report:

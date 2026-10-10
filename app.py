@@ -11,6 +11,7 @@ from datetime import timedelta
 from email.message import EmailMessage
 from threading import Thread
 
+from flask_compress import Compress
 from flask import (
     Flask,
     redirect,
@@ -38,6 +39,7 @@ from translations import TRANSLATIONS
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
+Compress(app)
 logger = logging.getLogger(__name__)
 is_production = os.getenv("APP_ENV", "development").lower() == "production"
 secret_key = os.getenv("SECRET_KEY")
@@ -167,6 +169,21 @@ def add_security_headers(response):
     response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("X-Frame-Options", "DENY")
+    return response
+
+
+@app.after_request
+def add_conditional_etag(response):
+    """Let browsers revalidate HTML pages and receive 304 instead of the full body."""
+    if (
+        request.method == "GET"
+        and response.status_code == 200
+        and response.mimetype == "text/html"
+        and not response.direct_passthrough
+    ):
+        response.headers.setdefault("Cache-Control", "private, no-cache")
+        response.add_etag()
+        response.make_conditional(request)
     return response
 
 
@@ -629,6 +646,11 @@ def learn():
     return render_template("learn.html")
 
 
+def metar_refresh_enabled():
+    """Request threads only read cached METARs when the background refresher fills the cache."""
+    return os.getenv("KNMI_METAR_REFRESH", "1").lower() not in {"0", "false", "no"}
+
+
 @app.route("/metar", methods=["GET", "POST"])
 def metar_practice():
     """Show and grade the daily METAR exercise for a Dutch airport."""
@@ -643,7 +665,11 @@ def metar_practice():
         metar = None
     else:
         try:
-            metar = get_daily_metar(selected_airport, wait_for_rate_limit=False)
+            metar = get_daily_metar(
+                selected_airport,
+                wait_for_rate_limit=False,
+                cache_only=metar_refresh_enabled(),
+            )
             session["metar_airport"] = selected_airport
         except MetarError as exc:
             metar = None
