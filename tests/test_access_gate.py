@@ -1,5 +1,6 @@
 import importlib
 import os
+import tempfile
 import time
 import unittest
 from unittest.mock import patch
@@ -21,6 +22,13 @@ def csrf_data(client, **data):
 
 
 class AccessGateTests(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        db_patch = patch.dict(os.environ, {"DB_PATH": os.path.join(self.temp_dir.name, "gate.db")})
+        db_patch.start()
+        self.addCleanup(db_patch.stop)
+        self.addCleanup(self.temp_dir.cleanup)
+
     def test_protected_pages_redirect_to_gate_when_enabled(self):
         client = app.test_client()
         with patch.dict(os.environ, GATE_ENV):
@@ -74,16 +82,53 @@ class AccessGateTests(unittest.TestCase):
 
     def test_repeated_incorrect_codes_are_throttled_without_sleeping(self):
         client = app.test_client()
-        app_module._gate_failures.clear()
         with patch.dict(os.environ, GATE_ENV), patch("app.time.sleep") as sleep:
             statuses = [
                 client.post("/access-gate", data=csrf_data(client, code="nope", next="/")).status_code
                 for _ in range(app_module.GATE_MAX_FAILURES + 1)
             ]
-        app_module._gate_failures.clear()
         self.assertEqual(statuses[:-1], [401] * app_module.GATE_MAX_FAILURES)
         self.assertEqual(statuses[-1], 429)
         sleep.assert_not_called()
+
+    def test_throttle_is_tracked_per_forwarded_client_ip(self):
+        client = app.test_client()
+        with patch.dict(os.environ, GATE_ENV):
+            for _ in range(app_module.GATE_MAX_FAILURES):
+                client.post(
+                    "/access-gate",
+                    data=csrf_data(client, code="nope", next="/"),
+                    environ_overrides={"REMOTE_ADDR": "198.51.100.1"},
+                )
+            blocked = client.post(
+                "/access-gate",
+                data=csrf_data(client, code="nope", next="/"),
+                environ_overrides={"REMOTE_ADDR": "198.51.100.1"},
+            )
+            other = client.post(
+                "/access-gate",
+                data=csrf_data(client, code="nope", next="/"),
+                environ_overrides={"REMOTE_ADDR": "198.51.100.2"},
+            )
+        self.assertEqual(blocked.status_code, 429)
+        self.assertEqual(other.status_code, 401)
+
+    def test_proxy_fix_uses_forwarded_for_when_enabled(self):
+        env = {"APP_ENV": "production", "SECRET_KEY": "k", "ACCESS_GATE_ENABLED": "0"}
+        try:
+            with patch.dict(os.environ, env):
+                reloaded = importlib.reload(app_module)
+
+                @reloaded.app.route("/_ip")
+                def _ip():
+                    return reloaded.request.remote_addr
+
+                response = reloaded.app.test_client().get(
+                    "/_ip", headers={"X-Forwarded-For": "203.0.113.9"}
+                )
+                self.assertEqual(response.get_data(as_text=True), "203.0.113.9")
+        finally:
+            importlib.reload(app_module)
 
     def test_next_parameter_is_restricted_to_same_origin_paths(self):
         client = app.test_client()
