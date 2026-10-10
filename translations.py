@@ -172,5 +172,6 @@ TRANSLATIONS = {
         "Toegangscode": "Access code",
         "Toegang verkrijgen": "Get access",
         "De ingevoerde code is onjuist. Probeer het opnieuw.": "The code you entered is incorrect. Please try again.",
+        "Te veel pogingen. Probeer het over een minuut opnieuw.": "Too many attempts. Please try again in a minute.",
     },
 }

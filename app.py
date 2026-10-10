@@ -9,9 +9,8 @@ import sqlite3
 import time
 from datetime import timedelta
 from email.message import EmailMessage
-from threading import Thread
+from threading import Lock, Thread
 
-from flask_compress import Compress
 from flask import (
     Flask,
     redirect,
@@ -39,7 +38,6 @@ from translations import TRANSLATIONS
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
-Compress(app)
 logger = logging.getLogger(__name__)
 is_production = os.getenv("APP_ENV", "development").lower() == "production"
 secret_key = os.getenv("SECRET_KEY")
@@ -127,6 +125,8 @@ def is_safe_redirect_target(target):
 @app.before_request
 def enforce_access_gate():
     """Redirect unauthenticated visitors to the access gate while it is enabled."""
+    if request.endpoint == "healthz":
+        return None
     ensure_csrf_token()
     if not access_gate_enabled():
         return None
@@ -197,10 +197,30 @@ def inject_language_context():
     }
 
 
+_language_column_cache = {}
+
+
+def _database_signature():
+    """Identify the current database file so cached schema facts go stale when it is replaced."""
+    path = get_db_path()
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return path, stat.st_mtime_ns, stat.st_size
+
+
 def questions_have_language_column(conn):
-    """Check whether this database has the optional question language column."""
+    """Check whether this database has the optional question language column (cached per database file)."""
+    signature = _database_signature()
+    if signature is not None and signature in _language_column_cache:
+        return _language_column_cache[signature]
     columns = conn.execute("PRAGMA table_info(questions)").fetchall()
-    return any(column[1] == "language" for column in columns)
+    has_column = any(column[1] == "language" for column in columns)
+    if signature is not None:
+        _language_column_cache.clear()
+        _language_column_cache[signature] = has_column
+    return has_column
 
 
 def language_filter(conn, language, prefix=""):
@@ -503,6 +523,28 @@ def set_language():
     return redirect(target)
 
 
+GATE_MAX_FAILURES = 5
+GATE_FAILURE_WINDOW = 60
+_gate_failures = {}
+_gate_failures_lock = Lock()
+
+
+def _gate_attempts_exhausted(ip_address):
+    """Report whether an IP made too many wrong code attempts recently (tracked per worker process)."""
+    now = time.time()
+    with _gate_failures_lock:
+        for key in [k for k, stamps in _gate_failures.items() if not stamps or stamps[-1] < now - GATE_FAILURE_WINDOW]:
+            del _gate_failures[key]
+        recent = [stamp for stamp in _gate_failures.get(ip_address, []) if stamp >= now - GATE_FAILURE_WINDOW]
+        _gate_failures[ip_address] = recent
+        return len(recent) >= GATE_MAX_FAILURES
+
+
+def _record_gate_failure(ip_address):
+    with _gate_failures_lock:
+        _gate_failures.setdefault(ip_address, []).append(time.time())
+
+
 @app.route("/access-gate", methods=["GET", "POST"])
 def access_gate():
     """Show the under-construction code gate and verify submitted access codes."""
@@ -511,6 +553,14 @@ def access_gate():
         next_target = url_for("index")
 
     if request.method == "POST":
+        client_ip = request.remote_addr or ""
+        if _gate_attempts_exhausted(client_ip):
+            return render_template(
+                "gate.html",
+                next=next_target,
+                error=translate("Te veel pogingen. Probeer het over een minuut opnieuw.", session.get("language")),
+            ), 429
+
         submitted_code = request.form.get("code", "")
         expected_code = os.getenv("ACCESS_CODE") or ""
         if expected_code and hmac.compare_digest(submitted_code, expected_code):
@@ -519,7 +569,7 @@ def access_gate():
             return redirect(next_target)
 
         logger.warning("Rejected access gate code attempt from %s", request.remote_addr)
-        time.sleep(1)
+        _record_gate_failure(client_ip)
         return render_template(
             "gate.html",
             next=next_target,
@@ -744,42 +794,41 @@ def start_contact_message_delivery(sender_email, subject, message):
     Thread(target=deliver, name="contact-message-delivery", daemon=True).start()
 
 
+_contact_table_ready = set()
+
+
+def _ensure_contact_usage_table(conn):
+    """Create the contact usage table once per database path instead of on every request."""
+    path = get_db_path()
+    if path in _contact_table_ready and os.path.exists(path):
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS contact_form_usage (
+            date TEXT,
+            ip TEXT
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE INDEX IF NOT EXISTS contact_form_usage_ip_date
+        ON contact_form_usage (ip, date)
+        """
+    )
+    conn.commit()
+    _contact_table_ready.add(path)
+
+
 def reserve_contact_form_usage(ip_address):
     """Reserve one contact message for an IP address within the daily limit."""
     conn = get_db_connection()
     try:
+        _ensure_contact_usage_table(conn)
         conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS contact_form_usage (
-                date TEXT,
-                ip TEXT
-            )
-            """
-        )
-        conn.execute(
-            """
-            CREATE INDEX IF NOT EXISTS contact_form_usage_ip_date
-            ON contact_form_usage (ip, date)
-            """
-        )
-        conn.commit()
         conn.execute(
             "DELETE FROM contact_form_usage WHERE date < datetime('now', '-30 days')"
         )
-        conn.commit()
-        usage_count = conn.execute(
-            """
-            SELECT COUNT(*)
-            FROM contact_form_usage
-            WHERE ip = ? AND date >= datetime('now', '-24 hours')
-            """,
-            (ip_address,),
-        ).fetchone()[0]
-        if usage_count >= 3:
-            return False
-
-        conn.execute("BEGIN IMMEDIATE")
         usage_count = conn.execute(
             """
             SELECT COUNT(*)

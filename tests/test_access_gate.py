@@ -72,6 +72,19 @@ class AccessGateTests(unittest.TestCase):
             with client.session_transaction() as session:
                 self.assertNotIn("access_granted_at", session)
 
+    def test_repeated_incorrect_codes_are_throttled_without_sleeping(self):
+        client = app.test_client()
+        app_module._gate_failures.clear()
+        with patch.dict(os.environ, GATE_ENV), patch("app.time.sleep") as sleep:
+            statuses = [
+                client.post("/access-gate", data=csrf_data(client, code="nope", next="/")).status_code
+                for _ in range(app_module.GATE_MAX_FAILURES + 1)
+            ]
+        app_module._gate_failures.clear()
+        self.assertEqual(statuses[:-1], [401] * app_module.GATE_MAX_FAILURES)
+        self.assertEqual(statuses[-1], 429)
+        sleep.assert_not_called()
+
     def test_next_parameter_is_restricted_to_same_origin_paths(self):
         client = app.test_client()
         with patch.dict(os.environ, GATE_ENV):

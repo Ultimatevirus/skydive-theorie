@@ -107,6 +107,8 @@ docker compose -f compose.production.yml -f compose.production.image.yml up -d -
 
 Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Docker network. HTTP redirects to HTTPS, and Let's Encrypt state is stored in the named `letsencrypt` volume. Production session cookies are marked `Secure`, `HttpOnly`, and `SameSite=Lax`.
 
+Concurrency: production runs 2 `app` replicas (2 Gunicorn workers x 6 threads each, tunable with `GUNICORN_PROCESSES`/`GUNICORN_THREADS`), sized for a 4-core host. Traefik compresses responses and routes `/static/` to a small `static` nginx container, so neither consumes Gunicorn threads. The `static` service is always built from the checked-out repository, even with `compose.production.image.yml`. Repeated wrong access-gate codes are throttled per IP (5 per minute per worker) instead of sleeping the request thread.
+
 The SQLite `data.db` file contains versioned application content and the daily METAR cache. The image contains the latest seed database, while `/data/data.db` is stored in the persistent `app-data` volume. On startup, the latest questions are synchronized from the image seed; existing runtime data is preserved and new or changed seed schema objects are applied.
 
 ### KNMI METAR configuration
