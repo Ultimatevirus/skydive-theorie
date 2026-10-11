@@ -7,6 +7,7 @@ import secrets
 import smtplib
 import sqlite3
 import time
+import uuid
 from datetime import timedelta
 from email.message import EmailMessage
 from threading import Thread
@@ -730,18 +731,33 @@ def metar_refresh_enabled():
 def metar_practice():
     """Show and grade the daily METAR exercise for a Dutch airport."""
     checking = request.method == "POST" and request.form.get("action") == "check"
+    attempt_id = request.form.get("attempt_id") or session.get("metar_attempt_id")
+    attempts = session.get("metar_attempts", {})
+    if not isinstance(attempts, dict):
+        attempts = {}
+        session["metar_attempts"] = attempts
+    attempt_state = attempts.get(attempt_id) if attempt_id else None
+
     # Grade against the airport the questions were generated for; the dropdown may
     # hold a stale value (e.g. restored by the browser) from a previous exercise.
-    selected_airport = str(
-        (checking and request.form.get("question_airport"))
+    request_airport = (
+        request.form.get("question_airport")
         or request.form.get("airport")
         or request.args.get("airport")
-        or session.get("metar_airport")
-        or "EHAM"
-    ).strip().upper()
+    )
+    if checking and attempt_id and not attempt_state:
+        selected_airport = str(session.get("metar_airport") or request_airport or "EHAM").strip().upper()
+    else:
+        selected_airport = str(
+            (checking and attempt_state and attempt_state.get("airport"))
+            or request_airport
+            or session.get("metar_airport")
+            or "EHAM"
+        ).strip().upper()
     error = None
     result = None
     questions = []
+    attempt_id = attempt_id or uuid.uuid4().hex
 
     if selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
@@ -762,10 +778,16 @@ def metar_practice():
         language = normalize_language(session.get("language", "NL"))
         definitions = load_weather_definitions()
         if checking:
-            seed = session.pop("metar_seed", None) or new_question_seed()
+            if attempt_state:
+                seed = attempt_state.get("seed") or session.pop("metar_seed", None) or new_question_seed()
+            else:
+                seed = session.pop("metar_seed", None) or new_question_seed()
         else:
             seed = new_question_seed()
             session["metar_seed"] = seed
+            session["metar_attempt_id"] = attempt_id
+            attempts[attempt_id] = {"airport": selected_airport, "seed": seed}
+            session["metar_attempts"] = attempts
         questions = build_questions(metar, seed, language, definitions)
         if checking:
             result = grade_answers(questions, request.form)
@@ -779,6 +801,7 @@ def metar_practice():
         submitted=request.form if result else {},
         result=result,
         error=error,
+        attempt_id=attempt_id,
     )
 
 

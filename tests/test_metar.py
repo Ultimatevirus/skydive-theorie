@@ -357,6 +357,35 @@ class MetarRouteTests(unittest.TestCase):
         self.assertIn("result-correct", response.get_data(as_text=True))
         self.assertNotIn("result-wrong", response.get_data(as_text=True))
 
+    def test_mismatched_attempt_metadata_does_not_override_the_generated_airport(self):
+        parsed = parse_metar(REPORT)
+        parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
+        client = app.test_client()
+
+        with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            client.get("/metar?airport=EHAM")
+            with client.session_transaction() as session:
+                attempt_id = session["metar_attempt_id"]
+                seed = session["metar_seed"]
+            answers = {f"q_{q['field']}": q["correct"] for q in make_questions(parsed, seed)}
+            response = client.post(
+                "/metar",
+                data=csrf_data(
+                    client,
+                    airport="EHRD",
+                    question_airport="EHRD",
+                    attempt_id=attempt_id,
+                    action="check",
+                    **answers,
+                ),
+            )
+
+        html = response.get_data(as_text=True)
+        self.assertIn("EHAM · Amsterdam Schiphol", html)
+        self.assertNotIn("EHRD · Rotterdam The Hague", html)
+
     def test_unanswered_questions_are_marked_and_counted_wrong(self):
         parsed = parse_metar(REPORT)
         parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
