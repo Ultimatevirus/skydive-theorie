@@ -225,6 +225,82 @@ class PracticeFlowTests(unittest.TestCase):
             if os.path.exists(db_path):
                 os.remove(db_path)
 
+    def test_language_change_clears_old_free_practice_topic_filter(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE questions (
+                id INTEGER PRIMARY KEY,
+                level TEXT,
+                language TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO questions (level, language, topic, subtopic, is_active, question, true_answer, false_answers) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("A", "NL", "Materiaal", "Harnas", 1, "Nederlandse vraag", "Ja", "['Nee']"),
+                ("A", "EN", "Equipment", "Harness", 1, "English question", "Yes", "['No']"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session.update(
+                {
+                    "csrf_token": "test-csrf-token",
+                    "level": "A",
+                    "question_amount": 1,
+                    "selected_topics": ["Materiaal"],
+                    "language": "NL",
+                    "exam_question_ids": [1],
+                    "started_at": 1000,
+                }
+            )
+
+        try:
+            app_module._language_column_cache.clear()
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                language_response = client.post(
+                    "/language",
+                    data=csrf_data(client, language="EN"),
+                    headers={"Referer": "http://localhost/exam"},
+                )
+                self.assertEqual(language_response.status_code, 302)
+
+                exam_response = client.get("/exam")
+                self.assertEqual(exam_response.status_code, 200)
+                self.assertIn("English question", exam_response.get_data(as_text=True))
+
+                with client.session_transaction() as session:
+                    question_ids = session["exam_question_ids"]
+                    self.assertNotIn("selected_topics", session)
+
+                result_response = client.post(
+                    "/exam",
+                    data=csrf_data(
+                        client,
+                        **{f"answer_{question_ids[0]}": "Yes"},
+                    ),
+                )
+
+            self.assertEqual(result_response.status_code, 200)
+            self.assertIn("Your score: 1 / 1", result_response.get_data(as_text=True))
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
     def test_practice_page_shows_level_question_and_cards(self):
         client = app.test_client()
         response = client.get("/practice")

@@ -522,7 +522,10 @@ def sitemap_xml():
 @app.route("/language", methods=["POST"])
 def set_language():
     """Persist the selected UI and question language, then return to the page."""
-    session["language"] = normalize_language(request.form.get("language"))
+    language = normalize_language(request.form.get("language"))
+    if language != normalize_language(session.get("language", "NL")):
+        session.pop("selected_topics", None)
+    session["language"] = language
     session.pop("exam_question_ids", None)
     target = request.referrer or url_for("index")
     if not target.startswith(request.host_url):
