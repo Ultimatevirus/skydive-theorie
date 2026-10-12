@@ -1,4 +1,4 @@
-import os
+﻿import os
 import json
 import sqlite3
 import tempfile
@@ -15,6 +15,7 @@ from metar import (
     DUTCH_AIRPORTS,
     MetarError,
     _CACHE,
+    build_abbreviation_questions,
     build_questions,
     get_daily_metar,
     grade_answers,
@@ -339,7 +340,7 @@ class MetarRouteTests(unittest.TestCase):
         with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
             app_module, "load_weather_definitions", return_value=DEFINITIONS
         ):
-            response = client.get("/metar?airport=EHAM")
+            response = client.get("/metar/ontleden?airport=EHAM")
             self.assertEqual(response.status_code, 200)
             self.assertIn(REPORT, response.get_data(as_text=True))
             self.assertIn("Hoe laat is deze METAR uitgegeven?", response.get_data(as_text=True))
@@ -348,7 +349,7 @@ class MetarRouteTests(unittest.TestCase):
 
             answers = {f"q_{q['field']}": q["correct"] for q in make_questions(parsed, seed)}
             response = client.post(
-                "/metar",
+                "/metar/ontleden",
                 data=csrf_data(client, airport="EHAM", action="check", **answers),
             )
 
@@ -365,13 +366,13 @@ class MetarRouteTests(unittest.TestCase):
         with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
             app_module, "load_weather_definitions", return_value=DEFINITIONS
         ):
-            client.get("/metar?airport=EHAM")
+            client.get("/metar/ontleden?airport=EHAM")
             with client.session_transaction() as session:
                 attempt_id = session["metar_attempt_id"]
                 seed = session["metar_seed"]
             answers = {f"q_{q['field']}": q["correct"] for q in make_questions(parsed, seed)}
             response = client.post(
-                "/metar",
+                "/metar/ontleden",
                 data=csrf_data(
                     client,
                     airport="EHRD",
@@ -394,8 +395,8 @@ class MetarRouteTests(unittest.TestCase):
         with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
             app_module, "load_weather_definitions", return_value=DEFINITIONS
         ):
-            client.get("/metar?airport=EHAM")
-            response = client.post("/metar", data=csrf_data(client, airport="EHAM", action="check"))
+            client.get("/metar/ontleden?airport=EHAM")
+            response = client.post("/metar/ontleden", data=csrf_data(client, airport="EHAM", action="check"))
 
         html = response.get_data(as_text=True)
         self.assertIn("result-unanswered", html)
@@ -410,18 +411,80 @@ class MetarRouteTests(unittest.TestCase):
         client = app.test_client()
 
         with patch.object(app_module, "get_daily_metar", side_effect=[eham, ehrd]) as get_metar:
-            client.post("/metar", data=csrf_data(client, airport="EHAM", action="load"))
-            response = client.post("/metar", data=csrf_data(client, airport="EHRD", action="load"))
+            client.post("/metar/ontleden", data=csrf_data(client, airport="EHAM", action="load"))
+            response = client.post("/metar/ontleden", data=csrf_data(client, airport="EHRD", action="load"))
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("EHRD · Rotterdam The Hague", response.get_data(as_text=True))
         self.assertEqual(get_metar.call_args_list[1].args[0], "EHRD")
 
     def test_invalid_airport_is_rejected(self):
-        response = app.test_client().get("/metar?airport=XXXX")
+        response = app.test_client().get("/metar/ontleden?airport=XXXX")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Kies een Nederlandse luchthaven", response.get_data(as_text=True))
+
+
+class MetarAbbreviationTests(unittest.TestCase):
+    def test_questions_are_deterministic_with_plausible_unique_options(self):
+        first = build_abbreviation_questions("a" * 16, "NL", DEFINITIONS)
+        second = build_abbreviation_questions("a" * 16, "NL", DEFINITIONS)
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 10)
+        self.assertEqual(len({q["field"] for q in first}), 10)
+        for question in first:
+            self.assertEqual(len(question["options"]), 4)
+            self.assertEqual(len(set(question["options"])), 4)
+            self.assertIn(question["correct"], question["options"])
+
+    def test_cloud_distractors_are_other_cloud_meanings(self):
+        cloud_meanings = {
+            nl for cat, nl, _ in metar_module.load_abbreviations(DEFAULT_LOCAL_DB).values() if cat == "cloud"
+        }
+        for seed in range(30):
+            for question in build_abbreviation_questions(f"{seed:016x}", "NL", DEFINITIONS, count=200):
+                if question["label"] == "BKN":
+                    self.assertTrue(set(question["options"]) <= cloud_meanings)
+                    return
+        self.fail("BKN question never generated")
+
+    def test_english_language_uses_english_meanings(self):
+        questions = build_abbreviation_questions("b" * 16, "EN", DEFINITIONS, count=200)
+        by_code = {q["label"]: q for q in questions}
+
+        self.assertEqual(by_code["BKN"]["correct"], "Broken clouds (5-7 oktas)")
+        self.assertIn("mean in a METAR", by_code["BKN"]["question"])
+
+    def test_abbreviation_routes(self):
+        client = app.test_client()
+        choice = client.get("/metar").get_data(as_text=True)
+        self.assertIn("/metar/ontleden", choice)
+        self.assertIn("/metar/afkortingen", choice)
+
+        page = client.get("/metar/afkortingen")
+        html = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(html.count('<input type="radio"'), 40)
+
+        seed = html.split('name="seed" value="')[1].split('"')[0]
+        questions = build_abbreviation_questions(seed, "NL", DEFINITIONS)
+        answers = {f"q_{q['field']}": q["correct"] for q in questions}
+        graded = client.post(
+            "/metar/afkortingen",
+            data=csrf_data(client, action="check", seed=seed, **answers),
+        ).get_data(as_text=True)
+        self.assertIn("10 / 10", graded)
+
+        empty = client.post(
+            "/metar/afkortingen", data=csrf_data(client, action="check", seed=seed)
+        ).get_data(as_text=True)
+        self.assertIn("0 / 10", empty)
+
+        invalid = client.post(
+            "/metar/afkortingen", data=csrf_data(client, action="check", seed="bad")
+        ).get_data(as_text=True)
+        self.assertEqual(invalid.count('<input type="radio"'), 40)
 
 
 if __name__ == "__main__":

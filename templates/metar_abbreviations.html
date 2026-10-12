@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('METAR afkortingen oefenen') }}{% endblock %}
+
+{% set page_name = 'metar' %}
+
+{% block content %}
+    <div class="card exam-card metar-card">
+        <div class="page-header">
+            <div>
+                <h1>{{ t('METAR afkortingen oefenen') }}</h1>
+                <p class="metar-subheader">{{ t('Kies bij elke afkorting de juiste betekenis. Na het controleren zie je je score en de goede antwoorden.') }}</p>
+            </div>
+        </div>
+
+        <form method="post" action="{{ url_for('metar_abbreviations') }}" class="metar-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            {% if result %}
+                <div class="overall-summary {{ 'passed' if result|selectattr('correct')|list|length * 10 >= result|length * 6 else 'failed' }}">
+                    <p class="score">{{ t('Je score: {score} / {total}', score=result|selectattr('correct')|list|length, total=result|length) }}</p>
+                </div>
+                <div class="metar-questions">
+                    {% for item in result %}
+                        <div class="result-item {% if item.is_unanswered %}result-unanswered{% elif item.correct %}result-correct{% else %}result-wrong{% endif %}">
+                            <div class="question-heading">
+                                <span class="question-number">{{ loop.index }}</span>
+                                <h3 class="question-title">{{ item.question }}</h3>
+                            </div>
+                            <div class="answer-row">
+                                {% if item.is_unanswered %}
+                                    <p class="answer-line answer-unanswered">{{ t('Niet ingevuld') }}</p>
+                                {% else %}
+                                    <p class="answer-line {% if item.correct %}answer-correct{% else %}answer-wrong{% endif %}">
+                                        {{ t('Jouw antwoord: {answer}', answer=item.answer) }}
+                                    </p>
+                                {% endif %}
+                                <p class="answer-line answer-correct">{{ t('Goed antwoord: {answer}', answer=item.expected) }}</p>
+                            </div>
+                            {% if item.is_unanswered %}
+                                <p class="result-status status-unanswered">{{ t('Niet ingevuld') }}</p>
+                            {% elif item.correct %}
+                                <p class="result-status status-pass">{{ t('Correct') }}</p>
+                            {% else %}
+                                <p class="result-status status-fail">{{ t('Niet correct') }}</p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="button-row">
+                    <a href="{{ url_for('metar_abbreviations') }}" class="primary-btn">{{ t('Nieuwe vragen') }}</a>
+                    <a href="{{ url_for('metar_choice') }}" class="secondary-btn">{{ t('Terug') }}</a>
+                </div>
+            {% else %}
+                <input type="hidden" name="seed" value="{{ seed }}">
+                <div class="metar-questions">
+                    {% for q in questions %}
+                        <div class="question-card">
+                            <div class="metar-question-heading">
+                                <div class="metar-question-cell metar-question-number">
+                                    <span>NR</span>
+                                    <strong>{{ loop.index }}</strong>
+                                </div>
+                                <div class="metar-question-cell metar-question-report">
+                                    <span>{{ t('Afkorting') }}</span>
+                                    <code>{{ q.label }}</code>
+                                </div>
+                                <div class="metar-question-cell metar-question-prompt">
+                                    <span>{{ t('Vraag') }}</span>
+                                    <h4 class="question-title">{{ q.question }}</h4>
+                                </div>
+                            </div>
+                            {% for option in q.options %}
+                                <label class="option-label">
+                                    <input type="radio" name="q_{{ q.field }}" value="{{ option }}">
+                                    <span>{{ 'ABCD'[loop.index0] }}: {{ option }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="button-row">
+                    <button type="submit" name="action" value="check" class="primary-btn">{{ t('Controleer antwoorden') }}</button>
+                    <a href="{{ url_for('metar_choice') }}" class="secondary-btn">{{ t('Terug') }}</a>
+                </div>
+            {% endif %}
+        </form>
+
+        {% if not result %}
+            <div id="confirm-modal" class="modal-backdrop" hidden>
+                <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+                    <h3 id="confirm-title">{{ t('Niet alle vragen zijn ingevuld') }}</h3>
+                    <p>{{ t('Niet alle vragen zijn ingevuld. Weet je zeker dat je wilt doorgaan? Niet ingevulde vragen tellen als fout.') }}</p>
+                    <div class="button-row">
+                        <button type="button" id="confirm-continue" class="primary-btn">{{ t('Doorgaan') }}</button>
+                        <button type="button" id="confirm-cancel" class="secondary-btn">{{ t('Terug naar examen') }}</button>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    {% if not result %}
+    <script>
+        const abbrForm = document.querySelector(".metar-form");
+        const confirmModal = document.getElementById("confirm-modal");
+        const total = new Set(Array.from(abbrForm.querySelectorAll('input[type="radio"]')).map(i => i.name)).size;
+        let confirmed = false;
+
+        function addCheckAction() {
+            const action = document.createElement("input");
+            action.type = "hidden";
+            action.name = "action";
+            action.value = "check";
+            abbrForm.appendChild(action);
+        }
+
+        abbrForm.addEventListener("submit", (event) => {
+            if (confirmed) return;
+            if (abbrForm.querySelectorAll('input[type="radio"]:checked').length < total) {
+                event.preventDefault();
+                confirmModal.hidden = false;
+                document.getElementById("confirm-continue").focus();
+            }
+        });
+        document.getElementById("confirm-cancel").addEventListener("click", () => { confirmModal.hidden = true; });
+        confirmModal.addEventListener("click", (event) => {
+            if (event.target === confirmModal) confirmModal.hidden = true;
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") confirmModal.hidden = true;
+        });
+        document.getElementById("confirm-continue").addEventListener("click", () => {
+            confirmed = true;
+            addCheckAction();
+            abbrForm.submit();
+        });
+    </script>
+    {% endif %}
+{% endblock %}

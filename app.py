@@ -24,7 +24,7 @@ from flask import (
     url_for,
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
-from metar import DUTCH_AIRPORTS, MetarError, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
+from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
 from quiz import (
     build_option_list,
     build_question_groups,
@@ -730,7 +730,33 @@ def metar_refresh_enabled():
     return os.getenv("KNMI_METAR_REFRESH", "1").lower() not in {"0", "false", "no"}
 
 
-@app.route("/metar", methods=["GET", "POST"])
+@app.route("/metar")
+def metar_choice():
+    """Let the user choose between parsing a METAR and practising abbreviations."""
+    return render_template("metar_choice.html")
+
+
+@app.route("/metar/afkortingen", methods=["GET", "POST"])
+def metar_abbreviations():
+    """Multiple-choice practice for METAR abbreviations."""
+    checking = request.method == "POST" and request.form.get("action") == "check"
+    seed = str(request.form.get("seed", "")).strip()
+    if not (checking and re.fullmatch(r"[0-9a-f]{16}", seed)):
+        seed = new_question_seed()
+        checking = False
+
+    language = normalize_language(session.get("language", "NL"))
+    questions = build_abbreviation_questions(seed, language, load_weather_definitions())
+    result = grade_answers(questions, request.form) if checking else None
+    return render_template(
+        "metar_abbreviations.html",
+        questions=questions,
+        result=result,
+        seed=seed,
+    )
+
+
+@app.route("/metar/ontleden", methods=["GET", "POST"])
 def metar_practice():
     """Show and grade the daily METAR exercise for a Dutch airport."""
     checking = request.method == "POST" and request.form.get("action") == "check"

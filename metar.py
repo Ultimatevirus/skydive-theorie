@@ -29,6 +29,7 @@ METAR_DATASET = os.getenv("KNMI_METAR_DATASET", "metar")
 METAR_VERSION = os.getenv("KNMI_METAR_VERSION", "1.0")
 _CACHE = {}
 _WEATHER_DEFINITIONS_CACHE = {}
+_ABBREVIATIONS_CACHE = {}
 _WEATHER_DEFINITIONS_LOCK = Lock()
 API_CALL_LIMIT = 3
 API_CALL_WINDOW = 60
@@ -762,3 +763,79 @@ def grade_answers(questions, submitted):
             "correct": answer == question["correct"],
         })
     return results
+
+
+ABBREVIATION_QUESTION_COUNT = 10
+
+def load_abbreviations(path=None):
+    """Read {abbreviation: (category, NL, EN)} from the metar_abbreviations table."""
+    database_path = os.path.abspath(path or get_db_path())
+    stat = os.stat(database_path)
+    cache_key = (database_path, stat.st_mtime_ns, stat.st_size)
+    with _WEATHER_DEFINITIONS_LOCK:
+        if cache_key in _ABBREVIATIONS_CACHE:
+            return _ABBREVIATIONS_CACHE[cache_key]
+
+        conn = connect_db(path=database_path)
+        try:
+            rows = conn.execute(
+                "SELECT METAR_abreviation, category, NL_definition, EN_definition FROM metar_abbreviations"
+            ).fetchall()
+        finally:
+            conn.close()
+        abbreviations = {row[0]: (row[1], row[2], row[3]) for row in rows}
+        _ABBREVIATIONS_CACHE.clear()
+        _ABBREVIATIONS_CACHE[cache_key] = abbreviations
+        return abbreviations
+
+
+def _abbreviation_entries(definitions, abbreviations, language):
+    """Return {code: (category, meaning)} combining static codes and database weather codes."""
+    index = 1 if str(language).upper() == "EN" else 0
+    entries = {code: (cat, texts[index]) for code, (cat, *texts) in abbreviations.items()}
+    for code in _standalone_codes(definitions):
+        if code not in entries:
+            entries[code] = ("weather", definitions[code][index])
+    return entries
+
+
+def build_abbreviation_questions(
+    seed, language="NL", definitions=None, count=ABBREVIATION_QUESTION_COUNT, abbreviations=None
+):
+    """Build 'what does this abbreviation mean' questions; the same seed yields the same questions."""
+    definitions = definitions if definitions is not None else load_weather_definitions()
+    abbreviations = abbreviations if abbreviations is not None else load_abbreviations()
+    rng = random.Random(f"abbr:{seed}")
+    entries = _abbreviation_entries(definitions, abbreviations, language)
+    english = str(language).upper() == "EN"
+
+    # Mix categories so a set is not made of weather codes only.
+    by_category = {}
+    for code, (category, _) in entries.items():
+        by_category.setdefault(category, []).append(code)
+    chosen = []
+    pool = {cat: rng.sample(codes, len(codes)) for cat, codes in by_category.items()}
+    while len(chosen) < min(count, len(entries)):
+        for category in rng.sample(list(pool), len(pool)):
+            if pool[category] and len(chosen) < count:
+                chosen.append(pool[category].pop())
+    rng.shuffle(chosen)
+
+    questions = []
+    for code in chosen:
+        category, correct = entries[code]
+        same = [c for c, (cat, _) in entries.items() if cat == category and c != code]
+        others = [c for c in entries if c != code and c not in same]
+        ranked = _similar_text(rng, code, same, count=len(same)) + rng.sample(others, len(others))
+        distractors = []
+        for other in ranked:
+            meaning = entries[other][1]
+            if meaning != correct and meaning not in distractors:
+                distractors.append(meaning)
+            if len(distractors) == OPTION_COUNT - 1:
+                break
+        text = f"What does \"{code}\" mean in a METAR?" if english else f"Wat betekent \"{code}\" in een METAR?"
+        question = _build_question(rng, f"abbr_{code}", code, text, correct, distractors)
+        questions.append(question)
+    return questions
+

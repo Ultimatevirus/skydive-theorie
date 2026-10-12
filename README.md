@@ -9,7 +9,7 @@ This website helps you prepare for the KNVVL theory exams required to obtain you
 - Instant feedback on answers and overall performance
 - Learning resources page
 - Contact form for inquiries
-- Daily METAR practice using KNMI observations
+- Daily METAR practice using KNMI observations (decoding METARs at `/metar/ontleden`) and multiple-choice METAR abbreviation practice (`/metar/afkortingen`), chosen at `/metar`
 
 ## ⚠️ Important Disclaimer
 

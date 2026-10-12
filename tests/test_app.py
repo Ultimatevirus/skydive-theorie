@@ -74,7 +74,7 @@ class PracticeFlowTests(unittest.TestCase):
             patch.object(app_module, "load_weather_definitions", return_value={}),
             patch.object(app_module, "build_questions", return_value=[question]),
         ):
-            response = app.test_client().get("/metar")
+            response = app.test_client().get("/metar/ontleden")
 
         html = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
