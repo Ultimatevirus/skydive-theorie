@@ -50,7 +50,6 @@ __all__ = [
 
 TAF_DATASET = os.getenv("KNMI_TAF_DATASET", "taf")
 TAF_VERSION = os.getenv("KNMI_TAF_VERSION", "1.0")
-MAX_PROBED_FILES = 4
 ABBREVIATION_QUESTION_COUNT = 10
 CHANGE_CODES = ("BECMG", "TEMPO", "FM", "PROB30", "PROB40")
 COMPOUND_CHANGES = ("PROB30 TEMPO", "PROB40 TEMPO")
@@ -140,7 +139,7 @@ def _get_open_data_taf(code, day, api_key, opener):
             if isinstance(item, dict) and item.get("filename")
         ]
         named = [item for item in files if code in str(item["filename"]).upper()]
-        for item in (named or files[:MAX_PROBED_FILES]):
+        for item in (named or files):
             download = _fetch_payload(f"{path}/{quote(item['filename'], safe='')}/url", api_key, opener)
             url = download.get("temporaryDownloadUrl") if isinstance(download, dict) else None
             if not url:

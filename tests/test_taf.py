@@ -177,6 +177,28 @@ class TafServiceTests(TafTestCase):
         self.assertEqual(result["raw"], "TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025")
         self.assertEqual(len(urls), 3)
 
+    def test_open_data_api_searches_all_files_when_filenames_are_not_airport_specific(self):
+        filenames = [f"report-{index}.xml" for index in range(5)]
+        urls = []
+
+        def opener(request, timeout):
+            url = request.full_url
+            urls.append(url)
+            if "/datasets/taf/versions/1.0/files?" in url:
+                return FakeResponse(json.dumps({"files": [{"filename": name} for name in filenames]}))
+            if url.endswith("/url"):
+                filename = url.split("/files/", 1)[1].removesuffix("/url")
+                return FakeResponse(json.dumps({"temporaryDownloadUrl": f"https://download.example/{filename}"}))
+            if url.endswith("report-4.xml"):
+                return FakeResponse(f"<!-- {REPORT}= -->")
+            return FakeResponse("<!-- TAF EHGG 121100Z 1212/1318 24010KT 9999 SCT025= -->")
+
+        with patch.dict(os.environ, {"KNMI_API_KEY": "key"}):
+            result = get_daily_taf("EHAM", date(2026, 10, 12), opener=opener)
+
+        self.assertEqual(result["raw"], REPORT)
+        self.assertEqual(len(urls), 11)
+
     def test_taf_fetch_shares_the_metar_rate_limit_table(self):
         with patch.dict(os.environ, {"KNMI_API_KEY": "key"}), \
                 patch.object(taf_module, "_get_open_data_taf", return_value=REPORT):
@@ -353,4 +375,3 @@ class TafRouteTests(unittest.TestCase):
             html_eham = res_eham.get_data(as_text=True)
             self.assertIn("EHAM · Amsterdam Schiphol", html_eham)
             self.assertNotIn("EHLE · Lelystad", html_eham)
-
