@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('TAF oefenen') }}{% endblock %}
+
+{% set page_name = 'taf' %}
+
+{% macro taf_lines(taf) %}
+    <div class="taf-lines">
+        {% for line in taf.lines %}<code>{{ line }}</code>{% endfor %}
+    </div>
+{% endmacro %}
+
+{% block content %}
+    <div class="card exam-card metar-card">
+        <div class="page-header">
+            <div>
+                <h1>{{ t('TAF mode') }}</h1>
+                <p class="metar-subheader">{{ t("Na het kiezen van een luchthaven krijg je de actuele TAF te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de TAF en worden dynamisch gegenereerd. De TAF's worden direct via het KNMI opgehaald.") }}</p>
+            </div>
+        </div>
+
+        {% if error %}<div class="error-box" role="alert">{{ t(error) }}</div>{% endif %}
+
+        <form method="post" action="{{ url_for('taf_practice') }}" class="metar-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="attempt_id" value="{{ attempt_id or '' }}">
+            <div class="field-group">
+                <label for="airport">{{ t('Luchthaven') }}</label>
+                <select id="airport" name="airport" required onchange="this.form.submit()">
+                    {% for code, name in airports.items() %}
+                        <option value="{{ code }}" {% if code == airport %}selected{% endif %}>{{ code }} - {{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            {% if taf and result %}
+                <div class="metar-report">
+                    <div><span>{{ t('Luchthaven') }}</span><strong>{{ taf.airport }} · {{ taf.airport_name }}</strong></div>
+                    <div><span>{{ t('Actuele TAF') }}</span>{{ taf_lines(taf) }}</div>
+                </div>
+                <div class="overall-summary {{ 'passed' if result|selectattr('correct')|list|length * 10 >= result|length * 6 else 'failed' }}">
+                    <p class="score">{{ t('Je score: {score} / {total}', score=result|selectattr('correct')|list|length, total=result|length) }}</p>
+                </div>
+                <div class="metar-questions">
+                    {% for item in result %}
+                        <div class="result-item {% if item.is_unanswered %}result-unanswered{% elif item.correct %}result-correct{% else %}result-wrong{% endif %}">
+                            <div class="question-heading">
+                                <span class="question-number">{{ loop.index }}</span>
+                                <h3 class="question-title">{{ t(item.question) }}</h3>
+                            </div>
+                            <div class="answer-row">
+                                {% if item.is_unanswered %}
+                                    <p class="answer-line answer-unanswered">{{ t('Niet ingevuld') }}</p>
+                                {% else %}
+                                    <p class="answer-line {% if item.correct %}answer-correct{% else %}answer-wrong{% endif %}">
+                                        {{ t('Jouw antwoord: {answer}', answer=t(item.answer)) }}
+                                    </p>
+                                {% endif %}
+                                <p class="answer-line answer-correct">{{ t('Goed antwoord: {answer}', answer=t(item.expected)) }}</p>
+                            </div>
+                            {% if item.is_unanswered %}
+                                <p class="result-status status-unanswered">{{ t('Niet ingevuld') }}</p>
+                            {% elif item.correct %}
+                                <p class="result-status status-pass">{{ t('Correct') }}</p>
+                            {% else %}
+                                <p class="result-status status-fail">{{ t('Niet correct') }}</p>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" name="action" value="load" class="primary-btn">{{ t('Nieuwe vragen') }}</button>
+            {% elif taf %}
+                <div class="metar-report">
+                    <div><span>{{ t('Luchthaven') }}</span><strong>{{ taf.airport }} · {{ taf.airport_name }}</strong></div>
+                    <div><span>{{ t('Actuele TAF') }}</span>{{ taf_lines(taf) }}</div>
+                </div>
+                <input type="hidden" name="question_airport" value="{{ taf.airport }}">
+                <div class="metar-questions">
+                    {% for q in questions %}
+                        <div class="question-card">
+                            <div class="metar-question-heading">
+                                <div class="metar-question-cell metar-question-number">
+                                    <span>NR</span>
+                                    <strong>{{ loop.index }}</strong>
+                                </div>
+                                <div class="metar-question-cell metar-question-report">
+                                    <span>{{ t('TAF') }}</span>
+                                    {{ taf_lines(taf) }}
+                                </div>
+                                <div class="metar-question-cell metar-question-prompt">
+                                    <span>{{ t('Vraag') }}</span>
+                                    <h4 class="question-title">{{ t(q.question) }}</h4>
+                                </div>
+                            </div>
+                            {% for option in q.options %}
+                                <label class="option-label">
+                                    <input type="radio" name="q_{{ q.field }}" value="{{ option }}">
+                                    <span>{{ 'ABCD'[loop.index0] }}: {{ t(option) }}</span>
+                                </label>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                </div>
+                <button type="submit" name="action" value="check" class="primary-btn">{{ t('Controleer TAF') }}</button>
+            {% else %}
+                <p class="helper-text">{{ t('Selecteer een luchthaven om de actuele TAF te laden.') }}</p>
+                <button type="submit" name="action" value="load" class="primary-btn">{{ t('TAF laden') }}</button>
+            {% endif %}
+        </form>
+
+        {% if taf and not result %}
+            <div id="confirm-modal" class="modal-backdrop" hidden>
+                <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+                    <h3 id="confirm-title">{{ t('Niet alle vragen zijn ingevuld') }}</h3>
+                    <p>{{ t('Niet alle vragen zijn ingevuld. Weet je zeker dat je wilt doorgaan? Niet ingevulde vragen tellen als fout.') }}</p>
+                    <div class="button-row">
+                        <button type="button" id="confirm-continue" class="primary-btn">{{ t('Doorgaan') }}</button>
+                        <button type="button" id="confirm-cancel" class="secondary-btn">{{ t('Terug naar examen') }}</button>
+                    </div>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block scripts %}
+    {% if taf and not result %}
+    <script>
+        const tafForm = document.querySelector(".metar-form");
+        const confirmModal = document.getElementById("confirm-modal");
+        const confirmContinue = document.getElementById("confirm-continue");
+        const questionNames = Array.from(new Set(
+            Array.from(tafForm.querySelectorAll('input[type="radio"]')).map(input => input.name)
+        ));
+        let selectedAction = null;
+        let submitting = false;
+
+        function closeConfirmModal() {
+            confirmModal.hidden = true;
+        }
+
+        function submitWithAction(actionValue) {
+            const action = document.createElement("input");
+            action.type = "hidden";
+            action.name = "action";
+            action.value = actionValue;
+            tafForm.appendChild(action);
+            submitting = true;
+            tafForm.querySelectorAll('button[type="submit"]').forEach(button => {
+                button.disabled = true;
+            });
+        }
+
+        tafForm.querySelectorAll('button[type="submit"]').forEach(button => {
+            button.addEventListener("click", () => {
+                selectedAction = button.value;
+            });
+        });
+
+        tafForm.addEventListener("submit", (event) => {
+            if (submitting) {
+                event.preventDefault();
+                return;
+            }
+            const actionValue = (event.submitter && event.submitter.value) || selectedAction;
+            if (!actionValue) {
+                return;
+            }
+            const answered = tafForm.querySelectorAll('input[type="radio"]:checked').length;
+            if (actionValue === "check" && answered < questionNames.length) {
+                event.preventDefault();
+                confirmModal.hidden = false;
+                confirmContinue.focus();
+                return;
+            }
+            submitWithAction(actionValue);
+            selectedAction = null;
+        });
+
+        document.getElementById("confirm-cancel").addEventListener("click", closeConfirmModal);
+        confirmModal.addEventListener("click", (event) => {
+            if (event.target === confirmModal) closeConfirmModal();
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && !confirmModal.hidden) closeConfirmModal();
+        });
+        confirmContinue.addEventListener("click", () => {
+            if (submitting) return;
+            confirmContinue.disabled = true;
+            submitWithAction("check");
+            tafForm.submit();
+        });
+    </script>
+    {% endif %}
+{% endblock %}

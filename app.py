@@ -25,6 +25,8 @@ from flask import (
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
 from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
+import taf as taf_module
+from taf import TafError, get_daily_taf
 from quiz import (
     build_option_list,
     build_question_groups,
@@ -769,17 +771,19 @@ def metar_practice():
 
     # Grade against the airport the questions were generated for; the dropdown may
     # hold a stale value (e.g. restored by the browser) from a previous exercise.
-    request_airport = (
-        request.form.get("question_airport")
-        or request.form.get("airport")
-        or request.args.get("airport")
-    )
-    if checking and attempt_id and not attempt_state:
-        selected_airport = str(session.get("metar_airport") or request_airport or "EHAM").strip().upper()
+    if checking:
+        selected_airport = str(
+            (attempt_state and attempt_state.get("airport"))
+            or request.form.get("question_airport")
+            or session.get("metar_airport")
+            or request.form.get("airport")
+            or request.args.get("airport")
+            or "EHAM"
+        ).strip().upper()
     else:
         selected_airport = str(
-            (checking and attempt_state and attempt_state.get("airport"))
-            or request_airport
+            request.form.get("airport")
+            or request.args.get("airport")
             or session.get("metar_airport")
             or "EHAM"
         ).strip().upper()
@@ -826,6 +830,105 @@ def metar_practice():
         airports=DUTCH_AIRPORTS,
         airport=selected_airport,
         metar=metar,
+        questions=questions,
+        submitted=request.form if result else {},
+        result=result,
+        error=error,
+        attempt_id=attempt_id,
+    )
+
+
+def taf_refresh_enabled():
+    """Request threads only read cached TAFs when the background refresher fills the cache."""
+    return os.getenv("KNMI_TAF_REFRESH", "1").lower() not in {"0", "false", "no"}
+
+
+@app.route("/taf/afkortingen", methods=["GET", "POST"])
+def taf_abbreviations():
+    """Multiple-choice practice for TAF abbreviations."""
+    checking = request.method == "POST" and request.form.get("action") == "check"
+    seed = str(request.form.get("seed", "")).strip()
+    if not (checking and re.fullmatch(r"[0-9a-f]{16}", seed)):
+        seed = new_question_seed()
+        checking = False
+
+    language = normalize_language(session.get("language", "NL"))
+    questions = taf_module.build_abbreviation_questions(seed, language, load_weather_definitions())
+    result = grade_answers(questions, request.form) if checking else None
+    return render_template(
+        "taf_abbreviations.html",
+        questions=questions,
+        result=result,
+        seed=seed,
+    )
+
+
+@app.route("/taf/ontleden", methods=["GET", "POST"])
+def taf_practice():
+    """Show and grade the daily TAF exercise for a Dutch airport."""
+    checking = request.method == "POST" and request.form.get("action") == "check"
+    attempt_id = request.form.get("attempt_id") or session.get("taf_attempt_id")
+    attempts = session.get("taf_attempts", {})
+    if not isinstance(attempts, dict):
+        attempts = {}
+        session["taf_attempts"] = attempts
+    attempt_state = attempts.get(attempt_id) if attempt_id else None
+
+    if checking:
+        selected_airport = str(
+            (attempt_state and attempt_state.get("airport"))
+            or request.form.get("question_airport")
+            or session.get("taf_airport")
+            or request.form.get("airport")
+            or request.args.get("airport")
+            or "EHAM"
+        ).strip().upper()
+    else:
+        selected_airport = str(
+            request.form.get("airport")
+            or request.args.get("airport")
+            or session.get("taf_airport")
+            or "EHAM"
+        ).strip().upper()
+    error = None
+    result = None
+    questions = []
+    taf = None
+    attempt_id = attempt_id or uuid.uuid4().hex
+
+    if selected_airport not in DUTCH_AIRPORTS:
+        error = "Kies een Nederlandse luchthaven uit de lijst."
+    else:
+        try:
+            taf = get_daily_taf(
+                selected_airport,
+                wait_for_rate_limit=False,
+                cache_only=taf_refresh_enabled(),
+            )
+            session["taf_airport"] = selected_airport
+        except TafError as exc:
+            error = str(exc)
+
+    if taf and not error:
+        language = normalize_language(session.get("language", "NL"))
+        definitions = load_weather_definitions()
+        if checking:
+            seed = (attempt_state or {}).get("seed") or session.pop("taf_seed", None) or new_question_seed()
+        else:
+            seed = new_question_seed()
+            session["taf_seed"] = seed
+            session["taf_attempt_id"] = attempt_id
+            attempts[attempt_id] = {"airport": selected_airport, "seed": seed}
+            session["taf_attempts"] = attempts
+        questions = taf_module.build_questions(taf, seed, language, definitions)
+        if checking:
+            result = grade_answers(questions, request.form)
+
+    return render_template(
+        "taf.html",
+        airports=DUTCH_AIRPORTS,
+        airport=selected_airport,
+        taf=taf,
         questions=questions,
         submitted=request.form if result else {},
         result=result,

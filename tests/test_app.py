@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import app as app_module
+import taf as taf_module
 from app import app
 
 
@@ -81,6 +82,66 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('class="metar-question-heading"', html)
         self.assertIn('metar-question-cell metar-question-report', html)
         self.assertGreaterEqual(html.count(metar.raw), 2)
+
+    def test_taf_practice_shows_multiline_report(self):
+        taf = taf_module.parse_taf(
+            "TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025 BECMG 1214/1216 27015KT"
+        )
+        taf.update(airport="EHAM", airport_name="Amsterdam")
+
+        with (
+            patch.object(app_module, "get_daily_taf", return_value=taf),
+            patch.object(app_module, "load_weather_definitions", return_value={}),
+            patch.object(app_module.taf_module, "build_questions", return_value=[
+                {"field": "taf_issued", "label": "x", "question": "Q?", "options": ["a", "b"], "correct": "a"},
+            ]),
+        ):
+            response = app.test_client().get("/taf/ontleden")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="taf-lines"', html)
+        self.assertIn("<code>BECMG 1214/1216 27015KT</code>", html)
+        self.assertIn("Controleer TAF", html)
+
+    def test_taf_practice_grades_answers(self):
+        taf = taf_module.parse_taf("TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025")
+        taf.update(airport="EHAM", airport_name="Amsterdam")
+        client = app.test_client()
+
+        with (
+            patch.object(app_module, "get_daily_taf", return_value=taf),
+            patch.object(app_module, "load_weather_definitions", return_value={}),
+            patch.object(app_module.taf_module, "build_questions", return_value=[
+                {"field": "taf_issued", "label": "x", "question": "Q?", "options": ["a", "b"], "correct": "a"},
+            ]),
+        ):
+            client.get("/taf/ontleden")
+            response = client.post(
+                "/taf/ontleden",
+                data=csrf_data(client, action="check", airport="EHAM", q_taf_issued="a"),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Je score: 1 / 1", response.get_data(as_text=True))
+
+    def test_taf_practice_reports_service_errors_and_invalid_airport(self):
+        client = app.test_client()
+        with patch.object(app_module, "get_daily_taf", side_effect=taf_module.TafError("De TAF wordt nog opgehaald.")):
+            self.assertIn("De TAF wordt nog opgehaald.", client.get("/taf/ontleden").get_data(as_text=True))
+        invalid = client.get("/taf/ontleden?airport=EGLL")
+        self.assertIn("Kies een Nederlandse luchthaven", invalid.get_data(as_text=True))
+
+    def test_taf_abbreviations_page_and_choice_page(self):
+        client = app.test_client()
+        page = client.get("/taf/afkortingen")
+        choice = client.get("/metar").get_data(as_text=True)
+
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("<mark>", page.get_data(as_text=True))
+        self.assertIn("METAR/TAF oefenen", choice)
+        for path in ("/metar/ontleden", "/metar/afkortingen", "/taf/ontleden", "/taf/afkortingen"):
+            self.assertIn(f'href="{path}"', choice)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
         transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()

@@ -2,6 +2,7 @@ import os
 from threading import Event, Thread
 
 from metar import metar_refresh_loop
+from taf import taf_refresh_loop
 
 
 # Sized for a 4-core host; override per deployment (production compose runs several replicas).
@@ -35,10 +36,11 @@ secure_scheme_headers = { 'X-Forwarded-Proto': 'https' }
 
 _metar_refresh_stop = Event()
 _metar_refresh_thread = None
+_taf_refresh_thread = None
 
 
 def when_ready(server):
-	global _metar_refresh_thread
+	global _metar_refresh_thread, _taf_refresh_thread
 	if os.environ.get('KNMI_METAR_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
 		_metar_refresh_thread = Thread(
 			target=metar_refresh_loop,
@@ -47,9 +49,18 @@ def when_ready(server):
 			daemon=True,
 		)
 		_metar_refresh_thread.start()
+	if os.environ.get('KNMI_TAF_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
+		_taf_refresh_thread = Thread(
+			target=taf_refresh_loop,
+			args=(_metar_refresh_stop,),
+			name='taf-refresh',
+			daemon=True,
+		)
+		_taf_refresh_thread.start()
 
 
 def on_exit(server):
 	_metar_refresh_stop.set()
-	if _metar_refresh_thread is not None:
-		_metar_refresh_thread.join(timeout=5)
+	for thread in (_metar_refresh_thread, _taf_refresh_thread):
+		if thread is not None:
+			thread.join(timeout=5)

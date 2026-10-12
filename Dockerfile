@@ -15,6 +15,7 @@ COPY app.py ./
 COPY db.py ./
 COPY quiz.py ./
 COPY metar.py ./
+COPY taf.py ./
 COPY translations.py ./
 COPY gunicorn_config.py ./
 COPY docker-entrypoint.sh ./
