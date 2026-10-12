@@ -440,7 +440,7 @@ class MetarAbbreviationTests(unittest.TestCase):
 
     def test_cloud_distractors_are_other_cloud_meanings(self):
         cloud_meanings = {
-            nl for cat, nl, _ in metar_module.load_abbreviations(DEFAULT_LOCAL_DB).values() if cat == "cloud"
+            nl for cat, nl, _, _ in metar_module.load_abbreviations(DEFAULT_LOCAL_DB).values() if cat == "cloud"
         }
         for seed in range(30):
             for question in build_abbreviation_questions(f"{seed:016x}", "NL", DEFINITIONS, count=200):
@@ -455,6 +455,14 @@ class MetarAbbreviationTests(unittest.TestCase):
 
         self.assertEqual(by_code["BKN"]["correct"], "Broken clouds (5-7 oktas)")
         self.assertIn("mean in a METAR", by_code["BKN"]["question"])
+
+    def test_every_question_has_an_example_metar_containing_the_code(self):
+        questions = build_abbreviation_questions("c" * 16, "NL", DEFINITIONS, count=500)
+        self.assertGreater(len(questions), 80)
+        for question in questions:
+            before, token, after = question["example_parts"]
+            self.assertTrue(token, question["label"])
+            self.assertTrue(before or after, question["label"])
 
     def test_abbreviation_routes(self):
         client = app.test_client()

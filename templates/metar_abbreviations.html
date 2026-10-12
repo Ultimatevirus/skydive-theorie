@@ -69,6 +69,7 @@
                                     <h4 class="question-title">{{ q.question }}</h4>
                                 </div>
                             </div>
+                            <p class="abbr-example"><span>{{ t('Voorbeeld METAR') }}</span> <code>{{ q.example_parts[0] }}<mark>{{ q.example_parts[1] }}</mark>{{ q.example_parts[2] }}</code></p>
                             {% for option in q.options %}
                                 <label class="option-label">
                                     <input type="radio" name="q_{{ q.field }}" value="{{ option }}">

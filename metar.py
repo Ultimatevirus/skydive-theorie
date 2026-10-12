@@ -768,7 +768,7 @@ def grade_answers(questions, submitted):
 ABBREVIATION_QUESTION_COUNT = 10
 
 def load_abbreviations(path=None):
-    """Read {abbreviation: (category, NL, EN)} from the metar_abbreviations table."""
+    """Read {abbreviation: (category, NL, EN, example)} from the metar_abbreviations table."""
     database_path = os.path.abspath(path or get_db_path())
     stat = os.stat(database_path)
     cache_key = (database_path, stat.st_mtime_ns, stat.st_size)
@@ -779,24 +779,48 @@ def load_abbreviations(path=None):
         conn = connect_db(path=database_path)
         try:
             rows = conn.execute(
-                "SELECT METAR_abreviation, category, NL_definition, EN_definition FROM metar_abbreviations"
+                "SELECT METAR_abreviation, category, NL_definition, EN_definition, example FROM metar_abbreviations"
             ).fetchall()
         finally:
             conn.close()
-        abbreviations = {row[0]: (row[1], row[2], row[3]) for row in rows}
+        abbreviations = {row[0]: (row[1], row[2], row[3], row[4]) for row in rows}
         _ABBREVIATIONS_CACHE.clear()
         _ABBREVIATIONS_CACHE[cache_key] = abbreviations
         return abbreviations
 
 
 def _abbreviation_entries(definitions, abbreviations, language):
-    """Return {code: (category, meaning)} combining static codes and database weather codes."""
+    """Return {code: (category, meaning, example)} combining database abbreviations and weather codes."""
     index = 1 if str(language).upper() == "EN" else 0
-    entries = {code: (cat, texts[index]) for code, (cat, *texts) in abbreviations.items()}
+    entries = {
+        code: (category, (nl, en)[index], example)
+        for code, (category, nl, en, example) in abbreviations.items()
+    }
     for code in _standalone_codes(definitions):
         if code not in entries:
-            entries[code] = ("weather", definitions[code][index])
+            entries[code] = ("weather", definitions[code][index], _weather_example(code))
     return entries
+
+
+def _weather_example(code):
+    """Build an example METAR that reports the given weather code."""
+    if "FG" in code:
+        visibility = "0400"
+    elif "BR" in code:
+        visibility = "3000"
+    elif "HZ" in code:
+        visibility = "6000"
+    else:
+        visibility = "8000"
+    clouds = "BKN015CB" if ("TS" in code or "SH" in code) else "SCT020"
+    return f"EHAM 121250Z 24008KT {visibility} [[{code}]] {clouds} 12/09 Q1013"
+
+
+def _split_example(example):
+    """Split an example on its [[highlighted]] token into (before, token, after)."""
+    before, _, rest = example.partition("[[")
+    token, _, after = rest.partition("]]")
+    return before, token, after
 
 
 def build_abbreviation_questions(
@@ -811,7 +835,7 @@ def build_abbreviation_questions(
 
     # Mix categories so a set is not made of weather codes only.
     by_category = {}
-    for code, (category, _) in entries.items():
+    for code, (category, _, _example) in entries.items():
         by_category.setdefault(category, []).append(code)
     chosen = []
     pool = {cat: rng.sample(codes, len(codes)) for cat, codes in by_category.items()}
@@ -823,8 +847,8 @@ def build_abbreviation_questions(
 
     questions = []
     for code in chosen:
-        category, correct = entries[code]
-        same = [c for c, (cat, _) in entries.items() if cat == category and c != code]
+        category, correct, example = entries[code]
+        same = [c for c, (cat, _, _example) in entries.items() if cat == category and c != code]
         others = [c for c in entries if c != code and c not in same]
         ranked = _similar_text(rng, code, same, count=len(same)) + rng.sample(others, len(others))
         distractors = []
@@ -836,6 +860,7 @@ def build_abbreviation_questions(
                 break
         text = f"What does \"{code}\" mean in a METAR?" if english else f"Wat betekent \"{code}\" in een METAR?"
         question = _build_question(rng, f"abbr_{code}", code, text, correct, distractors)
+        question["example_parts"] = _split_example(example)
         questions.append(question)
     return questions
 

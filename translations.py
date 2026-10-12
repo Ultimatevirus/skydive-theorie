@@ -125,6 +125,7 @@ TRANSLATIONS = {
         "METAR afkortingen oefenen": "Practice METAR abbreviations",
         "Kies bij elke afkorting de juiste betekenis. Na het controleren zie je je score en de goede antwoorden.": "Choose the correct meaning for each abbreviation. After checking you will see your score and the correct answers.",
         "Afkorting": "Abbreviation",
+        "Voorbeeld METAR": "Example METAR",
         "Controleer antwoorden": "Check answers",
         "Dagelijkse uitdaging": "Daily challenge",
         "METAR mode": "METAR mode",

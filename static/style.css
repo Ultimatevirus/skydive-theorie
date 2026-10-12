@@ -875,6 +875,35 @@ button:hover,
     padding: 0;
 }
 
+.abbr-example {
+    display: grid;
+    gap: 3px;
+    margin: 12px 0;
+    padding: 10px 14px;
+    border-left: 4px solid var(--primary);
+    background: var(--primary-soft);
+}
+
+.abbr-example span {
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.abbr-example code {
+    overflow-wrap: anywhere;
+    font-weight: 600;
+}
+
+.abbr-example mark {
+    padding: 0 3px;
+    border-radius: 3px;
+    background: #ffd84d;
+    color: #1b1b1b;
+    font-weight: 800;
+}
+
 .metar-results {
     margin-top: 32px;
 }
