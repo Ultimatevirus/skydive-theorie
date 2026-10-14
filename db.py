@@ -46,6 +46,7 @@ def connect_db(path=None, row_factory=None, configure_journal=False):
     if row_factory is not None:
         conn.row_factory = row_factory
     conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
     if configure_journal:
         conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
@@ -104,6 +105,7 @@ def initialize_database(seed_path=None, database_path=None):
         replaced_tables = set()
 
         conn.execute("BEGIN IMMEDIATE")
+        conn.execute("PRAGMA defer_foreign_keys=ON")
 
         for (object_type, name), seed_object in seed_objects.items():
             if object_type != "table":
