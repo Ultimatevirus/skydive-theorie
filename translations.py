@@ -74,6 +74,7 @@ TRANSLATIONS = {
         "Goed antwoord: {answer}": "Correct answer: {answer}",
         "Correct": "Correct",
         "Niet correct": "Incorrect",
+        "Bron: {source}": "Source: {source}",
         "Niet ingevuld": "Not filled in",
         "Niet alle vragen zijn ingevuld": "Not all questions are filled in",
         "Doorgaan": "Continue",

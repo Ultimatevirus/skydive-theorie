@@ -67,7 +67,10 @@ class DatabaseHelperTests(unittest.TestCase):
             db.initialize_database(seed_path=seed_path, database_path=database_path)
 
             database = sqlite3.connect(database_path)
-            self.assertEqual(database.execute("SELECT * FROM questions").fetchall(), [(1, "latest")])
+            self.assertEqual(
+                database.execute("SELECT Key, value FROM questions").fetchall(),
+                [(1, "latest")],
+            )
             self.assertEqual(database.execute("SELECT * FROM metar").fetchall(), [("keep",)])
             self.assertEqual(database.execute("SELECT * FROM added_view").fetchall(), [("seed row",)])
             self.assertIsNotNone(
@@ -130,6 +133,42 @@ class DatabaseHelperTests(unittest.TestCase):
                         "INSERT INTO questions VALUES (2, 'unknown')"
                     )
                 database.execute("INSERT INTO questions VALUES (2, 'manual')")
+            finally:
+                database.close()
+
+    def test_initialize_database_adds_missing_question_source_column(self):
+        with tempfile.TemporaryDirectory() as directory:
+            seed_path = Path(directory) / "seed.db"
+            database_path = Path(directory) / "data.db"
+
+            seed = sqlite3.connect(seed_path)
+            seed.executescript(
+                """
+                CREATE TABLE questions (Key INTEGER PRIMARY KEY, question TEXT);
+                INSERT INTO questions VALUES (1, 'Question');
+                CREATE TABLE source_material (
+                    source TEXT PRIMARY KEY,
+                    start_date TEXT,
+                    end_date TEXT
+                );
+                INSERT INTO source_material VALUES ('manual', NULL, NULL);
+                """
+            )
+            seed.close()
+
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+
+            database = db.connect_db(path=database_path)
+            try:
+                columns = {
+                    row[1] for row in database.execute("PRAGMA table_info(questions)")
+                }
+                self.assertIn("source", columns)
+                database.execute(
+                    "INSERT INTO questions (Key, question, source) VALUES (?, ?, ?)",
+                    (2, "Question with source", "manual"),
+                )
             finally:
                 database.close()
 

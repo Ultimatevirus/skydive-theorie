@@ -406,6 +406,75 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("Je score:", response.get_data(as_text=True))
 
+    def test_exam_results_show_source_only_for_incorrect_answers_with_source(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE questions (
+                level TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT,
+                source TEXT
+            )
+            """
+        )
+        conn.executemany(
+            """
+            INSERT INTO questions
+                (level, topic, subtopic, is_active, question, true_answer, false_answers, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("A", "Materiaal", "Harnas", 1, "Wrong answer with source?", "Ja", "[]", "BVR20260303"),
+                ("A", "Materiaal", "Harnas", 1, "Correct answer with source?", "Ja", "[]", "Should not be shown"),
+                ("A", "Materiaal", "Harnas", 1, "Wrong answer without source?", "Ja", "[]", None),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session.update(
+                {
+                    "csrf_token": "test-csrf-token",
+                    "level": "A",
+                    "question_amount": 3,
+                    "selected_topics": None,
+                    "language": "NL",
+                    "exam_question_ids": [1, 2, 3],
+                    "started_at": 1000,
+                }
+            )
+
+        try:
+            app_module._language_column_cache.clear()
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                response = client.post(
+                    "/exam",
+                    data={
+                        "csrf_token": "test-csrf-token",
+                        "answer_1": "Nee",
+                        "answer_2": "Ja",
+                        "answer_3": "Nee",
+                    },
+                )
+
+            html = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Bron: BVR20260303", html)
+            self.assertNotIn("Should not be shown", html)
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
     def test_level_selection_redirects_to_mode_selection(self):
         client = app.test_client()
         response = client.post(

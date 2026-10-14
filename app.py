@@ -1166,6 +1166,7 @@ def exam():
                     "correct": display_answer_value(row["true_answer"], language),
                     "is_correct": is_correct,
                     "is_unanswered": is_unanswered,
+                    "source": get_row_value(row, "source"),
                     "image_url": get_question_image_url(
                         get_row_value(row, "image_link")
                     ),
