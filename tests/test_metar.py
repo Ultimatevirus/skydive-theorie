@@ -188,6 +188,27 @@ class MetarServiceTests(unittest.TestCase):
         self.assertEqual(opener.call_count, 3)
         self.assertEqual(opener.call_args_list[0].args[0].headers["Authorization"], "test-key")
 
+    def test_api_requests_are_spaced_at_least_one_second_apart(self):
+        clock = [0.0]
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        opener = unittest.mock.Mock()
+        response = unittest.mock.MagicMock()
+        response.read.return_value = b"{}"
+        response.__enter__.return_value = response
+        opener.return_value = response
+
+        with patch.object(metar_module, "_LAST_API_REQUEST", None), \
+                patch.object(metar_module.time, "monotonic", side_effect=lambda: clock[0]), \
+                patch.object(metar_module.time, "sleep", side_effect=sleep) as sleep_mock:
+            metar_module._request("https://example.test/one", "", opener, "application/json")
+            metar_module._request("https://example.test/two", "", opener, "application/json")
+
+        sleep_mock.assert_called_once_with(1.0)
+        self.assertEqual(opener.call_count, 2)
+
     def test_refresh_fetches_each_airport_once_and_continues_after_failure(self):
         calls = []
 

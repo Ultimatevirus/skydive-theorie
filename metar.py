@@ -31,7 +31,10 @@ _CACHE = {}
 _WEATHER_DEFINITIONS_CACHE = {}
 _ABBREVIATIONS_CACHE = {}
 _WEATHER_DEFINITIONS_LOCK = Lock()
-API_CALL_LIMIT = 8
+_API_REQUEST_LOCK = Lock()
+_LAST_API_REQUEST = None
+_API_REQUEST_INTERVAL = 1.0
+API_CALL_LIMIT = 20
 API_CALL_WINDOW = 60
 CLAIM_TIMEOUT = 600
 logger = logging.getLogger(__name__)
@@ -63,14 +66,23 @@ def _first_value(payload, keys):
 
 
 def _request(url, api_key, opener, accept):
+    global _LAST_API_REQUEST
     headers = {"Accept": "application/json"}
     if api_key:
         headers["Authorization"] = api_key
     headers["Accept"] = accept
     request = Request(url, headers=headers)
     try:
-        with opener(request, timeout=10) as response:
-            return response.read()
+        with _API_REQUEST_LOCK:
+            if _LAST_API_REQUEST is not None:
+                delay = _API_REQUEST_INTERVAL - (time.monotonic() - _LAST_API_REQUEST)
+                if delay > 0:
+                    time.sleep(delay)
+            try:
+                with opener(request, timeout=10) as response:
+                    return response.read()
+            finally:
+                _LAST_API_REQUEST = time.monotonic()
     except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
         raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
 
@@ -863,4 +875,3 @@ def build_abbreviation_questions(
         question["example_parts"] = _split_example(example)
         questions.append(question)
     return questions
-
