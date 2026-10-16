@@ -187,6 +187,33 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
 
+    def test_it_systems_status_page_is_localized_and_uses_persisted_values(self):
+        client = app.test_client()
+        states = {
+            "smtp": {"status": "operational", "checked_at": 1_797_000_000, "last_activity_at": None},
+            "knmi_mqtt": {
+                "status": "operational",
+                "checked_at": 1_797_000_000,
+                "last_activity_at": 1_796_999_900,
+            },
+            "knmi_opendata": {
+                "status": "operational",
+                "checked_at": 1_797_000_000,
+                "last_activity_at": None,
+            },
+        }
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        with patch.object(app_module, "get_service_statuses", return_value=states):
+            response = client.get("/it-systemen")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertIn("All systems operational", html)
+        self.assertIn("Last checked:", html)
+        self.assertIn("Last KNMI notification:", html)
+
     def test_favicon_keeps_compatibility_urls_and_is_small(self):
         client = app.test_client()
         svg_response = client.get("/favicon.svg")
@@ -253,6 +280,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(dutch_response.status_code, 200)
         self.assertIn("Server- en websitebezoeklogs", dutch_html)
         self.assertIn('href="/gdpr"', dutch_html)
+        self.assertIn('href="/it-systemen"', dutch_html)
         self.assertIn(">EU GDPR</a>", dutch_html)
 
         client.post("/language", data=csrf_data(client, language="EN"))

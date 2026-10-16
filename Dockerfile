@@ -23,6 +23,7 @@ COPY db.py ./
 COPY quiz.py ./
 COPY metar.py ./
 COPY taf.py ./
+COPY system_status.py ./
 COPY translations.py ./
 COPY gunicorn_config.py ./
 COPY docker-entrypoint.sh ./

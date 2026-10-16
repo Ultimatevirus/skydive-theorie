@@ -2,6 +2,7 @@ import os
 from threading import Event, Thread
 
 from metar import metar_refresh_loop
+from system_status import system_status_monitor
 from taf import taf_refresh_loop
 
 
@@ -37,10 +38,18 @@ secure_scheme_headers = { 'X-Forwarded-Proto': 'https' }
 _metar_refresh_stop = Event()
 _metar_refresh_thread = None
 _taf_refresh_thread = None
+_system_status_thread = None
 
 
 def when_ready(server):
-	global _metar_refresh_thread, _taf_refresh_thread
+	global _metar_refresh_thread, _taf_refresh_thread, _system_status_thread
+	_system_status_thread = Thread(
+		target=system_status_monitor,
+		args=(_metar_refresh_stop,),
+		name='system-status-monitor',
+		daemon=True,
+	)
+	_system_status_thread.start()
 	if os.environ.get('KNMI_METAR_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
 		_metar_refresh_thread = Thread(
 			target=metar_refresh_loop,
@@ -61,6 +70,6 @@ def when_ready(server):
 
 def on_exit(server):
 	_metar_refresh_stop.set()
-	for thread in (_metar_refresh_thread, _taf_refresh_thread):
+	for thread in (_metar_refresh_thread, _taf_refresh_thread, _system_status_thread):
 		if thread is not None:
 			thread.join(timeout=5)

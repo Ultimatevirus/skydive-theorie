@@ -43,11 +43,29 @@ class AccessGateTests(unittest.TestCase):
             self.assertEqual(client.get("/healthz").status_code, 200)
             self.assertEqual(client.get("/favicon.ico").status_code, 200)
             self.assertEqual(client.get("/favicon.svg").status_code, 200)
-            self.assertEqual(client.get("/robots.txt").status_code, 200)
-            self.assertEqual(client.get("/sitemap.xml").status_code, 200)
+            robots = client.get("/robots.txt")
+            sitemap = client.get("/sitemap.xml")
+            self.assertEqual(robots.status_code, 200)
+            self.assertIn("Allow: /it-systemen", robots.get_data(as_text=True))
+            self.assertEqual(sitemap.status_code, 200)
+            self.assertIn(
+                "<loc>https://www.skydive-theorie.nl/it-systemen</loc>",
+                sitemap.get_data(as_text=True),
+            )
             self.assertEqual(
                 client.get("/static/style.css").status_code, 200
             )
+
+    def test_it_systems_status_is_public_and_not_in_site_navigation(self):
+        client = app.test_client()
+        with patch.dict(os.environ, GATE_ENV):
+            response = client.get("/it-systemen")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("KNMI Notification Service (MQTT)", html)
+        self.assertIn("KNMI Open Data API", html)
+        self.assertNotIn('<a href="/it-systemen"', html)
 
     def test_correct_code_grants_access_and_redirects_to_next(self):
         client = app.test_client()

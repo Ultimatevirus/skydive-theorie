@@ -129,6 +129,12 @@ The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML fi
 
 KNMI Open Data requests use a descriptive User-Agent, are limited to 900 requests per rolling hour across the shared database, and retry rate-limit/server errors with exponential backoff (respecting `Retry-After`). METAR and TAF requests share this account-level quota; notifications are used instead of timer-based polling. See KNMI's [fair use policy](https://developer.dataplatform.knmi.nl/fair-use).
 
+### IT systems status page
+
+The public status page is available at `/it-systemen` and is not linked in the normal site navigation. A Gunicorn master process checks SMTP, KNMI Notification Service (MQTT), and KNMI Open Data in the background and stores the latest results in the shared SQLite database, so page views do not wait for provider connections. SMTP checks the configured connection, TLS, and authentication without sending a message.
+
+The MQTT status uses a received notification as evidence of activity and only probes the broker and subscription when no notification has arrived in the last two hours. The Open Data check first looks for a METAR row dated today; when one exists, it does not call the API. If no row exists, it makes a lightweight authenticated files-list request no more than once every 15 minutes, subject to the shared KNMI API quota. Missing credentials are shown as not configured, and provider error details and credentials are not exposed on the page.
+
 ### Build and run the image directly
 
 1. Clone the repository

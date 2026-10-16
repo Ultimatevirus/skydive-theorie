@@ -8,7 +8,7 @@ import smtplib
 import sqlite3
 import time
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from threading import Thread
 
@@ -26,6 +26,7 @@ from flask import (
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
 from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
+from system_status import get_service_statuses
 import taf as taf_module
 from taf import TafError, get_daily_taf
 from quiz import (
@@ -71,7 +72,7 @@ if (
 
 ACCESS_TOKEN_LIFETIME = timedelta(days=int(os.getenv("ACCESS_TOKEN_LIFETIME_DAYS", "7")))
 app.config["PERMANENT_SESSION_LIFETIME"] = ACCESS_TOKEN_LIFETIME
-GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "robots_txt", "sitemap_xml", "static", "gdpr"}
+GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "it_systems_status", "favicon", "robots_txt", "sitemap_xml", "static", "gdpr"}
 _missing_access_code_warned = False
 
 
@@ -436,6 +437,76 @@ def favicon():
 @app.route("/healthz")
 def healthz():
     return {"status": "ok"}, 200
+
+
+@app.route("/it-systemen")
+def it_systems_status():
+    states = get_service_statuses()
+    services = [
+        {
+            "name": "SMTP",
+            "description": "E-mailverbinding voor het contactformulier.",
+            **states.get("smtp", {"status": "unknown", "checked_at": None}),
+        },
+        {
+            "name": "KNMI Notification Service (MQTT)",
+            "description": "Meldingen voor nieuwe KNMI METAR-bestanden.",
+            **states.get("knmi_mqtt", {"status": "unknown", "checked_at": None}),
+        },
+        {
+            "name": "KNMI Open Data API",
+            "description": "Ophalen van METAR-gegevens uit KNMI Open Data.",
+            **states.get("knmi_opendata", {"status": "unknown", "checked_at": None}),
+        },
+    ]
+    for service in services:
+        checked_at = service["checked_at"]
+        service["checked_at_iso"] = (
+            datetime.fromtimestamp(checked_at, timezone.utc).isoformat(timespec="minutes")
+            if checked_at is not None
+            else None
+        )
+        service["checked_at_display"] = (
+            datetime.fromtimestamp(checked_at, timezone.utc).strftime("%d-%m-%Y %H:%M UTC")
+            if checked_at is not None
+            else None
+        )
+        activity_at = service.get("last_activity_at")
+        service["last_activity_iso"] = (
+            datetime.fromtimestamp(activity_at, timezone.utc).isoformat(timespec="minutes")
+            if activity_at is not None
+            else None
+        )
+        service["last_activity_display"] = (
+            datetime.fromtimestamp(activity_at, timezone.utc).strftime("%d-%m-%Y %H:%M UTC")
+            if activity_at is not None
+            else None
+        )
+
+    statuses = {service["status"] for service in services}
+    if statuses == {"operational"}:
+        overall_status = "operational"
+        overall_label = "Alle systemen operationeel"
+    elif "outage" in statuses:
+        overall_status = "outage"
+        overall_label = "Er is een storing bij een of meer diensten"
+    elif "not_configured" in statuses:
+        overall_status = "unknown"
+        overall_label = "Niet alle diensten zijn geconfigureerd"
+    else:
+        overall_status = "unknown"
+        overall_label = "Status wordt gecontroleerd"
+
+    response = app.make_response(
+        render_template(
+            "it_systems.html",
+            services=services,
+            overall_status=overall_status,
+            overall_label=overall_label,
+        )
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/robots.txt")

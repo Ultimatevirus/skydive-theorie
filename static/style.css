@@ -690,6 +690,12 @@ button:hover,
     padding: 22px 0;
 }
 
+.footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .footer-legal-link {
     color: var(--text);
     border: 1px solid currentColor;
@@ -1928,5 +1934,162 @@ body {
 
     .metar-fields label {
         min-height: 0;
+    }
+}
+
+.system-status-card {
+    width: min(100%, 920px);
+    margin: 0 auto;
+}
+
+.system-status-header {
+    margin-bottom: 24px;
+}
+
+.system-status-header h1 {
+    margin: 0 0 8px;
+    color: var(--text);
+    font-size: clamp(2rem, 4vw, 3rem);
+    line-height: 1.15;
+}
+
+.system-status-header p:last-child {
+    margin: 0;
+}
+
+.system-status-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--pass);
+    color: var(--pass-text);
+}
+
+.system-status-summary-outage {
+    background: var(--fail);
+    color: var(--fail-text);
+}
+
+.system-status-summary-unknown {
+    background: var(--bg-2);
+    color: var(--text);
+}
+
+.system-status-dot {
+    width: 11px;
+    height: 11px;
+    flex: 0 0 11px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 0 4px rgba(19, 138, 93, 0.12);
+}
+
+.system-status-summary-outage .system-status-dot,
+.system-status-indicator-outage .system-status-dot {
+    background: var(--error);
+    box-shadow: 0 0 0 4px rgba(214, 59, 80, 0.12);
+}
+
+.system-status-summary-unknown .system-status-dot,
+.system-status-indicator-unknown .system-status-dot,
+.system-status-indicator-not_configured .system-status-dot {
+    background: var(--muted);
+    box-shadow: 0 0 0 4px rgba(91, 107, 127, 0.12);
+}
+
+.system-status-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.system-status-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+}
+
+.system-status-indicator {
+    padding: 7px 0 0 2px;
+}
+
+.system-status-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.system-status-title h2 {
+    margin: 0;
+    color: var(--text);
+    font-size: 1.08rem;
+}
+
+.system-status-details {
+    min-width: 0;
+    flex: 1;
+}
+
+.system-status-details > p {
+    margin: 5px 0 0;
+}
+
+.system-status-details .system-status-timestamp {
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.system-status-badge {
+    flex: 0 0 auto;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--success-soft);
+    color: var(--success);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.system-status-badge-outage {
+    background: var(--error-soft);
+    color: var(--error);
+}
+
+.system-status-badge-unknown,
+.system-status-badge-not_configured {
+    background: var(--bg-2);
+    color: var(--muted);
+}
+
+.system-status-footnote {
+    margin: 18px 0 0;
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+:root[data-theme="dark"] .system-status-row {
+    background: rgba(17, 28, 45, 0.72);
+}
+
+@media (max-width: 600px) {
+    .system-status-row {
+        gap: 12px;
+        padding: 16px 13px;
+    }
+
+    .system-status-title {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 7px;
     }
 }
