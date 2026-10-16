@@ -25,6 +25,7 @@ class DatabaseHelperTests(unittest.TestCase):
             )
             self.assertIs(conn.row_factory, sqlite3.Row)
             self.assertEqual(conn.execute("PRAGMA busy_timeout").fetchone()[0], 30000)
+            self.assertEqual(conn.execute("PRAGMA foreign_keys").fetchone()[0], 1)
             journal_mode = conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
             self.assertEqual(journal_mode, "wal")
             self.assertEqual(conn.execute("PRAGMA synchronous").fetchone()[0], 1)
@@ -66,7 +67,10 @@ class DatabaseHelperTests(unittest.TestCase):
             db.initialize_database(seed_path=seed_path, database_path=database_path)
 
             database = sqlite3.connect(database_path)
-            self.assertEqual(database.execute("SELECT * FROM questions").fetchall(), [(1, "latest")])
+            self.assertEqual(
+                database.execute("SELECT Key, value FROM questions").fetchall(),
+                [(1, "latest")],
+            )
             self.assertEqual(database.execute("SELECT * FROM metar").fetchall(), [("keep",)])
             self.assertEqual(database.execute("SELECT * FROM added_view").fetchall(), [("seed row",)])
             self.assertIsNotNone(
@@ -75,6 +79,98 @@ class DatabaseHelperTests(unittest.TestCase):
                 ).fetchone()
             )
             database.close()
+
+    def test_initialize_database_syncs_question_source_foreign_key(self):
+        with tempfile.TemporaryDirectory() as directory:
+            seed_path = Path(directory) / "seed.db"
+            database_path = Path(directory) / "data.db"
+
+            seed = sqlite3.connect(seed_path)
+            seed.executescript(
+                """
+                CREATE TABLE questions (
+                    Key INTEGER PRIMARY KEY,
+                    source TEXT REFERENCES source_material(source)
+                );
+                INSERT INTO questions VALUES (1, 'manual');
+                CREATE TABLE source_material (
+                    source TEXT PRIMARY KEY,
+                    start_date TEXT,
+                    end_date TEXT
+                );
+                INSERT INTO source_material VALUES ('manual', NULL, NULL);
+                """
+            )
+            seed.close()
+
+            database = sqlite3.connect(database_path)
+            database.executescript(
+                """
+                CREATE TABLE questions (Key INTEGER PRIMARY KEY);
+                INSERT INTO questions VALUES (1);
+                """
+            )
+            database.close()
+
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+
+            database = db.connect_db(path=database_path)
+            try:
+                self.assertEqual(
+                    database.execute("SELECT source FROM questions").fetchall(),
+                    [("manual",)],
+                )
+                foreign_key = database.execute(
+                    "PRAGMA foreign_key_list(questions)"
+                ).fetchone()
+                self.assertEqual(
+                    (foreign_key[2], foreign_key[3], foreign_key[4]),
+                    ("source_material", "source", "source"),
+                )
+                with self.assertRaises(sqlite3.IntegrityError):
+                    database.execute(
+                        "INSERT INTO questions VALUES (2, 'unknown')"
+                    )
+                database.execute("INSERT INTO questions VALUES (2, 'manual')")
+            finally:
+                database.close()
+
+    def test_initialize_database_adds_missing_question_source_column(self):
+        with tempfile.TemporaryDirectory() as directory:
+            seed_path = Path(directory) / "seed.db"
+            database_path = Path(directory) / "data.db"
+
+            seed = sqlite3.connect(seed_path)
+            seed.executescript(
+                """
+                CREATE TABLE questions (Key INTEGER PRIMARY KEY, question TEXT);
+                INSERT INTO questions VALUES (1, 'Question');
+                CREATE TABLE source_material (
+                    source TEXT PRIMARY KEY,
+                    start_date TEXT,
+                    end_date TEXT
+                );
+                INSERT INTO source_material VALUES ('manual', NULL, NULL);
+                """
+            )
+            seed.close()
+
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+
+            database = db.connect_db(path=database_path)
+            try:
+                columns = {
+                    row[1] for row in database.execute("PRAGMA table_info(questions)")
+                }
+                self.assertIn("source", columns)
+                database.execute(
+                    "INSERT INTO questions (Key, question, source) VALUES (?, ?, ?)",
+                    (2, "Question with source", "manual"),
+                )
+            finally:
+                database.close()
 
 
 if __name__ == "__main__":

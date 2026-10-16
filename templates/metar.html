@@ -17,6 +17,7 @@
 
         <form method="post" action="{{ url_for('metar_practice') }}" class="metar-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="attempt_id" value="{{ attempt_id or '' }}">
             <div class="field-group">
                 <label for="airport">{{ t('Luchthaven') }}</label>
                 <select id="airport" name="airport" required onchange="this.form.submit()">
@@ -125,22 +126,30 @@
         const questionNames = Array.from(new Set(
             Array.from(metarForm.querySelectorAll('input[type="radio"]')).map(input => input.name)
         ));
-        let submitter = null;
+        let selectedAction = null;
         let submitting = false;
 
         function closeConfirmModal() {
             confirmModal.hidden = true;
         }
 
+        metarForm.querySelectorAll('button[type="submit"]').forEach(button => {
+            button.addEventListener("click", () => {
+                selectedAction = button.value;
+            });
+        });
+
         metarForm.addEventListener("submit", (event) => {
             if (submitting) {
                 event.preventDefault();
                 return;
             }
-            submitter = event.submitter;
-            if (!submitter) return;
+            const actionValue = (event.submitter && event.submitter.value) || selectedAction;
+            if (!actionValue) {
+                return;
+            }
             const answered = metarForm.querySelectorAll('input[type="radio"]:checked').length;
-            if (submitter.value === "check" && answered < questionNames.length) {
+            if (actionValue === "check" && answered < questionNames.length) {
                 event.preventDefault();
                 confirmModal.hidden = false;
                 confirmContinue.focus();
@@ -148,11 +157,14 @@
             }
             const action = document.createElement("input");
             action.type = "hidden";
-            action.name = submitter.name;
-            action.value = submitter.value;
+            action.name = "action";
+            action.value = actionValue;
             metarForm.appendChild(action);
             submitting = true;
-            submitter.disabled = true;
+            metarForm.querySelectorAll('button[type="submit"]').forEach(button => {
+                button.disabled = true;
+            });
+            selectedAction = null;
         });
 
         document.getElementById("confirm-cancel").addEventListener("click", closeConfirmModal);
@@ -165,6 +177,7 @@
         confirmContinue.addEventListener("click", () => {
             if (submitting) return;
             submitting = true;
+            selectedAction = "check";
             confirmContinue.disabled = true;
             metarForm.querySelectorAll('button[type="submit"]').forEach(button => {
                 button.disabled = true;

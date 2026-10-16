@@ -74,6 +74,9 @@
                     <p class="result-status status-pass">{{ t('Correct') }}</p>
                 {% else %}
                     <p class="result-status status-fail">{{ t('Niet correct') }}</p>
+                    {% if result.source %}
+                        <p class="result-source">{{ t('Bron: {source}', source=result.source) }}</p>
+                    {% endif %}
                 {% endif %}
             </div>
         {% endfor %}

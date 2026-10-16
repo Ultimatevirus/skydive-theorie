@@ -1,10 +1,12 @@
-import os
+﻿import os
 import json
 import sqlite3
 import tempfile
 import time
 import unittest
 from datetime import date
+from email.message import Message
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 import app as app_module
@@ -15,6 +17,7 @@ from metar import (
     DUTCH_AIRPORTS,
     MetarError,
     _CACHE,
+    build_abbreviation_questions,
     build_questions,
     get_daily_metar,
     grade_answers,
@@ -167,6 +170,21 @@ class MetarServiceTests(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_forced_refresh_replaces_same_day_database_and_memory_cache(self):
+        day = date(2026, 9, 2)
+        old_report = REPORT.replace("27012G20KT", "25008KT")
+        metar_module._store_metar(day, "EHAM", old_report)
+        _CACHE[(day.isoformat(), "EHAM")] = metar_module._build_result(old_report, "EHAM", day)
+
+        with patch.dict("os.environ", {"KNMI_API_KEY": "test-key", "KNMI_METAR_URL": ""}), \
+                patch("metar._wait_for_api_slot", return_value=True), \
+                patch("metar._get_open_data_metar", return_value=REPORT):
+            result = get_daily_metar("EHAM", day, force_refresh=True)
+
+        self.assertEqual(result["raw"], REPORT)
+        self.assertEqual(_CACHE[(day.isoformat(), "EHAM")]["raw"], REPORT)
+        self.assertEqual(metar_module._get_cached_metar(day, "EHAM"), REPORT)
+
     def test_open_data_api_lists_and_downloads_xml_metar(self):
         responses = []
         for body in (
@@ -186,12 +204,81 @@ class MetarServiceTests(unittest.TestCase):
         self.assertEqual(result["raw"], REPORT)
         self.assertEqual(opener.call_count, 3)
         self.assertEqual(opener.call_args_list[0].args[0].headers["Authorization"], "test-key")
+        self.assertEqual(
+            opener.call_args_list[0].args[0].get_header("User-agent"),
+            metar_module.USER_AGENT,
+        )
+        conn = sqlite3.connect(self.database.name)
+        try:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM metar_api_call").fetchone()[0], 3)
+        finally:
+            conn.close()
+
+    def test_api_retries_rate_limit_responses_with_retry_after(self):
+        headers = Message()
+        headers["Retry-After"] = "3"
+        response = unittest.mock.MagicMock()
+        response.read.return_value = b"{}"
+        response.__enter__.return_value = response
+        opener = unittest.mock.Mock(side_effect=[
+            HTTPError("https://example.test", 429, "Too Many Requests", headers, None),
+            response,
+        ])
+
+        with patch("metar._wait_for_api_slot", return_value=True), \
+                patch.object(metar_module, "_LAST_API_REQUEST", None), \
+                patch.object(metar_module, "_API_REQUEST_INTERVAL", 0), \
+                patch("metar.time.sleep") as sleep:
+            result = metar_module._request(
+                "https://example.test", "test-key", opener, "application/json"
+            )
+
+        self.assertEqual(result, b"{}")
+        self.assertEqual(opener.call_count, 2)
+        sleep.assert_called_once_with(3.0)
+        self.assertEqual(
+            opener.call_args_list[1].args[0].get_header("User-agent"),
+            metar_module.USER_AGENT,
+        )
+
+    def test_api_request_quota_counts_actual_requests_in_the_hourly_window(self):
+        with patch.object(metar_module, "API_CALL_LIMIT", 2):
+            self.assertTrue(metar_module._wait_for_api_slot(wait=False))
+            self.assertTrue(metar_module._wait_for_api_slot(wait=False))
+            self.assertFalse(metar_module._wait_for_api_slot(wait=False))
+
+        conn = sqlite3.connect(self.database.name)
+        try:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM metar_api_call").fetchone()[0], 2)
+        finally:
+            conn.close()
+
+    def test_api_requests_are_spaced_at_least_one_second_apart(self):
+        clock = [0.0]
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        opener = unittest.mock.Mock()
+        response = unittest.mock.MagicMock()
+        response.read.return_value = b"{}"
+        response.__enter__.return_value = response
+        opener.return_value = response
+
+        with patch.object(metar_module, "_LAST_API_REQUEST", None), \
+                patch.object(metar_module.time, "monotonic", side_effect=lambda: clock[0]), \
+                patch.object(metar_module.time, "sleep", side_effect=sleep) as sleep_mock:
+            metar_module._request("https://example.test/one", "", opener, "application/json")
+            metar_module._request("https://example.test/two", "", opener, "application/json")
+
+        sleep_mock.assert_called_once_with(1.0)
+        self.assertEqual(opener.call_count, 2)
 
     def test_refresh_fetches_each_airport_once_and_continues_after_failure(self):
         calls = []
 
-        def fetch(code, day, opener):
-            calls.append(code)
+        def fetch(code, day, opener, force_refresh):
+            calls.append((code, force_refresh))
             if code == "EHRD":
                 raise MetarError("temporary")
             return {}
@@ -199,20 +286,28 @@ class MetarServiceTests(unittest.TestCase):
         with patch("metar.get_daily_metar", side_effect=fetch):
             refresh_daily_metars(date(2026, 9, 3))
 
-        self.assertEqual(calls, list(dict.fromkeys(DUTCH_AIRPORTS)))
-        self.assertEqual(calls.count("EHAM"), 1)
+        self.assertEqual(calls, [(code, True) for code in dict.fromkeys(DUTCH_AIRPORTS)])
 
-    def test_refresh_loop_waits_30_minutes_between_refreshes(self):
-        stop_event = unittest.mock.Mock()
-        stop_event.is_set.side_effect = [False, True]
-        wait_calls = []
-        stop_event.wait.side_effect = lambda seconds: wait_calls.append(seconds)
+    def test_notification_only_refreshes_airport_named_in_event(self):
+        with patch("metar.get_daily_metar") as get_metar:
+            refresh_daily_metars(date(2026, 9, 3), airports=["EHAM"])
 
-        with patch("metar.refresh_daily_metars") as refresh_metars:
-            metar_refresh_loop(stop_event=stop_event, opener=unittest.mock.Mock())
+        get_metar.assert_called_once_with(
+            "EHAM", date(2026, 9, 3), opener=unittest.mock.ANY, force_refresh=True
+        )
 
-        self.assertEqual(refresh_metars.call_count, 1)
-        self.assertEqual(wait_calls, [1800])
+    def test_notification_extracts_airport_from_knmi_filename(self):
+        self.assertEqual(
+            metar_module.METAR_NOTIFICATION_TOPIC,
+            "dataplatform/file/v1/metar/1.0/created",
+        )
+        self.assertEqual(
+            metar_module._notification_airports(
+                b'{"filename":"A_LANL80EHAM022022_C_EHAM_020926202202.xml"}'
+            ),
+            ["EHAM"],
+        )
+        self.assertIsNone(metar_module._notification_airports(b'{"dataset":"metar"}'))
 
     def test_foreground_fetch_returns_busy_error_when_another_worker_holds_claim(self):
         conn = sqlite3.connect(self.database.name)
@@ -339,7 +434,7 @@ class MetarRouteTests(unittest.TestCase):
         with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
             app_module, "load_weather_definitions", return_value=DEFINITIONS
         ):
-            response = client.get("/metar?airport=EHAM")
+            response = client.get("/metar/ontleden?airport=EHAM")
             self.assertEqual(response.status_code, 200)
             self.assertIn(REPORT, response.get_data(as_text=True))
             self.assertIn("Hoe laat is deze METAR uitgegeven?", response.get_data(as_text=True))
@@ -348,7 +443,7 @@ class MetarRouteTests(unittest.TestCase):
 
             answers = {f"q_{q['field']}": q["correct"] for q in make_questions(parsed, seed)}
             response = client.post(
-                "/metar",
+                "/metar/ontleden",
                 data=csrf_data(client, airport="EHAM", action="check", **answers),
             )
 
@@ -356,6 +451,35 @@ class MetarRouteTests(unittest.TestCase):
         self.assertIn(f"{len(answers)} / {len(answers)}", response.get_data(as_text=True))
         self.assertIn("result-correct", response.get_data(as_text=True))
         self.assertNotIn("result-wrong", response.get_data(as_text=True))
+
+    def test_mismatched_attempt_metadata_does_not_override_the_generated_airport(self):
+        parsed = parse_metar(REPORT)
+        parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
+        client = app.test_client()
+
+        with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            client.get("/metar/ontleden?airport=EHAM")
+            with client.session_transaction() as session:
+                attempt_id = session["metar_attempt_id"]
+                seed = session["metar_seed"]
+            answers = {f"q_{q['field']}": q["correct"] for q in make_questions(parsed, seed)}
+            response = client.post(
+                "/metar/ontleden",
+                data=csrf_data(
+                    client,
+                    airport="EHRD",
+                    question_airport="EHRD",
+                    attempt_id=attempt_id,
+                    action="check",
+                    **answers,
+                ),
+            )
+
+        html = response.get_data(as_text=True)
+        self.assertIn("EHAM · Amsterdam Schiphol", html)
+        self.assertNotIn("EHRD · Rotterdam The Hague", html)
 
     def test_unanswered_questions_are_marked_and_counted_wrong(self):
         parsed = parse_metar(REPORT)
@@ -365,8 +489,8 @@ class MetarRouteTests(unittest.TestCase):
         with patch.object(app_module, "get_daily_metar", return_value=parsed), patch.object(
             app_module, "load_weather_definitions", return_value=DEFINITIONS
         ):
-            client.get("/metar?airport=EHAM")
-            response = client.post("/metar", data=csrf_data(client, airport="EHAM", action="check"))
+            client.get("/metar/ontleden?airport=EHAM")
+            response = client.post("/metar/ontleden", data=csrf_data(client, airport="EHAM", action="check"))
 
         html = response.get_data(as_text=True)
         self.assertIn("result-unanswered", html)
@@ -381,18 +505,88 @@ class MetarRouteTests(unittest.TestCase):
         client = app.test_client()
 
         with patch.object(app_module, "get_daily_metar", side_effect=[eham, ehrd]) as get_metar:
-            client.post("/metar", data=csrf_data(client, airport="EHAM", action="load"))
-            response = client.post("/metar", data=csrf_data(client, airport="EHRD", action="load"))
+            client.post("/metar/ontleden", data=csrf_data(client, airport="EHAM", action="load"))
+            response = client.post("/metar/ontleden", data=csrf_data(client, airport="EHRD", action="load"))
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("EHRD · Rotterdam The Hague", response.get_data(as_text=True))
         self.assertEqual(get_metar.call_args_list[1].args[0], "EHRD")
 
     def test_invalid_airport_is_rejected(self):
-        response = app.test_client().get("/metar?airport=XXXX")
+        response = app.test_client().get("/metar/ontleden?airport=XXXX")
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Kies een Nederlandse luchthaven", response.get_data(as_text=True))
+
+
+class MetarAbbreviationTests(unittest.TestCase):
+    def test_questions_are_deterministic_with_plausible_unique_options(self):
+        first = build_abbreviation_questions("a" * 16, "NL", DEFINITIONS)
+        second = build_abbreviation_questions("a" * 16, "NL", DEFINITIONS)
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 10)
+        self.assertEqual(len({q["field"] for q in first}), 10)
+        for question in first:
+            self.assertEqual(len(question["options"]), 4)
+            self.assertEqual(len(set(question["options"])), 4)
+            self.assertIn(question["correct"], question["options"])
+
+    def test_cloud_distractors_are_other_cloud_meanings(self):
+        cloud_meanings = {
+            nl for cat, nl, _, _ in metar_module.load_abbreviations(DEFAULT_LOCAL_DB).values() if cat == "cloud"
+        }
+        for seed in range(30):
+            for question in build_abbreviation_questions(f"{seed:016x}", "NL", DEFINITIONS, count=200):
+                if question["label"] == "BKN":
+                    self.assertTrue(set(question["options"]) <= cloud_meanings)
+                    return
+        self.fail("BKN question never generated")
+
+    def test_english_language_uses_english_meanings(self):
+        questions = build_abbreviation_questions("b" * 16, "EN", DEFINITIONS, count=200)
+        by_code = {q["label"]: q for q in questions}
+
+        self.assertEqual(by_code["BKN"]["correct"], "Broken clouds (5-7 oktas)")
+        self.assertIn("mean in a METAR", by_code["BKN"]["question"])
+
+    def test_every_question_has_an_example_metar_containing_the_code(self):
+        questions = build_abbreviation_questions("c" * 16, "NL", DEFINITIONS, count=500)
+        self.assertGreater(len(questions), 80)
+        for question in questions:
+            before, token, after = question["example_parts"]
+            self.assertTrue(token, question["label"])
+            self.assertTrue(before or after, question["label"])
+
+    def test_abbreviation_routes(self):
+        client = app.test_client()
+        choice = client.get("/metar").get_data(as_text=True)
+        self.assertIn("/metar/ontleden", choice)
+        self.assertIn("/metar/afkortingen", choice)
+
+        page = client.get("/metar/afkortingen")
+        html = page.get_data(as_text=True)
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(html.count('<input type="radio"'), 40)
+
+        seed = html.split('name="seed" value="')[1].split('"')[0]
+        questions = build_abbreviation_questions(seed, "NL", DEFINITIONS)
+        answers = {f"q_{q['field']}": q["correct"] for q in questions}
+        graded = client.post(
+            "/metar/afkortingen",
+            data=csrf_data(client, action="check", seed=seed, **answers),
+        ).get_data(as_text=True)
+        self.assertIn("10 / 10", graded)
+
+        empty = client.post(
+            "/metar/afkortingen", data=csrf_data(client, action="check", seed=seed)
+        ).get_data(as_text=True)
+        self.assertIn("0 / 10", empty)
+
+        invalid = client.post(
+            "/metar/afkortingen", data=csrf_data(client, action="check", seed="bad")
+        ).get_data(as_text=True)
+        self.assertEqual(invalid.count('<input type="radio"'), 40)
 
 
 if __name__ == "__main__":

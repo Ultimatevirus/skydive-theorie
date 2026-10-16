@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('METAR/TAF oefenen') }}{% endblock %}
+
+{% set page_name = 'metar' %}
+
+{% block content %}
+    <div class="card exam-card practice-card">
+        <div class="page-header">
+            <div>
+                <p class="eyebrow">{{ t('METAR/TAF oefenen') }}</p>
+                <h1>{{ t('Wat wil je oefenen?') }}</h1>
+            </div>
+        </div>
+
+        <div class="choice-row">
+            <h2 class="choice-row-title">METAR</h2>
+            <div class="choice-grid" aria-label="{{ t('Kies een METAR-oefenmodus') }}">
+                <a href="{{ url_for('metar_practice') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t("METAR's ontleden") }}</span>
+                </a>
+                <a href="{{ url_for('metar_abbreviations') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t('METAR afkortingen oefenen') }}</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="choice-row">
+            <h2 class="choice-row-title">TAF</h2>
+            <div class="choice-grid" aria-label="{{ t('Kies een TAF-oefenmodus') }}">
+                <a href="{{ url_for('taf_practice') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t("TAF's ontleden") }}</span>
+                </a>
+                <a href="{{ url_for('taf_abbreviations') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t('TAF afkortingen oefenen') }}</span>
+                </a>
+            </div>
+        </div>
+
+        <div class="button-row practice-footer">
+            <a href="{{ url_for('index') }}" class="secondary-btn">{{ t('Terug naar home') }}</a>
+        </div>
+    </div>
+{% endblock %}

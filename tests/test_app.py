@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import app as app_module
+import taf as taf_module
 from app import app
 
 
@@ -36,9 +37,9 @@ class PracticeFlowTests(unittest.TestCase):
             "Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen!",
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
-            "Na het kiezen van een luchthaven krijg je de actuele METAR te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de METAR en worden dynamisch gegenereerd. De METAR's worden elke 30 minuten direct via het KNMI bijgewerkt.",
+            "Na het kiezen van een luchthaven krijg je de actuele METAR te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de METAR en worden dynamisch gegenereerd. De METAR's worden bijgewerkt zodra KNMI een nieuw METAR-bestand beschikbaar maakt.",
             "Met een oefenexamen maak je een vaste set van 40 vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.",
-            "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden een keer per dag bijgewerkt.",
+            "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden bijgewerkt zodra KNMI een nieuw METAR-bestand beschikbaar maakt.",
             "Selecteer een luchthaven om de dagelijkse METAR te laden.",
             "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.",
             "De vragen op deze site zijn ontworpen om beginnende skydivers te helpen met de voorbereiding op de theorie-examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Als je vragen hebt over de inhoud van de examens, is het aan te raden om contact op te nemen met een (door de KNVvL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet. Voor algemene leertips en adviezen kan je de pagina \"leren voor het examen\" bezoeken",
@@ -74,13 +75,73 @@ class PracticeFlowTests(unittest.TestCase):
             patch.object(app_module, "load_weather_definitions", return_value={}),
             patch.object(app_module, "build_questions", return_value=[question]),
         ):
-            response = app.test_client().get("/metar")
+            response = app.test_client().get("/metar/ontleden")
 
         html = response.get_data(as_text=True)
         self.assertEqual(response.status_code, 200)
         self.assertIn('class="metar-question-heading"', html)
         self.assertIn('metar-question-cell metar-question-report', html)
         self.assertGreaterEqual(html.count(metar.raw), 2)
+
+    def test_taf_practice_shows_multiline_report(self):
+        taf = taf_module.parse_taf(
+            "TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025 BECMG 1214/1216 27015KT"
+        )
+        taf.update(airport="EHAM", airport_name="Amsterdam")
+
+        with (
+            patch.object(app_module, "get_daily_taf", return_value=taf),
+            patch.object(app_module, "load_weather_definitions", return_value={}),
+            patch.object(app_module.taf_module, "build_questions", return_value=[
+                {"field": "taf_issued", "label": "x", "question": "Q?", "options": ["a", "b"], "correct": "a"},
+            ]),
+        ):
+            response = app.test_client().get("/taf/ontleden")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('class="taf-lines"', html)
+        self.assertIn("<code>BECMG 1214/1216 27015KT</code>", html)
+        self.assertIn("Controleer TAF", html)
+
+    def test_taf_practice_grades_answers(self):
+        taf = taf_module.parse_taf("TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025")
+        taf.update(airport="EHAM", airport_name="Amsterdam")
+        client = app.test_client()
+
+        with (
+            patch.object(app_module, "get_daily_taf", return_value=taf),
+            patch.object(app_module, "load_weather_definitions", return_value={}),
+            patch.object(app_module.taf_module, "build_questions", return_value=[
+                {"field": "taf_issued", "label": "x", "question": "Q?", "options": ["a", "b"], "correct": "a"},
+            ]),
+        ):
+            client.get("/taf/ontleden")
+            response = client.post(
+                "/taf/ontleden",
+                data=csrf_data(client, action="check", airport="EHAM", q_taf_issued="a"),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Je score: 1 / 1", response.get_data(as_text=True))
+
+    def test_taf_practice_reports_service_errors_and_invalid_airport(self):
+        client = app.test_client()
+        with patch.object(app_module, "get_daily_taf", side_effect=taf_module.TafError("De TAF wordt nog opgehaald.")):
+            self.assertIn("De TAF wordt nog opgehaald.", client.get("/taf/ontleden").get_data(as_text=True))
+        invalid = client.get("/taf/ontleden?airport=EGLL")
+        self.assertIn("Kies een Nederlandse luchthaven", invalid.get_data(as_text=True))
+
+    def test_taf_abbreviations_page_and_choice_page(self):
+        client = app.test_client()
+        page = client.get("/taf/afkortingen")
+        choice = client.get("/metar").get_data(as_text=True)
+
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("<mark>", page.get_data(as_text=True))
+        self.assertIn("METAR/TAF oefenen", choice)
+        for path in ("/metar/ontleden", "/metar/afkortingen", "/taf/ontleden", "/taf/afkortingen"):
+            self.assertIn(f'href="{path}"', choice)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
         transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()
@@ -225,6 +286,82 @@ class PracticeFlowTests(unittest.TestCase):
             if os.path.exists(db_path):
                 os.remove(db_path)
 
+    def test_language_change_clears_old_free_practice_topic_filter(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE questions (
+                id INTEGER PRIMARY KEY,
+                level TEXT,
+                language TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT
+            )
+            """
+        )
+        conn.executemany(
+            "INSERT INTO questions (level, language, topic, subtopic, is_active, question, true_answer, false_answers) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("A", "NL", "Materiaal", "Harnas", 1, "Nederlandse vraag", "Ja", "['Nee']"),
+                ("A", "EN", "Equipment", "Harness", 1, "English question", "Yes", "['No']"),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session.update(
+                {
+                    "csrf_token": "test-csrf-token",
+                    "level": "A",
+                    "question_amount": 1,
+                    "selected_topics": ["Materiaal"],
+                    "language": "NL",
+                    "exam_question_ids": [1],
+                    "started_at": 1000,
+                }
+            )
+
+        try:
+            app_module._language_column_cache.clear()
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                language_response = client.post(
+                    "/language",
+                    data=csrf_data(client, language="EN"),
+                    headers={"Referer": "http://localhost/exam"},
+                )
+                self.assertEqual(language_response.status_code, 302)
+
+                exam_response = client.get("/exam")
+                self.assertEqual(exam_response.status_code, 200)
+                self.assertIn("English question", exam_response.get_data(as_text=True))
+
+                with client.session_transaction() as session:
+                    question_ids = session["exam_question_ids"]
+                    self.assertNotIn("selected_topics", session)
+
+                result_response = client.post(
+                    "/exam",
+                    data=csrf_data(
+                        client,
+                        **{f"answer_{question_ids[0]}": "Yes"},
+                    ),
+                )
+
+            self.assertEqual(result_response.status_code, 200)
+            self.assertIn("Your score: 1 / 1", result_response.get_data(as_text=True))
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
     def test_practice_page_shows_level_question_and_cards(self):
         client = app.test_client()
         response = client.get("/practice")
@@ -268,6 +405,75 @@ class PracticeFlowTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("Je score:", response.get_data(as_text=True))
+
+    def test_exam_results_show_source_only_for_incorrect_answers_with_source(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.execute(
+            """
+            CREATE TABLE questions (
+                level TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT,
+                source TEXT
+            )
+            """
+        )
+        conn.executemany(
+            """
+            INSERT INTO questions
+                (level, topic, subtopic, is_active, question, true_answer, false_answers, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                ("A", "Materiaal", "Harnas", 1, "Wrong answer with source?", "Ja", "[]", "BVR20260303"),
+                ("A", "Materiaal", "Harnas", 1, "Correct answer with source?", "Ja", "[]", "Should not be shown"),
+                ("A", "Materiaal", "Harnas", 1, "Wrong answer without source?", "Ja", "[]", None),
+            ],
+        )
+        conn.commit()
+        conn.close()
+
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session.update(
+                {
+                    "csrf_token": "test-csrf-token",
+                    "level": "A",
+                    "question_amount": 3,
+                    "selected_topics": None,
+                    "language": "NL",
+                    "exam_question_ids": [1, 2, 3],
+                    "started_at": 1000,
+                }
+            )
+
+        try:
+            app_module._language_column_cache.clear()
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                response = client.post(
+                    "/exam",
+                    data={
+                        "csrf_token": "test-csrf-token",
+                        "answer_1": "Nee",
+                        "answer_2": "Ja",
+                        "answer_3": "Nee",
+                    },
+                )
+
+            html = response.get_data(as_text=True)
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("Bron: BVR20260303", html)
+            self.assertNotIn("Should not be shown", html)
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
 
     def test_level_selection_redirects_to_mode_selection(self):
         client = app.test_client()

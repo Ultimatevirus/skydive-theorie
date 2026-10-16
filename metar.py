@@ -2,12 +2,16 @@
 
 from datetime import date, datetime, timezone
 from difflib import SequenceMatcher
+from email.utils import parsedate_to_datetime
 import json
 import logging
 import os
 import random
 import re
+import socket
+import ssl
 import time
+from queue import Empty, Queue
 from threading import Event, Lock
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -27,12 +31,20 @@ DUTCH_AIRPORTS = {
 DEFAULT_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 METAR_DATASET = os.getenv("KNMI_METAR_DATASET", "metar")
 METAR_VERSION = os.getenv("KNMI_METAR_VERSION", "1.0")
+METAR_NOTIFICATION_TOPIC = f"dataplatform/file/v1/{METAR_DATASET}/{METAR_VERSION}/created"
+NOTIFICATION_BROKER = "mqtt.dataplatform.knmi.nl"
 _CACHE = {}
 _WEATHER_DEFINITIONS_CACHE = {}
+_ABBREVIATIONS_CACHE = {}
 _WEATHER_DEFINITIONS_LOCK = Lock()
-API_CALL_LIMIT = 3
-API_CALL_WINDOW = 60
+_API_REQUEST_LOCK = Lock()
+_LAST_API_REQUEST = None
+_API_REQUEST_INTERVAL = 1.0
+API_CALL_LIMIT = 900
+API_CALL_WINDOW = 60 * 60
+API_MAX_ATTEMPTS = 5
 CLAIM_TIMEOUT = 600
+USER_AGENT = "skydive-theorie/1.0 (+https://github.com/Ultimatevirus/skydive-theorie)"
 logger = logging.getLogger(__name__)
 
 
@@ -61,22 +73,66 @@ def _first_value(payload, keys):
     return None
 
 
-def _request(url, api_key, opener, accept):
-    headers = {"Accept": "application/json"}
+def _retry_after_seconds(error):
+    value = error.headers.get("Retry-After") if error.headers else None
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+
+
+def _request(url, api_key, opener, accept, wait_for_rate_limit=True):
+    global _LAST_API_REQUEST
+    headers = {"Accept": accept, "User-Agent": USER_AGENT}
     if api_key:
         headers["Authorization"] = api_key
-    headers["Accept"] = accept
     request = Request(url, headers=headers)
-    try:
-        with opener(request, timeout=10) as response:
-            return response.read()
-    except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
-        raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+    for attempt in range(API_MAX_ATTEMPTS):
+        if not _wait_for_api_slot(wait_for_rate_limit):
+            raise MetarError("De METAR-service is tijdelijk niet beschikbaar.")
+        retry_delay = None
+        try:
+            with _API_REQUEST_LOCK:
+                if _LAST_API_REQUEST is not None:
+                    delay = _API_REQUEST_INTERVAL - (time.monotonic() - _LAST_API_REQUEST)
+                    if delay > 0:
+                        time.sleep(delay)
+                try:
+                    with opener(request, timeout=10) as response:
+                        return response.read()
+                finally:
+                    _LAST_API_REQUEST = time.monotonic()
+        except HTTPError as exc:
+            retryable = exc.code == 429 or 500 <= exc.code < 600
+            retry_delay = _retry_after_seconds(exc) if retryable else None
+            exc.close()
+            if not retryable:
+                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+            if attempt + 1 == API_MAX_ATTEMPTS:
+                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            if attempt + 1 == API_MAX_ATTEMPTS:
+                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+        except ValueError as exc:
+            raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+
+        backoff = min(60.0, 2.0 ** attempt)
+        time.sleep(max(backoff, retry_delay or 0.0))
 
 
-def _fetch_payload(url, api_key, opener=urlopen):
+def _fetch_payload(url, api_key, opener=urlopen, wait_for_rate_limit=True):
     try:
-        return json.loads(_request(url, api_key, opener, "application/json").decode("utf-8"))
+        return json.loads(
+            _request(url, api_key, opener, "application/json", wait_for_rate_limit).decode("utf-8")
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise MetarError("KNMI gaf geen geldige API-respons terug.") from exc
 
@@ -134,7 +190,7 @@ def _normalise_report(report):
     return text
 
 
-def _get_open_data_metar(code, day, api_key, opener):
+def _get_open_data_metar(code, day, api_key, opener, wait_for_rate_limit=True):
     base_url = os.getenv("KNMI_OPEN_DATA_URL", DEFAULT_OPEN_DATA_URL).rstrip("/")
     path = f"{base_url}/v1/datasets/{quote(METAR_DATASET, safe='')}/versions/{quote(METAR_VERSION, safe='')}/files"
     query = urlencode({
@@ -144,7 +200,7 @@ def _get_open_data_metar(code, day, api_key, opener):
         "begin": f"{day.isoformat()}T00:00:00Z",
         "end": f"{day.isoformat()}T23:59:59Z",
     })
-    listing = _fetch_payload(f"{path}?{query}", api_key, opener)
+    listing = _fetch_payload(f"{path}?{query}", api_key, opener, wait_for_rate_limit)
     files = listing.get("files", []) if isinstance(listing, dict) else []
     candidates = [
         item for item in files
@@ -155,11 +211,15 @@ def _get_open_data_metar(code, day, api_key, opener):
     filename = candidates[0].get("filename")
     if not filename:
         raise MetarError("KNMI gaf geen geldig METAR-bestand terug.")
-    download = _fetch_payload(f"{path}/{quote(filename, safe='')}/url", api_key, opener)
+    download = _fetch_payload(
+        f"{path}/{quote(filename, safe='')}/url", api_key, opener, wait_for_rate_limit
+    )
     temporary_url = download.get("temporaryDownloadUrl") if isinstance(download, dict) else None
     if not temporary_url:
         raise MetarError("KNMI gaf geen downloadlink voor de METAR terug.")
-    return _extract_xml_report(_request(temporary_url, "", opener, "text/plain, application/xml"))
+    return _extract_xml_report(
+        _request(temporary_url, "", opener, "text/plain, application/xml", wait_for_rate_limit)
+    )
 
 
 def _number(value):
@@ -306,7 +366,7 @@ def _wait_for_api_slot(wait=True):
         time.sleep(max(0.01, oldest + API_CALL_WINDOW - time.time()))
 
 
-def _claim_metar_fetch(day, code, wait=True):
+def _claim_metar_fetch(day, code, wait=True, force_refresh=False):
     while True:
         conn = _connect_db()
         try:
@@ -316,7 +376,7 @@ def _claim_metar_fetch(day, code, wait=True):
                 "SELECT metar FROM metar WHERE datetime = ? AND airport = ?",
                 (day.isoformat(), code),
             ).fetchone()
-            if cached:
+            if cached and not force_refresh:
                 conn.commit()
                 return False
             now = time.time()
@@ -414,18 +474,25 @@ def _build_result(report, code, day):
     return result
 
 
-def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=True, cache_only=False):
+def get_daily_metar(
+    airport,
+    today=None,
+    opener=urlopen,
+    wait_for_rate_limit=True,
+    cache_only=False,
+    force_refresh=False,
+):
     code = str(airport or "").strip().upper()
     if code not in DUTCH_AIRPORTS:
         raise MetarError("Kies een Nederlandse luchthaven uit de lijst.")
     day = today or datetime.now(timezone.utc).date()
     cache_key = (day.isoformat(), code)
-    if cache_key in _CACHE:
+    if cache_key in _CACHE and not force_refresh:
         return _CACHE[cache_key]
     report = _get_cached_metar(day, code)
-    if report is None and cache_only:
+    if report is None and cache_only and not force_refresh:
         raise MetarError("De METAR wordt nog opgehaald. Probeer het over een minuut opnieuw.")
-    if report is not None:
+    if report is not None and not force_refresh:
         normalised_report = _normalise_report(report)
         if normalised_report != report:
             _store_metar(day, code, normalised_report)
@@ -433,7 +500,9 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
         result = _build_result(report, code, day)
         _CACHE[cache_key] = result
         return result
-    claimed = _claim_metar_fetch(day, code, wait=wait_for_rate_limit)
+    claimed = _claim_metar_fetch(
+        day, code, wait=wait_for_rate_limit, force_refresh=force_refresh
+    )
     if claimed is False:
         report = _get_cached_metar(day, code)
         if report is None:
@@ -459,13 +528,15 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
         legacy_template = os.getenv("KNMI_METAR_URL", "")
         if legacy_template and "{airport}" in legacy_template:
             url = legacy_template.format(airport=quote(code), date=day.isoformat())
-            report = _extract_report(_fetch_payload(url, api_key, opener))
+            report = _extract_report(
+                _fetch_payload(url, api_key, opener, wait_for_rate_limit)
+            )
         else:
             if not api_key:
                 raise MetarError("KNMI_API_KEY is niet ingesteld.")
-            if not _wait_for_api_slot(wait_for_rate_limit):
-                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.")
-            report = _get_open_data_metar(code, day, api_key, opener)
+            report = _get_open_data_metar(
+                code, day, api_key, opener, wait_for_rate_limit
+            )
         _release_metar_fetch(day, code, report)
     except Exception:
         _release_metar_fetch(day, code)
@@ -475,23 +546,106 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
     return result
 
 
-def refresh_daily_metars(day=None, opener=urlopen):
-    """Fetch each unique Dutch airport's METAR for the given UTC day."""
+def refresh_daily_metars(day=None, opener=urlopen, airports=None):
+    """Fetch fresh METARs for the airports affected by a KNMI dataset notification."""
     day = day or datetime.now(timezone.utc).date()
-    for code in dict.fromkeys(DUTCH_AIRPORTS):
+    codes = airports if airports is not None else DUTCH_AIRPORTS
+    for code in dict.fromkeys(codes):
         try:
-            get_daily_metar(code, day, opener=opener)
+            get_daily_metar(code, day, opener=opener, force_refresh=True)
         except MetarError:
             logger.exception("METAR refresh failed for %s", code)
 
 
+def _notification_airports(payload):
+    """Return airport codes named in a notification, or None if it is dataset-wide."""
+    text = payload.decode("utf-8", errors="replace").upper()
+    airports = [
+        code for code in DUTCH_AIRPORTS
+        if re.search(rf"(?<![A-Z]){code}(?![A-Z])", text)
+    ]
+    return airports or None
+
+
 def metar_refresh_loop(stop_event=None, opener=urlopen):
-    """Refresh all airports immediately and then every 30 minutes."""
+    """Refresh METARs only after KNMI reports a newly created dataset file."""
     stop_event = stop_event or Event()
+    token = os.getenv("KNMI_NOTIFICATION_API_KEY", "").strip()
+    if not token:
+        logger.error("KNMI_NOTIFICATION_API_KEY is not set; METAR notifications are disabled.")
+        return
+
+    import paho.mqtt.client as mqtt_client
+    import paho.mqtt.properties as mqtt_properties
+
+    notifications = Queue()
+
+    def on_connect(client, userdata, flags, reason_code, properties=None):
+        if getattr(reason_code, "is_failure", False):
+            logger.error("KNMI MQTT connection failed: %s", reason_code)
+            return
+        logger.info("Connected to KNMI METAR notifications.")
+        result, _ = client.subscribe(METAR_NOTIFICATION_TOPIC, qos=1)
+        if result != mqtt_client.MQTT_ERR_SUCCESS:
+            logger.error("Could not subscribe to KNMI topic %s: %s", METAR_NOTIFICATION_TOPIC, result)
+
+    def on_subscribe(client, userdata, mid, reason_codes, properties=None):
+        if any(getattr(reason_code, "is_failure", False) for reason_code in reason_codes):
+            logger.error("KNMI rejected the subscription to topic %s: %s", METAR_NOTIFICATION_TOPIC, reason_codes)
+            return
+        logger.info("Subscribed to KNMI topic %s.", METAR_NOTIFICATION_TOPIC)
+
+    def on_message(client, userdata, message):
+        notifications.put(message.payload)
+
+    def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
+        if getattr(reason_code, "is_failure", False):
+            logger.warning("Disconnected from KNMI METAR notifications: %s", reason_code)
+
+    client = mqtt_client.Client(
+        callback_api_version=mqtt_client.CallbackAPIVersion.VERSION2,
+        client_id=f"skydive-theorie-metar-{socket.gethostname()}",
+        protocol=mqtt_client.MQTTv5,
+        transport="websockets",
+    )
+    client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+    connect_properties = mqtt_properties.Properties(mqtt_properties.PacketTypes.CONNECT)
+    connect_properties.SessionExpiryInterval = 24 * 60 * 60
+    client.username_pw_set("token", token)
+    client.on_connect = on_connect
+    client.on_subscribe = on_subscribe
+    client.on_message = on_message
+    client.on_disconnect = on_disconnect
+
     while not stop_event.is_set():
-        day = datetime.now(timezone.utc).date()
-        refresh_daily_metars(day, opener=opener)
-        stop_event.wait(1800)
+        try:
+            client.connect(
+                host=NOTIFICATION_BROKER,
+                port=443,
+                keepalive=60,
+                clean_start=False,
+                properties=connect_properties,
+            )
+        except (OSError, ValueError):
+            logger.exception("Could not connect to KNMI METAR notifications; retrying in 30 seconds.")
+            if stop_event.wait(30):
+                break
+            continue
+
+        client.loop_start()
+        try:
+            while not stop_event.is_set():
+                try:
+                    payload = notifications.get(timeout=1)
+                except Empty:
+                    continue
+                refresh_daily_metars(
+                    opener=opener,
+                    airports=_notification_airports(payload),
+                )
+        finally:
+            client.disconnect()
+            client.loop_stop()
 
 
 NO_GUSTS = "Geen windstoten"
@@ -762,3 +916,103 @@ def grade_answers(questions, submitted):
             "correct": answer == question["correct"],
         })
     return results
+
+
+ABBREVIATION_QUESTION_COUNT = 10
+
+def load_abbreviations(path=None):
+    """Read {abbreviation: (category, NL, EN, example)} from the metar_abbreviations table."""
+    database_path = os.path.abspath(path or get_db_path())
+    stat = os.stat(database_path)
+    cache_key = (database_path, stat.st_mtime_ns, stat.st_size)
+    with _WEATHER_DEFINITIONS_LOCK:
+        if cache_key in _ABBREVIATIONS_CACHE:
+            return _ABBREVIATIONS_CACHE[cache_key]
+
+        conn = connect_db(path=database_path)
+        try:
+            rows = conn.execute(
+                "SELECT METAR_abreviation, category, NL_definition, EN_definition, example FROM metar_abbreviations"
+            ).fetchall()
+        finally:
+            conn.close()
+        abbreviations = {row[0]: (row[1], row[2], row[3], row[4]) for row in rows}
+        _ABBREVIATIONS_CACHE.clear()
+        _ABBREVIATIONS_CACHE[cache_key] = abbreviations
+        return abbreviations
+
+
+def _abbreviation_entries(definitions, abbreviations, language):
+    """Return {code: (category, meaning, example)} combining database abbreviations and weather codes."""
+    index = 1 if str(language).upper() == "EN" else 0
+    entries = {
+        code: (category, (nl, en)[index], example)
+        for code, (category, nl, en, example) in abbreviations.items()
+    }
+    for code in _standalone_codes(definitions):
+        if code not in entries:
+            entries[code] = ("weather", definitions[code][index], _weather_example(code))
+    return entries
+
+
+def _weather_example(code):
+    """Build an example METAR that reports the given weather code."""
+    if "FG" in code:
+        visibility = "0400"
+    elif "BR" in code:
+        visibility = "3000"
+    elif "HZ" in code:
+        visibility = "6000"
+    else:
+        visibility = "8000"
+    clouds = "BKN015CB" if ("TS" in code or "SH" in code) else "SCT020"
+    return f"EHAM 121250Z 24008KT {visibility} [[{code}]] {clouds} 12/09 Q1013"
+
+
+def _split_example(example):
+    """Split an example on its [[highlighted]] token into (before, token, after)."""
+    before, _, rest = example.partition("[[")
+    token, _, after = rest.partition("]]")
+    return before, token, after
+
+
+def build_abbreviation_questions(
+    seed, language="NL", definitions=None, count=ABBREVIATION_QUESTION_COUNT, abbreviations=None
+):
+    """Build 'what does this abbreviation mean' questions; the same seed yields the same questions."""
+    definitions = definitions if definitions is not None else load_weather_definitions()
+    abbreviations = abbreviations if abbreviations is not None else load_abbreviations()
+    rng = random.Random(f"abbr:{seed}")
+    entries = _abbreviation_entries(definitions, abbreviations, language)
+    english = str(language).upper() == "EN"
+
+    # Mix categories so a set is not made of weather codes only.
+    by_category = {}
+    for code, (category, _, _example) in entries.items():
+        by_category.setdefault(category, []).append(code)
+    chosen = []
+    pool = {cat: rng.sample(codes, len(codes)) for cat, codes in by_category.items()}
+    while len(chosen) < min(count, len(entries)):
+        for category in rng.sample(list(pool), len(pool)):
+            if pool[category] and len(chosen) < count:
+                chosen.append(pool[category].pop())
+    rng.shuffle(chosen)
+
+    questions = []
+    for code in chosen:
+        category, correct, example = entries[code]
+        same = [c for c, (cat, _, _example) in entries.items() if cat == category and c != code]
+        others = [c for c in entries if c != code and c not in same]
+        ranked = _similar_text(rng, code, same, count=len(same)) + rng.sample(others, len(others))
+        distractors = []
+        for other in ranked:
+            meaning = entries[other][1]
+            if meaning != correct and meaning not in distractors:
+                distractors.append(meaning)
+            if len(distractors) == OPTION_COUNT - 1:
+                break
+        text = f"What does \"{code}\" mean in a METAR?" if english else f"Wat betekent \"{code}\" in een METAR?"
+        question = _build_question(rng, f"abbr_{code}", code, text, correct, distractors)
+        question["example_parts"] = _split_example(example)
+        questions.append(question)
+    return questions

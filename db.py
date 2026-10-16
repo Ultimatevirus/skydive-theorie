@@ -46,6 +46,7 @@ def connect_db(path=None, row_factory=None, configure_journal=False):
     if row_factory is not None:
         conn.row_factory = row_factory
     conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA foreign_keys=ON")
     if configure_journal:
         conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
@@ -87,6 +88,27 @@ def _copy_table_rows(conn, table_name, source_database="seed"):
     )
 
 
+def _ensure_question_source_column(conn):
+    """Add the optional question source field when an existing schema lacks it."""
+    question_columns = {
+        row[1] for row in conn.execute("PRAGMA main.table_info(questions)")
+    }
+    if not question_columns or "source" in question_columns:
+        return
+
+    source_columns = {
+        row[1] for row in conn.execute("PRAGMA main.table_info(source_material)")
+    }
+    source_reference = (
+        " REFERENCES source_material(source)"
+        if "source" in source_columns
+        else ""
+    )
+    conn.execute(
+        f'ALTER TABLE "questions" ADD COLUMN "source" TEXT{source_reference}'
+    )
+
+
 def initialize_database(seed_path=None, database_path=None):
     """Merge the image seed database into the persistent runtime database."""
     seed_path = Path(seed_path or DEFAULT_LOCAL_DB)
@@ -102,8 +124,10 @@ def initialize_database(seed_path=None, database_path=None):
         seed_objects = _schema_objects(conn, "seed")
         target_objects = _schema_objects(conn, "main")
         replaced_tables = set()
+        tables_to_copy = []
 
         conn.execute("BEGIN IMMEDIATE")
+        conn.execute("PRAGMA defer_foreign_keys=ON")
 
         for (object_type, name), seed_object in seed_objects.items():
             if object_type != "table":
@@ -126,7 +150,10 @@ def initialize_database(seed_path=None, database_path=None):
                 _drop_object(conn, "table", name)
             if replace_table or existing_sql is None:
                 conn.execute(sql)
-                _copy_table_rows(conn, name)
+                tables_to_copy.append(name)
+
+        for name in tables_to_copy:
+            _copy_table_rows(conn, name)
 
         for (object_type, name), seed_object in seed_objects.items():
             if object_type == "table":
@@ -144,6 +171,7 @@ def initialize_database(seed_path=None, database_path=None):
                 _drop_object(conn, object_type, name)
             conn.execute(sql)
 
+        _ensure_question_source_column(conn)
         conn.commit()
     except Exception:
         conn.rollback()

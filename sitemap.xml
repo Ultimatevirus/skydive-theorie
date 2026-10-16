@@ -17,7 +17,17 @@
   </url>
   <url>
     <loc>https://www.skydive-theorie.nl/metar</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.skydive-theorie.nl/metar/ontleden</loc>
     <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://www.skydive-theorie.nl/metar/afkortingen</loc>
+    <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
