@@ -16,6 +16,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from flask import (
     Flask,
+    abort,
     redirect,
     render_template,
     request,
@@ -734,8 +735,16 @@ def metar_refresh_enabled():
 
 @app.route("/metar")
 def metar_choice():
-    """Let the user choose between parsing a METAR and practising abbreviations."""
-    return render_template("metar_choice.html")
+    """Let the user choose between parsing reports and practising abbreviations."""
+    return render_template("metar_choice.html", practice_mode=None)
+
+
+@app.route("/metar/keuze/<practice_mode>")
+def metar_type_choice(practice_mode):
+    """Let the user choose whether to practise METARs or TAFs."""
+    if practice_mode not in {"ontleden", "afkortingen"}:
+        abort(404)
+    return render_template("metar_choice.html", practice_mode=practice_mode)
 
 
 @app.route("/metar/afkortingen", methods=["GET", "POST"])

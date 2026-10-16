@@ -9,36 +9,38 @@
         <div class="page-header">
             <div>
                 <p class="eyebrow">{{ t('METAR/TAF oefenen') }}</p>
-                <h1>{{ t('Wat wil je oefenen?') }}</h1>
+                {% if practice_mode %}
+                    <h1>{{ t("Wil je METAR's of TAF's oefenen?") }}</h1>
+                {% else %}
+                    <h1>{{ t('Wil je ontleden oefenen of afkortingen?') }}</h1>
+                {% endif %}
             </div>
         </div>
 
-        <div class="choice-row">
-            <h2 class="choice-row-title">METAR</h2>
-            <div class="choice-grid" aria-label="{{ t('Kies een METAR-oefenmodus') }}">
-                <a href="{{ url_for('metar_practice') }}" class="choice-card option-card choice-form">
-                    <span class="choice-label">{{ t("METAR's ontleden") }}</span>
+        {% if practice_mode %}
+            <div class="choice-grid" aria-label="{{ t('Kies een berichttype') }}">
+                <a href="{{ url_for('metar_practice') if practice_mode == 'ontleden' else url_for('metar_abbreviations') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t("METAR's ontleden") if practice_mode == 'ontleden' else t('METAR afkortingen oefenen') }}</span>
                 </a>
-                <a href="{{ url_for('metar_abbreviations') }}" class="choice-card option-card choice-form">
-                    <span class="choice-label">{{ t('METAR afkortingen oefenen') }}</span>
-                </a>
-            </div>
-        </div>
-
-        <div class="choice-row">
-            <h2 class="choice-row-title">TAF</h2>
-            <div class="choice-grid" aria-label="{{ t('Kies een TAF-oefenmodus') }}">
-                <a href="{{ url_for('taf_practice') }}" class="choice-card option-card choice-form">
-                    <span class="choice-label">{{ t("TAF's ontleden") }}</span>
-                </a>
-                <a href="{{ url_for('taf_abbreviations') }}" class="choice-card option-card choice-form">
-                    <span class="choice-label">{{ t('TAF afkortingen oefenen') }}</span>
+                <a href="{{ url_for('taf_practice') if practice_mode == 'ontleden' else url_for('taf_abbreviations') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t("TAF's ontleden") if practice_mode == 'ontleden' else t('TAF afkortingen oefenen') }}</span>
                 </a>
             </div>
-        </div>
-
-        <div class="button-row practice-footer">
-            <a href="{{ url_for('index') }}" class="secondary-btn">{{ t('Terug naar home') }}</a>
-        </div>
+            <div class="button-row practice-footer">
+                <a href="{{ url_for('metar_choice') }}" class="secondary-btn">{{ t('Terug') }}</a>
+            </div>
+        {% else %}
+            <div class="choice-grid" aria-label="{{ t('Kies een oefenmodus') }}">
+                <a href="{{ url_for('metar_type_choice', practice_mode='ontleden') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t('Ontleden oefenen') }}</span>
+                </a>
+                <a href="{{ url_for('metar_type_choice', practice_mode='afkortingen') }}" class="choice-card option-card choice-form">
+                    <span class="choice-label">{{ t('Afkortingen oefenen') }}</span>
+                </a>
+            </div>
+            <div class="button-row practice-footer">
+                <a href="{{ url_for('index') }}" class="secondary-btn">{{ t('Terug naar home') }}</a>
+            </div>
+        {% endif %}
     </div>
 {% endblock %}

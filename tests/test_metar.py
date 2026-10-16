@@ -561,8 +561,8 @@ class MetarAbbreviationTests(unittest.TestCase):
     def test_abbreviation_routes(self):
         client = app.test_client()
         choice = client.get("/metar").get_data(as_text=True)
-        self.assertIn("/metar/ontleden", choice)
-        self.assertIn("/metar/afkortingen", choice)
+        self.assertIn("/metar/keuze/ontleden", choice)
+        self.assertIn("/metar/keuze/afkortingen", choice)
 
         page = client.get("/metar/afkortingen")
         html = page.get_data(as_text=True)

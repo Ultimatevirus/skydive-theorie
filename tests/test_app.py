@@ -140,8 +140,25 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("<mark>", page.get_data(as_text=True))
         self.assertIn("METAR/TAF oefenen", choice)
-        for path in ("/metar/ontleden", "/metar/afkortingen", "/taf/ontleden", "/taf/afkortingen"):
-            self.assertIn(f'href="{path}"', choice)
+        self.assertIn("Wil je ontleden oefenen of afkortingen?", choice)
+        self.assertIn('href="/metar/keuze/ontleden"', choice)
+        self.assertIn('href="/metar/keuze/afkortingen"', choice)
+        self.assertNotIn('href="/metar/ontleden"', choice)
+
+    def test_metar_type_choice_shows_only_report_types_for_selected_mode(self):
+        client = app.test_client()
+
+        parsing = client.get("/metar/keuze/ontleden").get_data(as_text=True)
+        abbreviations = client.get("/metar/keuze/afkortingen").get_data(as_text=True)
+
+        self.assertIn("Wil je METAR&#39;s of TAF&#39;s oefenen?", parsing)
+        self.assertIn('href="/metar/ontleden"', parsing)
+        self.assertIn('href="/taf/ontleden"', parsing)
+        self.assertNotIn('href="/metar/afkortingen"', parsing)
+        self.assertIn('href="/metar/afkortingen"', abbreviations)
+        self.assertIn('href="/taf/afkortingen"', abbreviations)
+        self.assertNotIn('href="/metar/ontleden"', abbreviations)
+        self.assertEqual(client.get("/metar/keuze/invalid").status_code, 404)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
         transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()

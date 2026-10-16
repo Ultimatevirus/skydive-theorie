@@ -48,7 +48,7 @@
                 </div>
                 <div class="button-row">
                     <a href="{{ url_for('taf_abbreviations') }}" class="primary-btn">{{ t('Nieuwe vragen') }}</a>
-                    <a href="{{ url_for('metar_choice') }}" class="secondary-btn">{{ t('Terug') }}</a>
+                    <a href="{{ url_for('metar_type_choice', practice_mode='afkortingen') }}" class="secondary-btn">{{ t('Terug') }}</a>
                 </div>
             {% else %}
                 <input type="hidden" name="seed" value="{{ seed }}">
@@ -81,7 +81,7 @@
                 </div>
                 <div class="button-row">
                     <button type="submit" name="action" value="check" class="primary-btn">{{ t('Controleer antwoorden') }}</button>
-                    <a href="{{ url_for('metar_choice') }}" class="secondary-btn">{{ t('Terug') }}</a>
+                    <a href="{{ url_for('metar_type_choice', practice_mode='afkortingen') }}" class="secondary-btn">{{ t('Terug') }}</a>
                 </div>
             {% endif %}
         </form>
