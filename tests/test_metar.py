@@ -5,6 +5,8 @@ import tempfile
 import time
 import unittest
 from datetime import date
+from email.message import Message
+from urllib.error import HTTPError
 from unittest.mock import patch
 
 import app as app_module
@@ -202,6 +204,54 @@ class MetarServiceTests(unittest.TestCase):
         self.assertEqual(result["raw"], REPORT)
         self.assertEqual(opener.call_count, 3)
         self.assertEqual(opener.call_args_list[0].args[0].headers["Authorization"], "test-key")
+        self.assertEqual(
+            opener.call_args_list[0].args[0].get_header("User-agent"),
+            metar_module.USER_AGENT,
+        )
+        conn = sqlite3.connect(self.database.name)
+        try:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM metar_api_call").fetchone()[0], 3)
+        finally:
+            conn.close()
+
+    def test_api_retries_rate_limit_responses_with_retry_after(self):
+        headers = Message()
+        headers["Retry-After"] = "3"
+        response = unittest.mock.MagicMock()
+        response.read.return_value = b"{}"
+        response.__enter__.return_value = response
+        opener = unittest.mock.Mock(side_effect=[
+            HTTPError("https://example.test", 429, "Too Many Requests", headers, None),
+            response,
+        ])
+
+        with patch("metar._wait_for_api_slot", return_value=True), \
+                patch.object(metar_module, "_LAST_API_REQUEST", None), \
+                patch.object(metar_module, "_API_REQUEST_INTERVAL", 0), \
+                patch("metar.time.sleep") as sleep:
+            result = metar_module._request(
+                "https://example.test", "test-key", opener, "application/json"
+            )
+
+        self.assertEqual(result, b"{}")
+        self.assertEqual(opener.call_count, 2)
+        sleep.assert_called_once_with(3.0)
+        self.assertEqual(
+            opener.call_args_list[1].args[0].get_header("User-agent"),
+            metar_module.USER_AGENT,
+        )
+
+    def test_api_request_quota_counts_actual_requests_in_the_hourly_window(self):
+        with patch.object(metar_module, "API_CALL_LIMIT", 2):
+            self.assertTrue(metar_module._wait_for_api_slot(wait=False))
+            self.assertTrue(metar_module._wait_for_api_slot(wait=False))
+            self.assertFalse(metar_module._wait_for_api_slot(wait=False))
+
+        conn = sqlite3.connect(self.database.name)
+        try:
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM metar_api_call").fetchone()[0], 2)
+        finally:
+            conn.close()
 
     def test_api_requests_are_spaced_at_least_one_second_apart(self):
         clock = [0.0]

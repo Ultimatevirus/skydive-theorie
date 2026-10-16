@@ -127,6 +127,8 @@ docker compose up --build -d
 
 The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for the notified airport on the current UTC day. METAR data is stored in the SQLite `metar` table; same-day fetch claims prevent duplicate API calls across Gunicorn processes and replicas. The `/data/data.db` volume persists this cache across deployments. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
 
+KNMI Open Data requests use a descriptive User-Agent, are limited to 900 requests per rolling hour across the shared database, and retry rate-limit/server errors with exponential backoff (respecting `Retry-After`). METAR and TAF requests share this account-level quota; notifications are used instead of timer-based polling. See KNMI's [fair use policy](https://developer.dataplatform.knmi.nl/fair-use).
+
 ### Build and run the image directly
 
 1. Clone the repository
@@ -135,4 +137,3 @@ The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML fi
 
 ### Visit the currently live build
 1. visit www.skydive-theorie.nl
-

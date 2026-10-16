@@ -24,7 +24,6 @@ from metar import (
     _similar_text,
     _split_example,
     _standalone_codes,
-    _wait_for_api_slot,
     build_questions as build_metar_questions,
     grade_answers,
     load_abbreviations,
@@ -122,7 +121,7 @@ def _extract_taf(content, code):
     return report if report.startswith("TAF") else f"TAF {report}"
 
 
-def _get_open_data_taf(code, day, api_key, opener):
+def _get_open_data_taf(code, day, api_key, opener, wait_for_rate_limit=True):
     base_url = os.getenv("KNMI_OPEN_DATA_URL", DEFAULT_OPEN_DATA_URL).rstrip("/")
     path = f"{base_url}/v1/datasets/{quote(TAF_DATASET, safe='')}/versions/{quote(TAF_VERSION, safe='')}/files"
     query = urlencode({
@@ -133,18 +132,24 @@ def _get_open_data_taf(code, day, api_key, opener):
         "end": f"{day.isoformat()}T23:59:59Z",
     })
     try:
-        listing = _fetch_payload(f"{path}?{query}", api_key, opener)
+        listing = _fetch_payload(f"{path}?{query}", api_key, opener, wait_for_rate_limit)
         files = [
             item for item in (listing.get("files", []) if isinstance(listing, dict) else [])
             if isinstance(item, dict) and item.get("filename")
         ]
         named = [item for item in files if code in str(item["filename"]).upper()]
         for item in (named or files):
-            download = _fetch_payload(f"{path}/{quote(item['filename'], safe='')}/url", api_key, opener)
+            download = _fetch_payload(
+                f"{path}/{quote(item['filename'], safe='')}/url", api_key, opener,
+                wait_for_rate_limit,
+            )
             url = download.get("temporaryDownloadUrl") if isinstance(download, dict) else None
             if not url:
                 continue
-            report = _extract_taf(_request(url, "", opener, "text/plain, application/xml"), code)
+            report = _extract_taf(
+                _request(url, "", opener, "text/plain, application/xml", wait_for_rate_limit),
+                code,
+            )
             if report:
                 return report
     except TafError:
@@ -347,9 +352,7 @@ def get_daily_taf(airport, today=None, opener=urlopen, wait_for_rate_limit=True,
         api_key = os.getenv("KNMI_API_KEY", "").strip()
         if not api_key:
             raise TafError("KNMI_API_KEY is niet ingesteld.")
-        if not _wait_for_api_slot(wait_for_rate_limit):
-            raise TafError("De TAF-service is tijdelijk niet beschikbaar.")
-        report = _get_open_data_taf(code, day, api_key, opener)
+        report = _get_open_data_taf(code, day, api_key, opener, wait_for_rate_limit)
         _release_taf_fetch(day, code, report)
     except Exception:
         _release_taf_fetch(day, code)

@@ -2,6 +2,7 @@
 
 from datetime import date, datetime, timezone
 from difflib import SequenceMatcher
+from email.utils import parsedate_to_datetime
 import json
 import logging
 import os
@@ -39,9 +40,11 @@ _WEATHER_DEFINITIONS_LOCK = Lock()
 _API_REQUEST_LOCK = Lock()
 _LAST_API_REQUEST = None
 _API_REQUEST_INTERVAL = 1.0
-API_CALL_LIMIT = 20
-API_CALL_WINDOW = 60
+API_CALL_LIMIT = 900
+API_CALL_WINDOW = 60 * 60
+API_MAX_ATTEMPTS = 5
 CLAIM_TIMEOUT = 600
+USER_AGENT = "skydive-theorie/1.0 (+https://github.com/Ultimatevirus/skydive-theorie)"
 logger = logging.getLogger(__name__)
 
 
@@ -70,31 +73,66 @@ def _first_value(payload, keys):
     return None
 
 
-def _request(url, api_key, opener, accept):
+def _retry_after_seconds(error):
+    value = error.headers.get("Retry-After") if error.headers else None
+    if not value:
+        return None
+    try:
+        return max(0.0, float(value))
+    except ValueError:
+        try:
+            retry_at = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if retry_at.tzinfo is None:
+            retry_at = retry_at.replace(tzinfo=timezone.utc)
+        return max(0.0, (retry_at - datetime.now(timezone.utc)).total_seconds())
+
+
+def _request(url, api_key, opener, accept, wait_for_rate_limit=True):
     global _LAST_API_REQUEST
-    headers = {"Accept": "application/json"}
+    headers = {"Accept": accept, "User-Agent": USER_AGENT}
     if api_key:
         headers["Authorization"] = api_key
-    headers["Accept"] = accept
     request = Request(url, headers=headers)
-    try:
-        with _API_REQUEST_LOCK:
-            if _LAST_API_REQUEST is not None:
-                delay = _API_REQUEST_INTERVAL - (time.monotonic() - _LAST_API_REQUEST)
-                if delay > 0:
-                    time.sleep(delay)
-            try:
-                with opener(request, timeout=10) as response:
-                    return response.read()
-            finally:
-                _LAST_API_REQUEST = time.monotonic()
-    except (HTTPError, URLError, TimeoutError, OSError, ValueError) as exc:
-        raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+    for attempt in range(API_MAX_ATTEMPTS):
+        if not _wait_for_api_slot(wait_for_rate_limit):
+            raise MetarError("De METAR-service is tijdelijk niet beschikbaar.")
+        retry_delay = None
+        try:
+            with _API_REQUEST_LOCK:
+                if _LAST_API_REQUEST is not None:
+                    delay = _API_REQUEST_INTERVAL - (time.monotonic() - _LAST_API_REQUEST)
+                    if delay > 0:
+                        time.sleep(delay)
+                try:
+                    with opener(request, timeout=10) as response:
+                        return response.read()
+                finally:
+                    _LAST_API_REQUEST = time.monotonic()
+        except HTTPError as exc:
+            retryable = exc.code == 429 or 500 <= exc.code < 600
+            retry_delay = _retry_after_seconds(exc) if retryable else None
+            exc.close()
+            if not retryable:
+                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+            if attempt + 1 == API_MAX_ATTEMPTS:
+                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+        except (URLError, TimeoutError, OSError) as exc:
+            if attempt + 1 == API_MAX_ATTEMPTS:
+                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+        except ValueError as exc:
+            raise MetarError("De METAR-service is tijdelijk niet beschikbaar.") from exc
+
+        backoff = min(60.0, 2.0 ** attempt)
+        time.sleep(max(backoff, retry_delay or 0.0))
 
 
-def _fetch_payload(url, api_key, opener=urlopen):
+def _fetch_payload(url, api_key, opener=urlopen, wait_for_rate_limit=True):
     try:
-        return json.loads(_request(url, api_key, opener, "application/json").decode("utf-8"))
+        return json.loads(
+            _request(url, api_key, opener, "application/json", wait_for_rate_limit).decode("utf-8")
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise MetarError("KNMI gaf geen geldige API-respons terug.") from exc
 
@@ -152,7 +190,7 @@ def _normalise_report(report):
     return text
 
 
-def _get_open_data_metar(code, day, api_key, opener):
+def _get_open_data_metar(code, day, api_key, opener, wait_for_rate_limit=True):
     base_url = os.getenv("KNMI_OPEN_DATA_URL", DEFAULT_OPEN_DATA_URL).rstrip("/")
     path = f"{base_url}/v1/datasets/{quote(METAR_DATASET, safe='')}/versions/{quote(METAR_VERSION, safe='')}/files"
     query = urlencode({
@@ -162,7 +200,7 @@ def _get_open_data_metar(code, day, api_key, opener):
         "begin": f"{day.isoformat()}T00:00:00Z",
         "end": f"{day.isoformat()}T23:59:59Z",
     })
-    listing = _fetch_payload(f"{path}?{query}", api_key, opener)
+    listing = _fetch_payload(f"{path}?{query}", api_key, opener, wait_for_rate_limit)
     files = listing.get("files", []) if isinstance(listing, dict) else []
     candidates = [
         item for item in files
@@ -173,11 +211,15 @@ def _get_open_data_metar(code, day, api_key, opener):
     filename = candidates[0].get("filename")
     if not filename:
         raise MetarError("KNMI gaf geen geldig METAR-bestand terug.")
-    download = _fetch_payload(f"{path}/{quote(filename, safe='')}/url", api_key, opener)
+    download = _fetch_payload(
+        f"{path}/{quote(filename, safe='')}/url", api_key, opener, wait_for_rate_limit
+    )
     temporary_url = download.get("temporaryDownloadUrl") if isinstance(download, dict) else None
     if not temporary_url:
         raise MetarError("KNMI gaf geen downloadlink voor de METAR terug.")
-    return _extract_xml_report(_request(temporary_url, "", opener, "text/plain, application/xml"))
+    return _extract_xml_report(
+        _request(temporary_url, "", opener, "text/plain, application/xml", wait_for_rate_limit)
+    )
 
 
 def _number(value):
@@ -486,13 +528,15 @@ def get_daily_metar(
         legacy_template = os.getenv("KNMI_METAR_URL", "")
         if legacy_template and "{airport}" in legacy_template:
             url = legacy_template.format(airport=quote(code), date=day.isoformat())
-            report = _extract_report(_fetch_payload(url, api_key, opener))
+            report = _extract_report(
+                _fetch_payload(url, api_key, opener, wait_for_rate_limit)
+            )
         else:
             if not api_key:
                 raise MetarError("KNMI_API_KEY is niet ingesteld.")
-            if not _wait_for_api_slot(wait_for_rate_limit):
-                raise MetarError("De METAR-service is tijdelijk niet beschikbaar.")
-            report = _get_open_data_metar(code, day, api_key, opener)
+            report = _get_open_data_metar(
+                code, day, api_key, opener, wait_for_rate_limit
+            )
         _release_metar_fetch(day, code, report)
     except Exception:
         _release_metar_fetch(day, code)
