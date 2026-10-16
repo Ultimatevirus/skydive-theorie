@@ -33,6 +33,7 @@ from quiz import (
     build_question_groups,
     calculate_grade,
     display_answer_value,
+    distribute_question_counts,
     format_elapsed,
     is_passed,
     normalize_answer_value,
@@ -298,9 +299,6 @@ def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL
         ).fetchall()
     conn.close()
 
-    if not topic_rows:
-        return {}, 0
-
     available_by_topic = {}
     for row in topic_rows:
         topic = row["topic"]
@@ -308,77 +306,7 @@ def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL
         available_by_topic.setdefault(topic, {})
         available_by_topic[topic][subtopic] = row["c"]
 
-    topic_names = sorted(available_by_topic)
-    total_available = sum(
-        sum(subtopic_counts.values())
-        for subtopic_counts in available_by_topic.values()
-    )
-    selected_total = min(amount, total_available)
-
-    if selected_total <= 0:
-        empty_counts = {
-            topic: {subtopic: 0 for subtopic in sorted(subtopics)}
-            for topic, subtopics in available_by_topic.items()
-        }
-        return empty_counts, 0
-
-    counts = {
-        topic: {subtopic: 0 for subtopic in sorted(subtopics)}
-        for topic, subtopics in available_by_topic.items()
-    }
-
-    topic_targets = {topic: 0 for topic in topic_names}
-    base = selected_total // len(topic_names)
-    remainder = selected_total % len(topic_names)
-    for index, topic in enumerate(topic_names):
-        topic_total = sum(available_by_topic[topic].values())
-        topic_targets[topic] = min(
-            base + (1 if index < remainder else 0),
-            topic_total,
-        )
-
-    used = sum(topic_targets.values())
-    if used < selected_total:
-        for topic in topic_names:
-            free_space = sum(available_by_topic[topic].values()) - topic_targets[topic]
-            if free_space > 0:
-                extra = min(selected_total - used, free_space)
-                topic_targets[topic] += extra
-                used += extra
-                if used >= selected_total:
-                    break
-
-    for topic in topic_names:
-        target = topic_targets.get(topic, 0)
-        if target <= 0:
-            continue
-
-        subtopics = sorted(available_by_topic[topic])
-        subtopic_base = target // len(subtopics)
-        subtopic_remainder = target % len(subtopics)
-
-        for index, subtopic in enumerate(subtopics):
-            available = available_by_topic[topic].get(subtopic, 0)
-            counts[topic][subtopic] = min(
-                subtopic_base + (1 if index < subtopic_remainder else 0),
-                available,
-            )
-
-        topic_used = sum(counts[topic].values())
-        if topic_used < target:
-            for subtopic in subtopics:
-                free_space = (
-                    available_by_topic[topic].get(subtopic, 0)
-                    - counts[topic].get(subtopic, 0)
-                )
-                if free_space > 0:
-                    extra = min(target - topic_used, free_space)
-                    counts[topic][subtopic] += extra
-                    topic_used += extra
-                    if topic_used >= target:
-                        break
-
-    return counts, selected_total
+    return distribute_question_counts(available_by_topic, amount)
 
 
 def fetch_questions(level, amount, selected_topics=None, language="NL"):

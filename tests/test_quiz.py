@@ -4,6 +4,7 @@ from quiz import (
     build_option_list,
     build_question_groups,
     calculate_grade,
+    distribute_question_counts,
     format_elapsed,
     is_passed,
     normalize_answer_value,
@@ -44,6 +45,42 @@ class QuizHelperTests(unittest.TestCase):
         self.assertFalse(is_passed(2, 5))
         self.assertTrue(topic_passed(3, 5))
         self.assertFalse(topic_passed(0, 0))
+
+    def test_question_counts_balance_across_topics_and_subtopics(self):
+        counts, selected_total = distribute_question_counts(
+            {
+                "Weather": {"Wind": 4, "Clouds": 4},
+                "Traffic": {"Signals": 4, "Rules": 4},
+            },
+            8,
+        )
+
+        self.assertEqual(selected_total, 8)
+        self.assertEqual(
+            counts,
+            {
+                "Weather": {"Clouds": 2, "Wind": 2},
+                "Traffic": {"Rules": 2, "Signals": 2},
+            },
+        )
+
+    def test_question_counts_redistribute_when_a_topic_is_at_capacity(self):
+        counts, selected_total = distribute_question_counts(
+            {"Small": {"Only": 2}, "Large": {"Only": 10}},
+            8,
+        )
+
+        self.assertEqual(selected_total, 8)
+        self.assertEqual(counts, {"Small": {"Only": 2}, "Large": {"Only": 6}})
+
+    def test_question_counts_return_empty_allocations_for_nonpositive_amount(self):
+        counts, selected_total = distribute_question_counts(
+            {"Weather": {"Wind": 4}},
+            0,
+        )
+
+        self.assertEqual(selected_total, 0)
+        self.assertEqual(counts, {"Weather": {"Wind": 0}})
 
     def test_build_option_list_preserves_original_casing(self):
         option_map = build_option_list("[A, B, D]", "C", level="B", language="NL")

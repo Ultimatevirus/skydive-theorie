@@ -38,7 +38,7 @@ class PracticeFlowTests(unittest.TestCase):
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
             "Na het kiezen van een luchthaven krijg je de actuele METAR te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de METAR en worden dynamisch gegenereerd. De METAR's worden bijgewerkt zodra KNMI een nieuw METAR-bestand beschikbaar maakt.",
-            "Met een oefenexamen maak je een vaste set van 40 vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.",
+            "Met een oefenexamen maak je een vaste set van 40 willekeurige vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.",
             "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden bijgewerkt zodra KNMI een nieuw METAR-bestand beschikbaar maakt.",
             "Selecteer een luchthaven om de dagelijkse METAR te laden.",
             "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.",
@@ -58,7 +58,7 @@ class PracticeFlowTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(
-            "A practice exam gives you a fixed set of 40 questions. In free practice, you choose the number of questions and the topics.",
+            "A practice exam gives you a fixed set of 40 random questions. In free practice, you choose the number of questions and the topics.",
             response.get_data(as_text=True),
         )
 
