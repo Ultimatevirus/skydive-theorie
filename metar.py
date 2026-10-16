@@ -7,7 +7,10 @@ import logging
 import os
 import random
 import re
+import socket
+import ssl
 import time
+from queue import Empty, Queue
 from threading import Event, Lock
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -27,6 +30,8 @@ DUTCH_AIRPORTS = {
 DEFAULT_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 METAR_DATASET = os.getenv("KNMI_METAR_DATASET", "metar")
 METAR_VERSION = os.getenv("KNMI_METAR_VERSION", "1.0")
+METAR_NOTIFICATION_TOPIC = f"dataplatform/file/v1/{METAR_DATASET}/{METAR_VERSION}/created"
+NOTIFICATION_BROKER = "mqtt.dataplatform.knmi.nl"
 _CACHE = {}
 _WEATHER_DEFINITIONS_CACHE = {}
 _ABBREVIATIONS_CACHE = {}
@@ -319,7 +324,7 @@ def _wait_for_api_slot(wait=True):
         time.sleep(max(0.01, oldest + API_CALL_WINDOW - time.time()))
 
 
-def _claim_metar_fetch(day, code, wait=True):
+def _claim_metar_fetch(day, code, wait=True, force_refresh=False):
     while True:
         conn = _connect_db()
         try:
@@ -329,7 +334,7 @@ def _claim_metar_fetch(day, code, wait=True):
                 "SELECT metar FROM metar WHERE datetime = ? AND airport = ?",
                 (day.isoformat(), code),
             ).fetchone()
-            if cached:
+            if cached and not force_refresh:
                 conn.commit()
                 return False
             now = time.time()
@@ -427,18 +432,25 @@ def _build_result(report, code, day):
     return result
 
 
-def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=True, cache_only=False):
+def get_daily_metar(
+    airport,
+    today=None,
+    opener=urlopen,
+    wait_for_rate_limit=True,
+    cache_only=False,
+    force_refresh=False,
+):
     code = str(airport or "").strip().upper()
     if code not in DUTCH_AIRPORTS:
         raise MetarError("Kies een Nederlandse luchthaven uit de lijst.")
     day = today or datetime.now(timezone.utc).date()
     cache_key = (day.isoformat(), code)
-    if cache_key in _CACHE:
+    if cache_key in _CACHE and not force_refresh:
         return _CACHE[cache_key]
     report = _get_cached_metar(day, code)
-    if report is None and cache_only:
+    if report is None and cache_only and not force_refresh:
         raise MetarError("De METAR wordt nog opgehaald. Probeer het over een minuut opnieuw.")
-    if report is not None:
+    if report is not None and not force_refresh:
         normalised_report = _normalise_report(report)
         if normalised_report != report:
             _store_metar(day, code, normalised_report)
@@ -446,7 +458,9 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
         result = _build_result(report, code, day)
         _CACHE[cache_key] = result
         return result
-    claimed = _claim_metar_fetch(day, code, wait=wait_for_rate_limit)
+    claimed = _claim_metar_fetch(
+        day, code, wait=wait_for_rate_limit, force_refresh=force_refresh
+    )
     if claimed is False:
         report = _get_cached_metar(day, code)
         if report is None:
@@ -488,23 +502,106 @@ def get_daily_metar(airport, today=None, opener=urlopen, wait_for_rate_limit=Tru
     return result
 
 
-def refresh_daily_metars(day=None, opener=urlopen):
-    """Fetch each unique Dutch airport's METAR for the given UTC day."""
+def refresh_daily_metars(day=None, opener=urlopen, airports=None):
+    """Fetch fresh METARs for the airports affected by a KNMI dataset notification."""
     day = day or datetime.now(timezone.utc).date()
-    for code in dict.fromkeys(DUTCH_AIRPORTS):
+    codes = airports if airports is not None else DUTCH_AIRPORTS
+    for code in dict.fromkeys(codes):
         try:
-            get_daily_metar(code, day, opener=opener)
+            get_daily_metar(code, day, opener=opener, force_refresh=True)
         except MetarError:
             logger.exception("METAR refresh failed for %s", code)
 
 
+def _notification_airports(payload):
+    """Return airport codes named in a notification, or None if it is dataset-wide."""
+    text = payload.decode("utf-8", errors="replace").upper()
+    airports = [
+        code for code in DUTCH_AIRPORTS
+        if re.search(rf"(?<![A-Z]){code}(?![A-Z])", text)
+    ]
+    return airports or None
+
+
 def metar_refresh_loop(stop_event=None, opener=urlopen):
-    """Refresh all airports immediately and then every 30 minutes."""
+    """Refresh METARs only after KNMI reports a newly created dataset file."""
     stop_event = stop_event or Event()
+    token = os.getenv("KNMI_NOTIFICATION_API_KEY", "").strip()
+    if not token:
+        logger.error("KNMI_NOTIFICATION_API_KEY is not set; METAR notifications are disabled.")
+        return
+
+    import paho.mqtt.client as mqtt_client
+    import paho.mqtt.properties as mqtt_properties
+
+    notifications = Queue()
+
+    def on_connect(client, userdata, flags, reason_code, properties=None):
+        if getattr(reason_code, "is_failure", False):
+            logger.error("KNMI MQTT connection failed: %s", reason_code)
+            return
+        logger.info("Connected to KNMI METAR notifications.")
+        result, _ = client.subscribe(METAR_NOTIFICATION_TOPIC, qos=1)
+        if result != mqtt_client.MQTT_ERR_SUCCESS:
+            logger.error("Could not subscribe to KNMI topic %s: %s", METAR_NOTIFICATION_TOPIC, result)
+
+    def on_subscribe(client, userdata, mid, reason_codes, properties=None):
+        if any(getattr(reason_code, "is_failure", False) for reason_code in reason_codes):
+            logger.error("KNMI rejected the subscription to topic %s: %s", METAR_NOTIFICATION_TOPIC, reason_codes)
+            return
+        logger.info("Subscribed to KNMI topic %s.", METAR_NOTIFICATION_TOPIC)
+
+    def on_message(client, userdata, message):
+        notifications.put(message.payload)
+
+    def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
+        if getattr(reason_code, "is_failure", False):
+            logger.warning("Disconnected from KNMI METAR notifications: %s", reason_code)
+
+    client = mqtt_client.Client(
+        callback_api_version=mqtt_client.CallbackAPIVersion.VERSION2,
+        client_id=f"skydive-theorie-metar-{socket.gethostname()}",
+        protocol=mqtt_client.MQTTv5,
+        transport="websockets",
+    )
+    client.tls_set(tls_version=ssl.PROTOCOL_TLS)
+    connect_properties = mqtt_properties.Properties(mqtt_properties.PacketTypes.CONNECT)
+    connect_properties.SessionExpiryInterval = 24 * 60 * 60
+    client.username_pw_set("token", token)
+    client.on_connect = on_connect
+    client.on_subscribe = on_subscribe
+    client.on_message = on_message
+    client.on_disconnect = on_disconnect
+
     while not stop_event.is_set():
-        day = datetime.now(timezone.utc).date()
-        refresh_daily_metars(day, opener=opener)
-        stop_event.wait(1800)
+        try:
+            client.connect(
+                host=NOTIFICATION_BROKER,
+                port=443,
+                keepalive=60,
+                clean_start=False,
+                properties=connect_properties,
+            )
+        except (OSError, ValueError):
+            logger.exception("Could not connect to KNMI METAR notifications; retrying in 30 seconds.")
+            if stop_event.wait(30):
+                break
+            continue
+
+        client.loop_start()
+        try:
+            while not stop_event.is_set():
+                try:
+                    payload = notifications.get(timeout=1)
+                except Empty:
+                    continue
+                refresh_daily_metars(
+                    opener=opener,
+                    airports=_notification_airports(payload),
+                )
+        finally:
+            client.disconnect()
+            client.loop_stop()
 
 
 NO_GUSTS = "Geen windstoten"

@@ -70,6 +70,7 @@ ACME_EMAIL=admin@example.com
 ACCESS_GATE_ENABLED=1
 ACCESS_CODE=replace-with-a-long-random-access-code
 KNMI_API_KEY=your-rotated-knmi-key
+KNMI_NOTIFICATION_API_KEY=your-notification-service-key
 KNMI_OPEN_DATA_URL=https://api.dataplatform.knmi.nl/open-data
 SMTP_HOST=smtp.example.com
 SMTP_PORT=587
@@ -113,17 +114,18 @@ The SQLite `data.db` file contains versioned application content and the daily M
 
 ### KNMI METAR configuration
 
-The application starts a background METAR refresh from the Gunicorn master. It fetches every unique Dutch airport immediately after startup and refreshes them again at each UTC calendar day, before a user opens the `/metar` page. The shared SQLite limiter allows at most 3 airport METAR fetches per rolling minute, including on-demand requests. Failed airports are retried by the next refresh pass.
+The Gunicorn master starts a background MQTT listener for `dataplatform/file/v1/metar/1.0/created`. It uses the KNMI Notification Service over TLS WebSockets on port 443, with QoS 1 and a persistent client ID per app container. METARs are refreshed only when KNMI publishes a new file notification; when the event identifies an airport, only that airport is refreshed. The listener does not perform a timer-based refresh. Failed updates are logged and can be retried when a later file notification arrives.
 
-Configure the credential and endpoint through deployment environment variables; the API key is never sent to the browser:
+Configure both server-side credentials through deployment environment variables; neither key is sent to the browser. `KNMI_NOTIFICATION_API_KEY` must be an API key with access to the Notification Service:
 
 ```powershell
 $env:KNMI_API_KEY = "your-rotated-knmi-key"
+$env:KNMI_NOTIFICATION_API_KEY = "your-notification-service-key"
 $env:KNMI_OPEN_DATA_URL = "https://api.dataplatform.knmi.nl/open-data"
 docker compose up --build -d
 ```
 
-The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for each airport on the current UTC day. METAR data is stored in the SQLite `metar` table and reused per airport and UTC day; same-day fetch claims prevent duplicate API calls across Gunicorn processes. The `/data/data.db` volume persists this cache across deployments. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
+The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for the notified airport on the current UTC day. METAR data is stored in the SQLite `metar` table; same-day fetch claims prevent duplicate API calls across Gunicorn processes and replicas. The `/data/data.db` volume persists this cache across deployments. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
 
 ### Build and run the image directly
 
@@ -133,5 +135,4 @@ The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML fi
 
 ### Visit the currently live build
 1. visit www.skydive-theorie.nl
-
 

@@ -168,6 +168,21 @@ class MetarServiceTests(unittest.TestCase):
         finally:
             conn.close()
 
+    def test_forced_refresh_replaces_same_day_database_and_memory_cache(self):
+        day = date(2026, 9, 2)
+        old_report = REPORT.replace("27012G20KT", "25008KT")
+        metar_module._store_metar(day, "EHAM", old_report)
+        _CACHE[(day.isoformat(), "EHAM")] = metar_module._build_result(old_report, "EHAM", day)
+
+        with patch.dict("os.environ", {"KNMI_API_KEY": "test-key", "KNMI_METAR_URL": ""}), \
+                patch("metar._wait_for_api_slot", return_value=True), \
+                patch("metar._get_open_data_metar", return_value=REPORT):
+            result = get_daily_metar("EHAM", day, force_refresh=True)
+
+        self.assertEqual(result["raw"], REPORT)
+        self.assertEqual(_CACHE[(day.isoformat(), "EHAM")]["raw"], REPORT)
+        self.assertEqual(metar_module._get_cached_metar(day, "EHAM"), REPORT)
+
     def test_open_data_api_lists_and_downloads_xml_metar(self):
         responses = []
         for body in (
@@ -212,8 +227,8 @@ class MetarServiceTests(unittest.TestCase):
     def test_refresh_fetches_each_airport_once_and_continues_after_failure(self):
         calls = []
 
-        def fetch(code, day, opener):
-            calls.append(code)
+        def fetch(code, day, opener, force_refresh):
+            calls.append((code, force_refresh))
             if code == "EHRD":
                 raise MetarError("temporary")
             return {}
@@ -221,20 +236,28 @@ class MetarServiceTests(unittest.TestCase):
         with patch("metar.get_daily_metar", side_effect=fetch):
             refresh_daily_metars(date(2026, 9, 3))
 
-        self.assertEqual(calls, list(dict.fromkeys(DUTCH_AIRPORTS)))
-        self.assertEqual(calls.count("EHAM"), 1)
+        self.assertEqual(calls, [(code, True) for code in dict.fromkeys(DUTCH_AIRPORTS)])
 
-    def test_refresh_loop_waits_30_minutes_between_refreshes(self):
-        stop_event = unittest.mock.Mock()
-        stop_event.is_set.side_effect = [False, True]
-        wait_calls = []
-        stop_event.wait.side_effect = lambda seconds: wait_calls.append(seconds)
+    def test_notification_only_refreshes_airport_named_in_event(self):
+        with patch("metar.get_daily_metar") as get_metar:
+            refresh_daily_metars(date(2026, 9, 3), airports=["EHAM"])
 
-        with patch("metar.refresh_daily_metars") as refresh_metars:
-            metar_refresh_loop(stop_event=stop_event, opener=unittest.mock.Mock())
+        get_metar.assert_called_once_with(
+            "EHAM", date(2026, 9, 3), opener=unittest.mock.ANY, force_refresh=True
+        )
 
-        self.assertEqual(refresh_metars.call_count, 1)
-        self.assertEqual(wait_calls, [1800])
+    def test_notification_extracts_airport_from_knmi_filename(self):
+        self.assertEqual(
+            metar_module.METAR_NOTIFICATION_TOPIC,
+            "dataplatform/file/v1/metar/1.0/created",
+        )
+        self.assertEqual(
+            metar_module._notification_airports(
+                b'{"filename":"A_LANL80EHAM022022_C_EHAM_020926202202.xml"}'
+            ),
+            ["EHAM"],
+        )
+        self.assertIsNone(metar_module._notification_airports(b'{"dataset":"metar"}'))
 
     def test_foreground_fetch_returns_busy_error_when_another_worker_holds_claim(self):
         conn = sqlite3.connect(self.database.name)

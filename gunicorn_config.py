@@ -45,7 +45,7 @@ def when_ready(server):
 		_metar_refresh_thread = Thread(
 			target=metar_refresh_loop,
 			args=(_metar_refresh_stop,),
-			name='metar-refresh',
+			name='metar-notifications',
 			daemon=True,
 		)
 		_metar_refresh_thread.start()

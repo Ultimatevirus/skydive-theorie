@@ -728,7 +728,7 @@ def learn():
 
 
 def metar_refresh_enabled():
-    """Request threads only read cached METARs when the background refresher fills the cache."""
+    """Request threads only read cached METARs when the KNMI listener fills the cache."""
     return os.getenv("KNMI_METAR_REFRESH", "1").lower() not in {"0", "false", "no"}
 
 
