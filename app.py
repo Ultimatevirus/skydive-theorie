@@ -72,8 +72,42 @@ if (
 
 ACCESS_TOKEN_LIFETIME = timedelta(days=int(os.getenv("ACCESS_TOKEN_LIFETIME_DAYS", "7")))
 app.config["PERMANENT_SESSION_LIFETIME"] = ACCESS_TOKEN_LIFETIME
+MAX_PRACTICE_ATTEMPTS = 5
 GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "it_systems_status", "favicon", "robots_txt", "sitemap_xml", "static", "gdpr"}
 _missing_access_code_warned = False
+
+
+def _prune_practice_attempts(attempts):
+    while len(attempts) > MAX_PRACTICE_ATTEMPTS:
+        oldest = min(
+            attempts,
+            key=lambda attempt_id: (
+                attempts[attempt_id].get("created_at", 0)
+                if isinstance(attempts[attempt_id], dict)
+                else 0
+            ),
+        )
+        attempts.pop(oldest)
+
+
+def _get_practice_attempts(key):
+    """Load a bounded set of report snapshots from the client-side session."""
+    stored = session.get(key)
+    changed = not isinstance(stored, dict)
+    attempts = stored if not changed else {}
+    original_count = len(attempts)
+    _prune_practice_attempts(attempts)
+    changed = changed or len(attempts) != original_count
+    if changed:
+        session[key] = attempts
+    return attempts
+
+
+def _remember_practice_attempt(attempts, attempt_id, state):
+    state["created_at"] = time.time()
+    attempts.pop(attempt_id, None)
+    attempts[attempt_id] = state
+    _prune_practice_attempts(attempts)
 
 
 def ensure_csrf_token():
@@ -771,10 +805,7 @@ def metar_practice():
     """Show and grade the daily METAR exercise for a Dutch airport."""
     checking = request.method == "POST" and request.form.get("action") == "check"
     attempt_id = request.form.get("attempt_id") or session.get("metar_attempt_id")
-    attempts = session.get("metar_attempts", {})
-    if not isinstance(attempts, dict):
-        attempts = {}
-        session["metar_attempts"] = attempts
+    attempts = _get_practice_attempts("metar_attempts")
     attempt_state = attempts.get(attempt_id) if attempt_id else None
 
     # Grade against the airport the questions were generated for; the dropdown may
@@ -800,10 +831,13 @@ def metar_practice():
     questions = []
     attempt_id = attempt_id or uuid.uuid4().hex
 
-    if selected_airport not in DUTCH_AIRPORTS:
+    if checking and (not attempt_state or not attempt_state.get("raw")):
+        error = "Deze oefening is verlopen. Laad opnieuw om verder te oefenen."
+        metar = None
+    elif selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
         metar = None
-    elif checking and attempt_state and attempt_state.get("raw"):
+    elif checking:
         metar = parse_metar(attempt_state["raw"])
         metar.update({
             "airport": selected_airport,
@@ -834,12 +868,12 @@ def metar_practice():
             seed = new_question_seed()
             session["metar_seed"] = seed
             session["metar_attempt_id"] = attempt_id
-            attempts[attempt_id] = {
+            _remember_practice_attempt(attempts, attempt_id, {
                 "airport": selected_airport,
                 "seed": seed,
                 "raw": metar["raw"],
                 "date": metar.get("date"),
-            }
+            })
             session["metar_attempts"] = attempts
         questions = build_questions(metar, seed, language, definitions)
         if checking:
@@ -888,10 +922,7 @@ def taf_practice():
     """Show and grade the daily TAF exercise for a Dutch airport."""
     checking = request.method == "POST" and request.form.get("action") == "check"
     attempt_id = request.form.get("attempt_id") or session.get("taf_attempt_id")
-    attempts = session.get("taf_attempts", {})
-    if not isinstance(attempts, dict):
-        attempts = {}
-        session["taf_attempts"] = attempts
+    attempts = _get_practice_attempts("taf_attempts")
     attempt_state = attempts.get(attempt_id) if attempt_id else None
 
     if checking:
@@ -916,9 +947,11 @@ def taf_practice():
     taf = None
     attempt_id = attempt_id or uuid.uuid4().hex
 
-    if selected_airport not in DUTCH_AIRPORTS:
+    if checking and (not attempt_state or not attempt_state.get("raw")):
+        error = "Deze oefening is verlopen. Laad opnieuw om verder te oefenen."
+    elif selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
-    elif checking and attempt_state and attempt_state.get("raw"):
+    elif checking:
         taf = taf_module.parse_taf(attempt_state["raw"])
         taf.update({
             "airport": selected_airport,
@@ -945,12 +978,12 @@ def taf_practice():
             seed = new_question_seed()
             session["taf_seed"] = seed
             session["taf_attempt_id"] = attempt_id
-            attempts[attempt_id] = {
+            _remember_practice_attempt(attempts, attempt_id, {
                 "airport": selected_airport,
                 "seed": seed,
                 "raw": taf["raw"],
                 "date": taf.get("date"),
-            }
+            })
             session["taf_attempts"] = attempts
         questions = taf_module.build_questions(taf, seed, language, definitions)
         if checking:
