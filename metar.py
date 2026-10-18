@@ -9,6 +9,7 @@ import os
 import random
 import re
 import socket
+import sqlite3
 import ssl
 import time
 from queue import Empty, Queue
@@ -19,6 +20,7 @@ from urllib.request import Request, urlopen
 from xml.etree import ElementTree
 
 from db import connect_db, get_db_path
+from system_status import record_notification_received
 
 
 DUTCH_AIRPORTS = {
@@ -597,6 +599,10 @@ def metar_refresh_loop(stop_event=None, opener=urlopen):
 
     def on_message(client, userdata, message):
         notifications.put(message.payload)
+        try:
+            record_notification_received()
+        except (OSError, sqlite3.Error):
+            logger.exception("Could not persist the latest KNMI notification time.")
 
     def on_disconnect(client, userdata, disconnect_flags, reason_code, properties=None):
         if getattr(reason_code, "is_failure", False):

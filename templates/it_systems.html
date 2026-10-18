@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% set page_name = 'it-systems' %}
+
+{% block title %}{{ t('IT-systemen') }} | Skydive-theorie.nl{% endblock %}
+{% block meta_description %}{{ t('Actuele status van de IT-systemen van Skydive-theorie.nl.') }}{% endblock %}
+
+{% block content %}
+    <section class="card system-status-card">
+        <header class="system-status-header">
+            <p class="eyebrow">{{ t('Systeemstatus') }}</p>
+            <h1>{{ t('IT-systemen') }}</h1>
+            <p>{{ t('Status van de diensten die deze website gebruikt.') }}</p>
+        </header>
+
+        <div class="system-status-summary system-status-summary-{{ overall_status }}" role="status">
+            <span class="system-status-dot" aria-hidden="true"></span>
+            <strong>{{ t(overall_label) }}</strong>
+        </div>
+
+        <ul class="system-status-list">
+            {% for service in services %}
+                <li class="system-status-row">
+                    <div class="system-status-indicator system-status-indicator-{{ service.status }}" aria-hidden="true">
+                        <span class="system-status-dot"></span>
+                    </div>
+                    <div class="system-status-details">
+                        <div class="system-status-title">
+                            <h2>{{ t(service.name) }}</h2>
+                            <span class="system-status-badge system-status-badge-{{ service.status }}">
+                                {{ t({
+                                    'operational': 'Operationeel',
+                                    'outage': 'Storing',
+                                    'not_configured': 'Niet geconfigureerd',
+                                    'unknown': 'Onbekend'
+                                }.get(service.status, 'Onbekend')) }}
+                            </span>
+                        </div>
+                        <p>{{ t(service.description) }}</p>
+                        {% if service.checked_at_display %}
+                            <p class="system-status-timestamp">
+                                {{ t('Laatst gecontroleerd:') }}
+                                <time datetime="{{ service.checked_at_iso }}">{{ service.checked_at_display }}</time>
+                            </p>
+                        {% else %}
+                            <p class="system-status-timestamp">{{ t('Nog geen controle uitgevoerd') }}</p>
+                        {% endif %}
+                        {% if service.last_activity_display and service.name == 'KNMI Notification Service (MQTT)' %}
+                            <p class="system-status-timestamp">
+                                {{ t('Laatste KNMI-melding:') }}
+                                <time datetime="{{ service.last_activity_iso }}">{{ service.last_activity_display }}</time>
+                            </p>
+                        {% endif %}
+                    </div>
+                </li>
+            {% endfor %}
+        </ul>
+
+        <p class="system-status-footnote">{{ t('Statuscontroles versturen geen e-mail en gebruiken waar mogelijk bestaande METAR-gegevens.') }}</p>
+    </section>
+{% endblock %}

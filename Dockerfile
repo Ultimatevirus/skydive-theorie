@@ -1,21 +1,29 @@
+FROM python:3.14-alpine3.24 AS builder
+
+WORKDIR /build
+
+COPY requirements.txt ./
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+
 FROM python:3.14-alpine3.24
 
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
+    PATH="/opt/venv/bin:$PATH" \
     DB_PATH=/data/data.db
 
 RUN addgroup -S app && adduser -S -G app app && mkdir -p /data && chown app:app /data
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
+COPY --from=builder /opt/venv /opt/venv
 COPY app.py ./
 COPY db.py ./
 COPY quiz.py ./
 COPY metar.py ./
 COPY taf.py ./
+COPY system_status.py ./
 COPY translations.py ./
 COPY gunicorn_config.py ./
 COPY docker-entrypoint.sh ./

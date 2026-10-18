@@ -38,7 +38,7 @@ class PracticeFlowTests(unittest.TestCase):
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
             "Na het kiezen van een luchthaven krijg je de actuele METAR te zien, waarna er een aantal vragen volgen. Deze vragen gaan over de inhoud van de METAR en worden dynamisch gegenereerd. De METAR's worden bijgewerkt zodra KNMI een nieuw METAR-bestand beschikbaar maakt.",
-            "Met een oefenexamen maak je een vaste set van 40 vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.",
+            "Met een oefenexamen maak je een vaste set van 40 willekeurige vragen. Bij vrij oefenen kies je zelf het aantal vragen en de onderwerpen.",
             "Kies een luchthaven en decodeer de actuele METAR. Let goed op de voorbeeldinvoer voordat je begint. De METAR's worden bijgewerkt zodra KNMI een nieuw METAR-bestand beschikbaar maakt.",
             "Selecteer een luchthaven om de dagelijkse METAR te laden.",
             "Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.",
@@ -58,7 +58,7 @@ class PracticeFlowTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn(
-            "A practice exam gives you a fixed set of 40 questions. In free practice, you choose the number of questions and the topics.",
+            "A practice exam gives you a fixed set of 40 random questions. In free practice, you choose the number of questions and the topics.",
             response.get_data(as_text=True),
         )
 
@@ -140,8 +140,25 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(page.status_code, 200)
         self.assertIn("<mark>", page.get_data(as_text=True))
         self.assertIn("METAR/TAF oefenen", choice)
-        for path in ("/metar/ontleden", "/metar/afkortingen", "/taf/ontleden", "/taf/afkortingen"):
-            self.assertIn(f'href="{path}"', choice)
+        self.assertIn("Wil je ontleden oefenen of afkortingen?", choice)
+        self.assertIn('href="/metar/keuze/ontleden"', choice)
+        self.assertIn('href="/metar/keuze/afkortingen"', choice)
+        self.assertNotIn('href="/metar/ontleden"', choice)
+
+    def test_metar_type_choice_shows_only_report_types_for_selected_mode(self):
+        client = app.test_client()
+
+        parsing = client.get("/metar/keuze/ontleden").get_data(as_text=True)
+        abbreviations = client.get("/metar/keuze/afkortingen").get_data(as_text=True)
+
+        self.assertIn("Wil je METAR&#39;s of TAF&#39;s oefenen?", parsing)
+        self.assertIn('href="/metar/ontleden"', parsing)
+        self.assertIn('href="/taf/ontleden"', parsing)
+        self.assertNotIn('href="/metar/afkortingen"', parsing)
+        self.assertIn('href="/metar/afkortingen"', abbreviations)
+        self.assertIn('href="/taf/afkortingen"', abbreviations)
+        self.assertNotIn('href="/metar/ontleden"', abbreviations)
+        self.assertEqual(client.get("/metar/keuze/invalid").status_code, 404)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
         transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()
@@ -169,6 +186,33 @@ class PracticeFlowTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.get_json(), {"status": "ok"})
+
+    def test_it_systems_status_page_is_localized_and_uses_persisted_values(self):
+        client = app.test_client()
+        states = {
+            "smtp": {"status": "operational", "checked_at": 1_797_000_000, "last_activity_at": None},
+            "knmi_mqtt": {
+                "status": "operational",
+                "checked_at": 1_797_000_000,
+                "last_activity_at": 1_796_999_900,
+            },
+            "knmi_opendata": {
+                "status": "operational",
+                "checked_at": 1_797_000_000,
+                "last_activity_at": None,
+            },
+        }
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        with patch.object(app_module, "get_service_statuses", return_value=states):
+            response = client.get("/it-systemen")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertIn("All systems operational", html)
+        self.assertIn("Last checked:", html)
+        self.assertIn("Last KNMI notification:", html)
 
     def test_favicon_keeps_compatibility_urls_and_is_small(self):
         client = app.test_client()
@@ -236,6 +280,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(dutch_response.status_code, 200)
         self.assertIn("Server- en websitebezoeklogs", dutch_html)
         self.assertIn('href="/gdpr"', dutch_html)
+        self.assertIn('href="/it-systemen"', dutch_html)
         self.assertIn(">EU GDPR</a>", dutch_html)
 
         client.post("/language", data=csrf_data(client, language="EN"))

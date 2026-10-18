@@ -187,6 +187,43 @@ def topic_passed(correct, total):
     return (correct / total) * 100 >= 60
 
 
+def _allocate_evenly(capacities, amount):
+    """Allocate an amount across sorted keys, redistributing any capacity shortfall."""
+    keys = sorted(capacities)
+    allocations = {key: 0 for key in keys}
+    total = min(amount, sum(capacities.values()))
+    if not keys or total <= 0:
+        return allocations, 0
+
+    base, remainder = divmod(total, len(keys))
+    for index, key in enumerate(keys):
+        extra = 1 if index < remainder else 0
+        allocations[key] = min(base + extra, capacities[key])
+
+    remaining = total - sum(allocations.values())
+    for key in keys:
+        extra = min(remaining, capacities[key] - allocations[key])
+        allocations[key] += extra
+        remaining -= extra
+        if remaining == 0:
+            break
+
+    return allocations, total
+
+
+def distribute_question_counts(available_by_topic, amount):
+    """Balance a requested question count across topics and their subtopics."""
+    topic_capacities = {
+        topic: sum(subtopic_counts.values())
+        for topic, subtopic_counts in available_by_topic.items()
+    }
+    topic_targets, selected_total = _allocate_evenly(topic_capacities, amount)
+    counts = {}
+    for topic, subtopic_counts in available_by_topic.items():
+        counts[topic], _ = _allocate_evenly(subtopic_counts, topic_targets[topic])
+    return counts, selected_total
+
+
 def build_question_groups(questions):
     """Group rendered questions by topic for topic-based exam UI."""
     grouped = {}

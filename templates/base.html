@@ -97,7 +97,10 @@
     <footer class="site-footer">
         <div class="container footer-inner">
             <span>{{ t('Gemaakt door Alex Brittmann') }}</span>
-            <a class="footer-legal-link" href="{{ url_for('gdpr') }}">EU GDPR</a>
+            <div class="footer-actions">
+                <a class="footer-legal-link" href="{{ url_for('gdpr') }}">EU GDPR</a>
+                <a class="footer-legal-link" href="{{ url_for('it_systems_status') }}">{{ t('IT-systemen') }}</a>
+            </div>
         </div>
     </footer>
 

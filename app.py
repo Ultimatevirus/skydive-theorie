@@ -8,7 +8,7 @@ import smtplib
 import sqlite3
 import time
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from threading import Thread
 
@@ -16,6 +16,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from flask import (
     Flask,
+    abort,
     redirect,
     render_template,
     request,
@@ -24,7 +25,8 @@ from flask import (
     url_for,
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
-from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
+from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed, parse_metar
+from system_status import get_service_statuses
 import taf as taf_module
 from taf import TafError, get_daily_taf
 from quiz import (
@@ -32,6 +34,7 @@ from quiz import (
     build_question_groups,
     calculate_grade,
     display_answer_value,
+    distribute_question_counts,
     format_elapsed,
     is_passed,
     normalize_answer_value,
@@ -69,7 +72,7 @@ if (
 
 ACCESS_TOKEN_LIFETIME = timedelta(days=int(os.getenv("ACCESS_TOKEN_LIFETIME_DAYS", "7")))
 app.config["PERMANENT_SESSION_LIFETIME"] = ACCESS_TOKEN_LIFETIME
-GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "favicon", "robots_txt", "sitemap_xml", "static", "gdpr"}
+GATE_EXEMPT_ENDPOINTS = {"access_gate", "healthz", "it_systems_status", "favicon", "robots_txt", "sitemap_xml", "static", "gdpr"}
 _missing_access_code_warned = False
 
 
@@ -297,9 +300,6 @@ def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL
         ).fetchall()
     conn.close()
 
-    if not topic_rows:
-        return {}, 0
-
     available_by_topic = {}
     for row in topic_rows:
         topic = row["topic"]
@@ -307,77 +307,7 @@ def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL
         available_by_topic.setdefault(topic, {})
         available_by_topic[topic][subtopic] = row["c"]
 
-    topic_names = sorted(available_by_topic)
-    total_available = sum(
-        sum(subtopic_counts.values())
-        for subtopic_counts in available_by_topic.values()
-    )
-    selected_total = min(amount, total_available)
-
-    if selected_total <= 0:
-        empty_counts = {
-            topic: {subtopic: 0 for subtopic in sorted(subtopics)}
-            for topic, subtopics in available_by_topic.items()
-        }
-        return empty_counts, 0
-
-    counts = {
-        topic: {subtopic: 0 for subtopic in sorted(subtopics)}
-        for topic, subtopics in available_by_topic.items()
-    }
-
-    topic_targets = {topic: 0 for topic in topic_names}
-    base = selected_total // len(topic_names)
-    remainder = selected_total % len(topic_names)
-    for index, topic in enumerate(topic_names):
-        topic_total = sum(available_by_topic[topic].values())
-        topic_targets[topic] = min(
-            base + (1 if index < remainder else 0),
-            topic_total,
-        )
-
-    used = sum(topic_targets.values())
-    if used < selected_total:
-        for topic in topic_names:
-            free_space = sum(available_by_topic[topic].values()) - topic_targets[topic]
-            if free_space > 0:
-                extra = min(selected_total - used, free_space)
-                topic_targets[topic] += extra
-                used += extra
-                if used >= selected_total:
-                    break
-
-    for topic in topic_names:
-        target = topic_targets.get(topic, 0)
-        if target <= 0:
-            continue
-
-        subtopics = sorted(available_by_topic[topic])
-        subtopic_base = target // len(subtopics)
-        subtopic_remainder = target % len(subtopics)
-
-        for index, subtopic in enumerate(subtopics):
-            available = available_by_topic[topic].get(subtopic, 0)
-            counts[topic][subtopic] = min(
-                subtopic_base + (1 if index < subtopic_remainder else 0),
-                available,
-            )
-
-        topic_used = sum(counts[topic].values())
-        if topic_used < target:
-            for subtopic in subtopics:
-                free_space = (
-                    available_by_topic[topic].get(subtopic, 0)
-                    - counts[topic].get(subtopic, 0)
-                )
-                if free_space > 0:
-                    extra = min(target - topic_used, free_space)
-                    counts[topic][subtopic] += extra
-                    topic_used += extra
-                    if topic_used >= target:
-                        break
-
-    return counts, selected_total
+    return distribute_question_counts(available_by_topic, amount)
 
 
 def fetch_questions(level, amount, selected_topics=None, language="NL"):
@@ -507,6 +437,76 @@ def favicon():
 @app.route("/healthz")
 def healthz():
     return {"status": "ok"}, 200
+
+
+@app.route("/it-systemen")
+def it_systems_status():
+    states = get_service_statuses()
+    services = [
+        {
+            "name": "SMTP",
+            "description": "E-mailverbinding voor het contactformulier.",
+            **states.get("smtp", {"status": "unknown", "checked_at": None}),
+        },
+        {
+            "name": "KNMI Notification Service (MQTT)",
+            "description": "Meldingen voor nieuwe KNMI METAR-bestanden.",
+            **states.get("knmi_mqtt", {"status": "unknown", "checked_at": None}),
+        },
+        {
+            "name": "KNMI Open Data API",
+            "description": "Ophalen van METAR-gegevens uit KNMI Open Data.",
+            **states.get("knmi_opendata", {"status": "unknown", "checked_at": None}),
+        },
+    ]
+    for service in services:
+        checked_at = service["checked_at"]
+        service["checked_at_iso"] = (
+            datetime.fromtimestamp(checked_at, timezone.utc).isoformat(timespec="minutes")
+            if checked_at is not None
+            else None
+        )
+        service["checked_at_display"] = (
+            datetime.fromtimestamp(checked_at, timezone.utc).strftime("%d-%m-%Y %H:%M UTC")
+            if checked_at is not None
+            else None
+        )
+        activity_at = service.get("last_activity_at")
+        service["last_activity_iso"] = (
+            datetime.fromtimestamp(activity_at, timezone.utc).isoformat(timespec="minutes")
+            if activity_at is not None
+            else None
+        )
+        service["last_activity_display"] = (
+            datetime.fromtimestamp(activity_at, timezone.utc).strftime("%d-%m-%Y %H:%M UTC")
+            if activity_at is not None
+            else None
+        )
+
+    statuses = {service["status"] for service in services}
+    if statuses == {"operational"}:
+        overall_status = "operational"
+        overall_label = "Alle systemen operationeel"
+    elif "outage" in statuses:
+        overall_status = "outage"
+        overall_label = "Er is een storing bij een of meer diensten"
+    elif "not_configured" in statuses:
+        overall_status = "unknown"
+        overall_label = "Niet alle diensten zijn geconfigureerd"
+    else:
+        overall_status = "unknown"
+        overall_label = "Status wordt gecontroleerd"
+
+    response = app.make_response(
+        render_template(
+            "it_systems.html",
+            services=services,
+            overall_status=overall_status,
+            overall_label=overall_label,
+        )
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @app.route("/robots.txt")
@@ -734,8 +734,16 @@ def metar_refresh_enabled():
 
 @app.route("/metar")
 def metar_choice():
-    """Let the user choose between parsing a METAR and practising abbreviations."""
-    return render_template("metar_choice.html")
+    """Let the user choose between parsing reports and practising abbreviations."""
+    return render_template("metar_choice.html", practice_mode=None)
+
+
+@app.route("/metar/keuze/<practice_mode>")
+def metar_type_choice(practice_mode):
+    """Let the user choose whether to practise METARs or TAFs."""
+    if practice_mode not in {"ontleden", "afkortingen"}:
+        abort(404)
+    return render_template("metar_choice.html", practice_mode=practice_mode)
 
 
 @app.route("/metar/afkortingen", methods=["GET", "POST"])
@@ -795,6 +803,13 @@ def metar_practice():
     if selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
         metar = None
+    elif checking and attempt_state and attempt_state.get("raw"):
+        metar = parse_metar(attempt_state["raw"])
+        metar.update({
+            "airport": selected_airport,
+            "airport_name": DUTCH_AIRPORTS[selected_airport],
+            "date": attempt_state.get("date"),
+        })
     else:
         try:
             metar = get_daily_metar(
@@ -819,7 +834,12 @@ def metar_practice():
             seed = new_question_seed()
             session["metar_seed"] = seed
             session["metar_attempt_id"] = attempt_id
-            attempts[attempt_id] = {"airport": selected_airport, "seed": seed}
+            attempts[attempt_id] = {
+                "airport": selected_airport,
+                "seed": seed,
+                "raw": metar["raw"],
+                "date": metar.get("date"),
+            }
             session["metar_attempts"] = attempts
         questions = build_questions(metar, seed, language, definitions)
         if checking:
@@ -898,6 +918,13 @@ def taf_practice():
 
     if selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
+    elif checking and attempt_state and attempt_state.get("raw"):
+        taf = taf_module.parse_taf(attempt_state["raw"])
+        taf.update({
+            "airport": selected_airport,
+            "airport_name": DUTCH_AIRPORTS[selected_airport],
+            "date": attempt_state.get("date"),
+        })
     else:
         try:
             taf = get_daily_taf(
@@ -918,7 +945,12 @@ def taf_practice():
             seed = new_question_seed()
             session["taf_seed"] = seed
             session["taf_attempt_id"] = attempt_id
-            attempts[attempt_id] = {"airport": selected_airport, "seed": seed}
+            attempts[attempt_id] = {
+                "airport": selected_airport,
+                "seed": seed,
+                "raw": taf["raw"],
+                "date": taf.get("date"),
+            }
             session["taf_attempts"] = attempts
         questions = taf_module.build_questions(taf, seed, language, definitions)
         if checking:
