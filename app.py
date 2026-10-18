@@ -25,7 +25,7 @@ from flask import (
     url_for,
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
-from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed
+from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed, parse_metar
 from system_status import get_service_statuses
 import taf as taf_module
 from taf import TafError, get_daily_taf
@@ -803,6 +803,13 @@ def metar_practice():
     if selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
         metar = None
+    elif checking and attempt_state and attempt_state.get("raw"):
+        metar = parse_metar(attempt_state["raw"])
+        metar.update({
+            "airport": selected_airport,
+            "airport_name": DUTCH_AIRPORTS[selected_airport],
+            "date": attempt_state.get("date"),
+        })
     else:
         try:
             metar = get_daily_metar(
@@ -827,7 +834,12 @@ def metar_practice():
             seed = new_question_seed()
             session["metar_seed"] = seed
             session["metar_attempt_id"] = attempt_id
-            attempts[attempt_id] = {"airport": selected_airport, "seed": seed}
+            attempts[attempt_id] = {
+                "airport": selected_airport,
+                "seed": seed,
+                "raw": metar["raw"],
+                "date": metar.get("date"),
+            }
             session["metar_attempts"] = attempts
         questions = build_questions(metar, seed, language, definitions)
         if checking:
@@ -906,6 +918,13 @@ def taf_practice():
 
     if selected_airport not in DUTCH_AIRPORTS:
         error = "Kies een Nederlandse luchthaven uit de lijst."
+    elif checking and attempt_state and attempt_state.get("raw"):
+        taf = taf_module.parse_taf(attempt_state["raw"])
+        taf.update({
+            "airport": selected_airport,
+            "airport_name": DUTCH_AIRPORTS[selected_airport],
+            "date": attempt_state.get("date"),
+        })
     else:
         try:
             taf = get_daily_taf(
@@ -926,7 +945,12 @@ def taf_practice():
             seed = new_question_seed()
             session["taf_seed"] = seed
             session["taf_attempt_id"] = attempt_id
-            attempts[attempt_id] = {"airport": selected_airport, "seed": seed}
+            attempts[attempt_id] = {
+                "airport": selected_airport,
+                "seed": seed,
+                "raw": taf["raw"],
+                "date": taf.get("date"),
+            }
             session["taf_attempts"] = attempts
         questions = taf_module.build_questions(taf, seed, language, definitions)
         if checking:

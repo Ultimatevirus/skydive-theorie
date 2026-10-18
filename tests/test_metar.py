@@ -481,6 +481,33 @@ class MetarRouteTests(unittest.TestCase):
         self.assertIn("EHAM · Amsterdam Schiphol", html)
         self.assertNotIn("EHRD · Rotterdam The Hague", html)
 
+    def test_grading_uses_the_metar_shown_when_the_attempt_started(self):
+        original = parse_metar(REPORT)
+        original.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
+        refreshed = parse_metar("EHAM 021300Z 18005KT 8000 RA BKN010 10/09 Q1000")
+        refreshed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
+        client = app.test_client()
+
+        with patch.object(app_module, "get_daily_metar", side_effect=[original, refreshed]) as get_metar, patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            client.get("/metar/ontleden?airport=EHAM")
+            with client.session_transaction() as session:
+                attempt_id = session["metar_attempt_id"]
+                seed = session["metar_seed"]
+            answers = {f"q_{q['field']}": q["correct"] for q in make_questions(original, seed)}
+            response = client.post(
+                "/metar/ontleden",
+                data=csrf_data(client, airport="EHAM", attempt_id=attempt_id, action="check", **answers),
+            )
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(REPORT, html)
+        self.assertNotIn(refreshed["raw"], html)
+        self.assertIn(f"{len(answers)} / {len(answers)}", html)
+        get_metar.assert_called_once()
+
     def test_unanswered_questions_are_marked_and_counted_wrong(self):
         parsed = parse_metar(REPORT)
         parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})

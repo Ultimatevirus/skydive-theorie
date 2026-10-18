@@ -364,3 +364,34 @@ class TafRouteTests(unittest.TestCase):
             html_eham = res_eham.get_data(as_text=True)
             self.assertIn("EHAM · Amsterdam Schiphol", html_eham)
             self.assertNotIn("EHLE · Lelystad", html_eham)
+
+    def test_grading_uses_the_taf_shown_when_the_attempt_started(self):
+        import app as app_module
+        from app import app
+        from metar import DUTCH_AIRPORTS
+
+        original = parse_taf(REPORT)
+        original.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-10-12"})
+        refreshed = parse_taf("TAF EHAM 121200Z 1212/1318 18005KT 8000 BKN010 TEMPO 1214/1218 RA")
+        refreshed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-10-12"})
+        client = app.test_client()
+
+        with patch.object(app_module, "get_daily_taf", side_effect=[original, refreshed]) as get_taf, patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            client.get("/taf/ontleden?airport=EHAM")
+            with client.session_transaction() as session:
+                attempt_id = session["taf_attempt_id"]
+                seed = session["taf_seed"]
+            answers = {f"q_{q['field']}": q["correct"] for q in make_taf_questions(original, seed)}
+            response = client.post(
+                "/taf/ontleden",
+                data=csrf_data(client, airport="EHAM", attempt_id=attempt_id, action="check", **answers),
+            )
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("TAF EHAM 121100Z 1212/1318", html)
+        self.assertNotIn("TAF EHAM 121200Z 1212/1318", html)
+        self.assertIn(f"{len(answers)} / {len(answers)}", html)
+        get_taf.assert_called_once()
