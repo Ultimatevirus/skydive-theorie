@@ -508,6 +508,48 @@ class MetarRouteTests(unittest.TestCase):
         self.assertIn(f"{len(answers)} / {len(answers)}", html)
         get_metar.assert_called_once()
 
+    def test_practice_attempt_snapshots_are_bounded_in_the_session(self):
+        parsed = parse_metar(REPORT)
+        parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
+        client = app.test_client()
+
+        with patch.object(app_module, "get_daily_metar", return_value=parsed) as get_metar, patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            client.get("/metar/ontleden?airport=EHAM")
+            with client.session_transaction() as session:
+                expired_attempt_id = session["metar_attempt_id"]
+                csrf_token = session["csrf_token"]
+
+            for index in range(12):
+                response = client.post(
+                    "/metar/ontleden",
+                    data={
+                        "csrf_token": csrf_token,
+                        "action": "load",
+                        "airport": "EHAM",
+                        "attempt_id": f"{index:032x}",
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertLessEqual(len(response.headers["Set-Cookie"]), app.config["MAX_COOKIE_SIZE"])
+
+            with client.session_transaction() as session:
+                self.assertEqual(len(session["metar_attempts"]), app_module.MAX_PRACTICE_ATTEMPTS)
+
+            expired = client.post(
+                "/metar/ontleden",
+                data=csrf_data(
+                    client,
+                    airport="EHAM",
+                    attempt_id=expired_attempt_id,
+                    action="check",
+                ),
+            )
+
+        self.assertIn("Deze oefening is verlopen", expired.get_data(as_text=True))
+        self.assertEqual(get_metar.call_count, 13)
+
     def test_unanswered_questions_are_marked_and_counted_wrong(self):
         parsed = parse_metar(REPORT)
         parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})

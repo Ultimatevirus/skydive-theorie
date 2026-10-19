@@ -395,3 +395,49 @@ class TafRouteTests(unittest.TestCase):
         self.assertNotIn("TAF EHAM 121200Z 1212/1318", html)
         self.assertIn(f"{len(answers)} / {len(answers)}", html)
         get_taf.assert_called_once()
+
+    def test_practice_attempt_snapshots_are_bounded_in_the_session(self):
+        import app as app_module
+        from app import app
+        from metar import DUTCH_AIRPORTS
+
+        parsed = parse_taf(REPORT)
+        parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-10-12"})
+        client = app.test_client()
+
+        with patch.object(app_module, "get_daily_taf", return_value=parsed) as get_taf, patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            client.get("/taf/ontleden?airport=EHAM")
+            with client.session_transaction() as session:
+                expired_attempt_id = session["taf_attempt_id"]
+                csrf_token = session["csrf_token"]
+
+            for index in range(12):
+                response = client.post(
+                    "/taf/ontleden",
+                    data={
+                        "csrf_token": csrf_token,
+                        "action": "load",
+                        "airport": "EHAM",
+                        "attempt_id": f"{index:032x}",
+                    },
+                )
+                self.assertEqual(response.status_code, 200)
+                self.assertLessEqual(len(response.headers["Set-Cookie"]), app.config["MAX_COOKIE_SIZE"])
+
+            with client.session_transaction() as session:
+                self.assertEqual(len(session["taf_attempts"]), app_module.MAX_PRACTICE_ATTEMPTS)
+
+            expired = client.post(
+                "/taf/ontleden",
+                data={
+                    "csrf_token": csrf_token,
+                    "airport": "EHAM",
+                    "attempt_id": expired_attempt_id,
+                    "action": "check",
+                },
+            )
+
+        self.assertIn("Deze oefening is verlopen", expired.get_data(as_text=True))
+        self.assertEqual(get_taf.call_count, 13)

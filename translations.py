@@ -224,6 +224,7 @@ TRANSLATIONS = {
         "De TAF-ophaling is onverwacht gestopt.": "The TAF retrieval stopped unexpectedly.",
         "Er wordt al een TAF opgehaald. Probeer het zo opnieuw.": "A TAF is already being fetched. Please try again shortly.",
         "Je formulier is verlopen. Vernieuw de pagina en probeer het opnieuw.": "Your form has expired. Refresh the page and try again.",
+        "Deze oefening is verlopen. Laad opnieuw om verder te oefenen.": "This exercise has expired. Reload to continue practising.",
         "Site in ontwikkeling": "Site under construction",
         "Deze site bevindt zich nog in de testfase en is alleen toegankelijk voor uitgenodigde testers. Voer je toegangscode in om verder te gaan.": "This site is still in the testing phase and is only accessible to invited testers. Enter your access code to continue.",
         "Toegangscode": "Access code",
