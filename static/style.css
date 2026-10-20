@@ -1164,6 +1164,68 @@ textarea {
     background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
 
+.image-source-box {
+    box-sizing: border-box;
+    width: fit-content;
+    max-width: 100%;
+    margin: 18px 0;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: linear-gradient(180deg, var(--card), var(--bg-2));
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+    text-align: center;
+}
+
+.image-source-box img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 480px;
+    margin: 0 auto;
+    border-radius: 10px;
+    object-fit: contain;
+}
+
+.image-source {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    margin: 10px 2px 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.image-source-label {
+    color: var(--text);
+    font-weight: 700;
+}
+
+.image-source a {
+    color: var(--primary-dark);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+.image-source a:hover {
+    color: var(--primary);
+}
+
+.image-source a:focus-visible {
+    border-radius: 3px;
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+:root[data-theme="dark"] .image-source a {
+    color: var(--primary);
+}
+
 .topic-group {
     border: 1px solid var(--border);
     border-radius: 18px;

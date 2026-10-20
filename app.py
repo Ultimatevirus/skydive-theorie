@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from threading import Thread
+from urllib.parse import urlsplit
 
 from werkzeug.middleware.proxy_fix import ProxyFix
 
@@ -286,6 +287,30 @@ def get_db_connection():
     return connect_db(path=get_db_path(), row_factory=sqlite3.Row)
 
 
+def _question_query_schema(conn):
+    """Return the question SELECT and join details supported by this database."""
+    question_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()
+    }
+    has_image_sources = (
+        "image_key" in question_columns
+        and conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'image_source'"
+        ).fetchone()
+        is not None
+    )
+    if has_image_sources:
+        return (
+            "questions.rowid AS id, questions.*, "
+            "image_source.image_local_source AS image_local_source, "
+            "image_source.image_original_source AS image_original_source",
+            "questions LEFT JOIN image_source "
+            "ON image_source.image_key = questions.image_key",
+            "questions.",
+        )
+    return "rowid AS id, *", "questions", ""
+
+
 def get_available_topics(level, language="NL"):
     """Return all active topics for the selected exam level."""
     conn = get_db_connection()
@@ -355,14 +380,18 @@ def fetch_questions(level, amount, selected_topics=None, language="NL"):
         return []
 
     conn = get_db_connection()
-    language_clause, language_params = language_filter(conn, language)
+    language_clause, language_params = language_filter(
+        conn, language, prefix="questions."
+    )
+    select_columns, question_source, column_prefix = _question_query_schema(conn)
     topic_names = list(topic_counts)
     placeholders = ", ".join("?" for _ in topic_names)
     rows = conn.execute(
         f"""
-        SELECT rowid AS id, *
-        FROM questions
-        WHERE level = ? AND topic IN ({placeholders}) AND is_active = 1{language_clause}
+        SELECT {select_columns}
+        FROM {question_source}
+        WHERE {column_prefix}level = ? AND {column_prefix}topic IN ({placeholders})
+            AND {column_prefix}is_active = 1{language_clause}
         """,
         (level, *topic_names, *language_params),
     ).fetchall()
@@ -396,12 +425,16 @@ def fetch_questions_by_ids(level, question_ids, language="NL"):
 
     placeholders = ", ".join("?" for _ in normalized_ids)
     conn = get_db_connection()
-    language_clause, language_params = language_filter(conn, language)
+    language_clause, language_params = language_filter(
+        conn, language, prefix="questions."
+    )
+    select_columns, question_source, column_prefix = _question_query_schema(conn)
     rows = conn.execute(
         f"""
-        SELECT rowid AS id, *
-        FROM questions
-        WHERE level = ? AND rowid IN ({placeholders}) AND is_active = 1{language_clause}
+        SELECT {select_columns}
+        FROM {question_source}
+        WHERE {column_prefix}level = ? AND {column_prefix}rowid IN ({placeholders})
+            AND {column_prefix}is_active = 1{language_clause}
         """,
         (level, *normalized_ids, *language_params),
     ).fetchall()
@@ -431,13 +464,24 @@ def render_question(row, level, language="NL"):
         row["false_answers"], row["true_answer"], level=level, language=language
     )
 
+    image_source = get_row_value(row, "image_original_source")
+    if image_source is not None:
+        image_source = str(image_source).strip() or None
+    local_image_source = get_row_value(row, "image_local_source")
+    if not local_image_source:
+        local_image_source = get_row_value(
+            row, "image_key", get_row_value(row, "image_link")
+        )
+
     return {
         "id": row["id"],
         "question": row["question"],
         "topic": row["topic"],
         "options": option_map,
         "is_yes_no": level == "A",
-        "image_url": get_question_image_url(get_row_value(row, "image_link")),
+        "image_url": get_question_image_url(local_image_source),
+        "image_original_source": image_source,
+        "image_original_source_url": get_http_url(image_source),
     }
 
 
@@ -1222,6 +1266,15 @@ def exam():
                 topic_scores[topic]["correct"] += 1
 
             topic_scores[topic]["total"] += 1
+            image_original_source = get_row_value(
+                row, "image_original_source"
+            )
+            if image_original_source is not None:
+                image_original_source = str(image_original_source).strip() or None
+            image_local_source = (
+                get_row_value(row, "image_local_source")
+                or get_row_value(row, "image_key", get_row_value(row, "image_link"))
+            )
 
             results.append(
                 {
@@ -1232,9 +1285,11 @@ def exam():
                     "is_correct": is_correct,
                     "is_unanswered": is_unanswered,
                     "source": get_row_value(row, "source"),
-                    "image_url": get_question_image_url(
-                        get_row_value(row, "image_link")
+                    "image_original_source": image_original_source,
+                    "image_original_source_url": get_http_url(
+                        image_original_source
                     ),
+                    "image_url": get_question_image_url(image_local_source),
                 }
             )
 
@@ -1313,6 +1368,19 @@ def get_question_image_url(image_link):
         return asset_url(normalized)
 
     return None
+
+
+def get_http_url(value):
+    """Return an HTTP(S) URL for safe linking, or None for plain source text."""
+    if not value:
+        return None
+    try:
+        parsed = urlsplit(str(value).strip())
+    except ValueError:
+        return None
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.netloc:
+        return None
+    return str(value).strip()
 
 
 # purely for local development, gunicorn will be used in production

@@ -46,9 +46,19 @@
                             </div>
 
                             {% if question.image_url %}
-                                <div class="question-image">
-                                    <img src="{{ question.image_url }}" loading="lazy" decoding="async" alt="{{ t('Vraagafbeelding') }}" style="max-width: 100%; height: auto; margin: 10px 0;">
-                                </div>
+                                <figure class="question-image image-source-box">
+                                    <img src="{{ question.image_url }}" loading="eager" decoding="async" alt="{{ t('Vraagafbeelding') }}">
+                                    {% if question.image_original_source %}
+                                        <figcaption class="image-source">
+                                            <span class="image-source-label">{{ t('Bron:') }}</span>
+                                            {% if question.image_original_source_url %}
+                                                <a href="{{ question.image_original_source_url }}" target="_blank" rel="noopener noreferrer">{{ question.image_original_source }}</a>
+                                            {% else %}
+                                                <span>{{ question.image_original_source }}</span>
+                                            {% endif %}
+                                        </figcaption>
+                                    {% endif %}
+                                </figure>
                             {% endif %}
 
                             {% if question.is_yes_no %}

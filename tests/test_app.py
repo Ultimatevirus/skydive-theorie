@@ -520,6 +520,160 @@ class PracticeFlowTests(unittest.TestCase):
             if os.path.exists(db_path):
                 os.remove(db_path)
 
+    def test_practice_images_show_localized_original_source(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.executescript(
+            """
+            CREATE TABLE image_source (
+                image_key TEXT PRIMARY KEY,
+                image_full_name TEXT NOT NULL,
+                image_local_source TEXT,
+                image_original_source TEXT,
+                start_date TEXT,
+                end_date TEXT
+            );
+            INSERT INTO image_source VALUES (
+                'example-image',
+                'Example image',
+                '/question_images/example.jpg',
+                'https://source.example/image',
+                NULL,
+                NULL
+            );
+            CREATE TABLE questions (
+                Key INTEGER PRIMARY KEY,
+                level TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                language TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT,
+                image_key TEXT REFERENCES image_source(image_key)
+            );
+            INSERT INTO questions VALUES (
+                1, 'A', 'Materiaal', 'Harnas', 'NL', 1,
+                'Nederlandse vraag', 'Ja', '[]', 'example-image'
+            );
+            INSERT INTO questions VALUES (
+                2, 'A', 'Equipment', 'Harness', 'EN', 1,
+                'English question', 'Yes', '[]', 'example-image'
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        try:
+            for language, expected_attribution, expected_question in (
+                ("NL", "Bron: https://source.example/image", "Nederlandse vraag"),
+                ("EN", "Source: https://source.example/image", "English question"),
+            ):
+                client = app.test_client()
+                with client.session_transaction() as session:
+                    session.update(
+                        {
+                            "language": language,
+                            "level": "A",
+                            "question_amount": 1,
+                            "selected_topics": None,
+                        }
+                    )
+
+                app_module._language_column_cache.clear()
+                with patch.object(app_module, "get_db_path", return_value=db_path):
+                    response = client.get("/exam")
+
+                html = response.get_data(as_text=True)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(expected_question, html)
+                expected_label, expected_source = expected_attribution.split(": ", 1)
+                self.assertIn(expected_label, html)
+                self.assertIn(expected_source, html)
+                self.assertIn(
+                    '<a href="https://source.example/image" target="_blank" '
+                    'rel="noopener noreferrer">https://source.example/image</a>',
+                    html,
+                )
+                self.assertIn("/static/question_images/example.jpg", html)
+
+                with client.session_transaction() as session:
+                    question_id = session["exam_question_ids"][0]
+                wrong_answer = "Nee" if language == "NL" else "No"
+                with patch.object(app_module, "get_db_path", return_value=db_path):
+                    result_response = client.post(
+                        "/exam",
+                        data=csrf_data(
+                            client, **{f"answer_{question_id}": wrong_answer}
+                        ),
+                    )
+
+                result_html = result_response.get_data(as_text=True)
+                self.assertEqual(result_response.status_code, 200)
+                self.assertIn(expected_label, result_html)
+                self.assertIn(expected_source, result_html)
+                self.assertIn(
+                    '<a href="https://source.example/image" target="_blank" '
+                    'rel="noopener noreferrer">https://source.example/image</a>',
+                    result_html,
+                )
+                self.assertIn("/static/question_images/example.jpg", result_html)
+
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                "UPDATE image_source SET image_original_source = ?",
+                ("Photographer credit",),
+            )
+            conn.commit()
+            conn.close()
+
+            client = app.test_client()
+            with client.session_transaction() as session:
+                session.update(
+                    {
+                        "language": "NL",
+                        "level": "A",
+                        "question_amount": 1,
+                        "selected_topics": None,
+                    }
+                )
+            app_module._language_column_cache.clear()
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                response = client.get("/exam")
+
+            html = response.get_data(as_text=True)
+            self.assertIn("Photographer credit", html)
+            self.assertNotIn('href="Photographer credit"', html)
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
+    def test_b_exam_image_assets_all_load(self):
+        with app.test_request_context("/"):
+            questions = app_module.fetch_questions("B", 64, language="NL")
+            image_urls = {
+                app_module.render_question(question, "B", "NL")["image_url"]
+                for question in questions
+            }
+        image_urls.discard(None)
+
+        self.assertTrue(image_urls)
+        client = app.test_client()
+        for image_url in image_urls:
+            response = client.get(image_url)
+            try:
+                self.assertEqual(response.status_code, 200, image_url)
+                self.assertTrue(
+                    response.content_type.startswith("image/"),
+                    (image_url, response.content_type),
+                )
+            finally:
+                response.close()
+
     def test_level_selection_redirects_to_mode_selection(self):
         client = app.test_client()
         response = client.post(

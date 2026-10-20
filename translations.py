@@ -80,6 +80,7 @@ TRANSLATIONS = {
         "Vragen": "Questions",
         "Verstreken tijd": "Elapsed time",
         "Vraagafbeelding": "Question image",
+        "Bron:": "Source:",
         "Vraag": "Question",
         "Controleer antwoorden": "Check answers",
         "Resultaat": "Result",

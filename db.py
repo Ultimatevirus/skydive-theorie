@@ -129,6 +129,13 @@ def initialize_database(seed_path=None, database_path=None):
         conn.execute("BEGIN IMMEDIATE")
         conn.execute("PRAGMA defer_foreign_keys=ON")
 
+        preserved_views = {
+            name: seed_object
+            for (object_type, name), seed_object in target_objects.items()
+            if object_type == "view"
+        }
+        views_dropped = False
+
         for (object_type, name), seed_object in seed_objects.items():
             if object_type != "table":
                 continue
@@ -136,11 +143,15 @@ def initialize_database(seed_path=None, database_path=None):
             sql = seed_object["sql"]
             existing_object = target_objects.get((object_type, name))
             existing_sql = existing_object["sql"] if existing_object else None
-            replace_table = name == "questions" or (
+            replace_table = name in {"questions", "image_source"} or (
                 existing_sql is not None and existing_sql != sql
             )
             if replace_table and existing_sql is not None:
                 replaced_tables.add(name)
+                if not views_dropped:
+                    for view_name in preserved_views:
+                        _drop_object(conn, "view", view_name)
+                    views_dropped = True
                 for (existing_type, existing_name), existing_object in list(target_objects.items()):
                     if existing_type == "index" and existing_name.startswith("sqlite_autoindex"):
                         continue
@@ -161,6 +172,9 @@ def initialize_database(seed_path=None, database_path=None):
             sql = seed_object["sql"]
             existing_object = target_objects.get((object_type, name))
             existing_sql = existing_object["sql"] if existing_object else None
+            if object_type == "view" and views_dropped:
+                conn.execute(sql)
+                continue
             table_was_replaced = (
                 object_type == "index"
                 and seed_object["table"] in replaced_tables
@@ -170,6 +184,15 @@ def initialize_database(seed_path=None, database_path=None):
             if existing_sql is not None:
                 _drop_object(conn, object_type, name)
             conn.execute(sql)
+
+        seed_view_names = {
+            name
+            for (object_type, name) in seed_objects
+            if object_type == "view"
+        }
+        for view_name, view_object in preserved_views.items():
+            if view_name not in seed_view_names:
+                conn.execute(view_object["sql"])
 
         _ensure_question_source_column(conn)
         conn.commit()
