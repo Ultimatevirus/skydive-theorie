@@ -15,16 +15,16 @@
         </div>
 
         <div class="choice-grid" aria-label="{{ t('Kies een onderwerp') }}">
-            <a href="{{ url_for('practice_category', category='algemeen') }}" class="choice-card option-card">
+            <a href="{{ url_for('practice_category', category='algemeen') }}" class="choice-card option-card category-card category-card--algemeen">
                 <span class="choice-label">{{ t('Algemeen') }}</span>
             </a>
-            <a href="{{ url_for('practice_category', category='regelementen') }}" class="choice-card option-card">
+            <a href="{{ url_for('practice_category', category='regelementen') }}" class="choice-card option-card category-card category-card--regelementen">
                 <span class="choice-label">{{ t('Regelementen') }}</span>
             </a>
-            <a href="{{ url_for('practice_category', category='meteo') }}" class="choice-card option-card">
+            <a href="{{ url_for('practice_category', category='meteo') }}" class="choice-card option-card category-card category-card--meteo">
                 <span class="choice-label">{{ t('Meteo') }}</span>
             </a>
-            <a href="{{ url_for('practice_category', category='material') }}" class="choice-card option-card">
+            <a href="{{ url_for('practice_category', category='material') }}" class="choice-card option-card category-card category-card--materiaal">
                 <span class="choice-label">{{ t('Materiaal') }}</span>
             </a>
         </div>

@@ -1079,6 +1079,43 @@ textarea {
     background: linear-gradient(135deg, #0d6d69 0%, #0e8b8d 100%);
 }
 
+.category-card {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.category-card::before {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background-image: linear-gradient(rgba(8, 24, 40, 0.48), rgba(8, 24, 40, 0.62)), var(--category-image);
+    background-position: center;
+    background-size: cover;
+    content: "";
+    transition: transform 180ms ease;
+}
+
+.category-card:hover::before {
+    transform: scale(1.04);
+}
+
+.category-card--algemeen {
+    --category-image: url("branding/parachutist.webp");
+}
+
+.category-card--regelementen {
+    --category-image: url("branding/airspace.webp");
+}
+
+.category-card--meteo {
+    --category-image: url("branding/meteo.webp");
+}
+
+.category-card--materiaal {
+    --category-image: url("branding/packing.webp");
+}
+
 .choice-label {
     display: block;
 }
