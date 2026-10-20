@@ -34,6 +34,8 @@ class PracticeFlowTests(unittest.TestCase):
     def test_recent_template_strings_are_in_english_translation_map(self):
         required = [
             "Oefenen voor je KNVvL A/B brevet",
+            "Op deze pagina vind je dynamische oefeningen om te oefenen voor de examens.",
+            "De dynamische oefeningen voor dit onderwerp worden hier verzameld.",
             "Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen!",
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
@@ -62,8 +64,35 @@ class PracticeFlowTests(unittest.TestCase):
             response.get_data(as_text=True),
         )
 
+    def test_oefenen_pages_link_to_categories_and_metar_taf_modes(self):
+        client = app.test_client()
+        client.post("/language", data=csrf_data(client, language="EN"))
+
+        home = client.get("/oefenen")
+        html = home.get_data(as_text=True)
+        self.assertEqual(home.status_code, 200)
+        self.assertIn(
+            "This page contains dynamic exercises to help you practice for the exams.",
+            html,
+        )
+        self.assertNotIn('href="/metar"', html)
+        for category in ("algemeen", "regelementen", "meteo", "material"):
+            self.assertIn(f'href="/oefenen/{category}"', html)
+
+        meteo = client.get("/oefenen/meteo")
+        self.assertEqual(meteo.status_code, 200)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF"', meteo.get_data(as_text=True))
+
+        metar_taf = client.get("/oefenen/meteo/METAR-TAF")
+        exercise_html = metar_taf.get_data(as_text=True)
+        self.assertEqual(metar_taf.status_code, 200)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/ontleden"', exercise_html)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/afkortingen"', exercise_html)
+
+        self.assertEqual(client.get("/oefenen/unknown").status_code, 404)
+
     def test_metar_practice_shows_report_in_question_and_original_panel(self):
-        metar = MagicMock(airport="EHAM", airport_name="Amsterdam", raw="EHAM 101425Z 24012KT")
+        metar = {"airport": "EHAM", "airport_name": "Amsterdam", "raw": "EHAM 101425Z 24012KT"}
         question = {
             "question": "What is the wind direction?",
             "options": ["240 degrees", "120 degrees"],
@@ -81,7 +110,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('class="metar-question-heading"', html)
         self.assertIn('metar-question-cell metar-question-report', html)
-        self.assertGreaterEqual(html.count(metar.raw), 2)
+        self.assertGreaterEqual(html.count(metar["raw"]), 2)
 
     def test_taf_practice_shows_multiline_report(self):
         taf = taf_module.parse_taf(
@@ -141,9 +170,9 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("<mark>", page.get_data(as_text=True))
         self.assertIn("METAR/TAF oefenen", choice)
         self.assertIn("Wil je ontleden oefenen of afkortingen?", choice)
-        self.assertIn('href="/metar/keuze/ontleden"', choice)
-        self.assertIn('href="/metar/keuze/afkortingen"', choice)
-        self.assertNotIn('href="/metar/ontleden"', choice)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/ontleden"', choice)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/afkortingen"', choice)
+        self.assertNotIn('href="/oefenen/meteo/METAR-TAF/ontleden"', choice)
 
     def test_metar_type_choice_shows_only_report_types_for_selected_mode(self):
         client = app.test_client()
@@ -152,12 +181,12 @@ class PracticeFlowTests(unittest.TestCase):
         abbreviations = client.get("/metar/keuze/afkortingen").get_data(as_text=True)
 
         self.assertIn("Wil je METAR&#39;s of TAF&#39;s oefenen?", parsing)
-        self.assertIn('href="/metar/ontleden"', parsing)
-        self.assertIn('href="/taf/ontleden"', parsing)
-        self.assertNotIn('href="/metar/afkortingen"', parsing)
-        self.assertIn('href="/metar/afkortingen"', abbreviations)
-        self.assertIn('href="/taf/afkortingen"', abbreviations)
-        self.assertNotIn('href="/metar/ontleden"', abbreviations)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/ontleden"', parsing)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/taf/ontleden"', parsing)
+        self.assertNotIn('href="/oefenen/meteo/METAR-TAF/afkortingen"', parsing)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/afkortingen"', abbreviations)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/taf/afkortingen"', abbreviations)
+        self.assertNotIn('href="/oefenen/meteo/METAR-TAF/ontleden"', abbreviations)
         self.assertEqual(client.get("/metar/keuze/invalid").status_code, 404)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
@@ -220,7 +249,7 @@ class PracticeFlowTests(unittest.TestCase):
         ico_response = client.get("/favicon.ico")
         home_html = client.get("/").get_data(as_text=True)
         static_response = client.get(
-            "/static/branding/skydive-theorie-favicon.svg"
+            "/static/icons/book-solid-full.svg"
         )
 
         self.assertEqual(svg_response.status_code, 200)
@@ -229,7 +258,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn(b"<svg ", svg_response.data)
         self.assertEqual(ico_response.status_code, 200)
         self.assertIn(
-            'href="/static/branding/skydive-theorie-favicon.svg?v=',
+            'href="/static/icons/book-solid-full.svg?v=',
             home_html,
         )
         self.assertEqual(static_response.status_code, 200)

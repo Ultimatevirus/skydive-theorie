@@ -371,6 +371,12 @@ textarea:focus-visible {
     stroke-linejoin: round;
 }
 
+.nav-icon-solid {
+    background-color: currentColor;
+    -webkit-mask: url("icons/book-solid-full.svg") center / contain no-repeat;
+    mask: url("icons/book-solid-full.svg") center / contain no-repeat;
+}
+
 .nav-link {
     display: inline-flex;
     align-items: center;

@@ -506,7 +506,7 @@ def start_exam(level, question_amount, selected_topics=None):
 @app.route("/favicon.ico")
 def favicon():
     """Serve a high-contrast favicon for the browser tab."""
-    icon_path = os.path.join(app.root_path, "static", "branding", "skydive-theorie-favicon.svg")
+    icon_path = os.path.join(app.root_path, "static", "icons", "book-solid-full.svg")
     response = send_file(icon_path, mimetype="image/svg+xml")
     response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
@@ -696,6 +696,27 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/oefenen")
+def oefenen():
+    """Render the overview of practice categories."""
+    return render_template("oefenen.html")
+
+
+@app.route("/oefenen/<category>")
+def practice_category(category):
+    """Render a practice category page."""
+    categories = {
+        "algemeen": "Algemeen",
+        "regelementen": "Regelementen",
+        "meteo": "Meteo",
+        "material": "Materiaal",
+    }
+    title = categories.get(category)
+    if title is None:
+        abort(404)
+    return render_template("practice_category.html", category=category, title=title)
+
+
 @app.route("/practice")
 def practice():
     """Render the first practice selection step: choose the brevet level."""
@@ -811,12 +832,14 @@ def metar_refresh_enabled():
 
 
 @app.route("/metar")
+@app.route("/oefenen/meteo/METAR-TAF")
 def metar_choice():
     """Let the user choose between parsing reports and practising abbreviations."""
     return render_template("metar_choice.html", practice_mode=None)
 
 
 @app.route("/metar/keuze/<practice_mode>")
+@app.route("/oefenen/meteo/METAR-TAF/keuze/<practice_mode>")
 def metar_type_choice(practice_mode):
     """Let the user choose whether to practise METARs or TAFs."""
     if practice_mode not in {"ontleden", "afkortingen"}:
@@ -825,6 +848,7 @@ def metar_type_choice(practice_mode):
 
 
 @app.route("/metar/afkortingen", methods=["GET", "POST"])
+@app.route("/oefenen/meteo/METAR-TAF/afkortingen", methods=["GET", "POST"])
 def metar_abbreviations():
     """Multiple-choice practice for METAR abbreviations."""
     checking = request.method == "POST" and request.form.get("action") == "check"
@@ -845,6 +869,7 @@ def metar_abbreviations():
 
 
 @app.route("/metar/ontleden", methods=["GET", "POST"])
+@app.route("/oefenen/meteo/METAR-TAF/ontleden", methods=["GET", "POST"])
 def metar_practice():
     """Show and grade the daily METAR exercise for a Dutch airport."""
     checking = request.method == "POST" and request.form.get("action") == "check"
@@ -942,6 +967,7 @@ def taf_refresh_enabled():
 
 
 @app.route("/taf/afkortingen", methods=["GET", "POST"])
+@app.route("/oefenen/meteo/METAR-TAF/taf/afkortingen", methods=["GET", "POST"])
 def taf_abbreviations():
     """Multiple-choice practice for TAF abbreviations."""
     checking = request.method == "POST" and request.form.get("action") == "check"
@@ -962,6 +988,7 @@ def taf_abbreviations():
 
 
 @app.route("/taf/ontleden", methods=["GET", "POST"])
+@app.route("/oefenen/meteo/METAR-TAF/taf/ontleden", methods=["GET", "POST"])
 def taf_practice():
     """Show and grade the daily TAF exercise for a Dutch airport."""
     checking = request.method == "POST" and request.form.get("action") == "check"

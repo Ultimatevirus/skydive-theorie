@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('Oefenen') }}{% endblock %}
+
+{% set page_name = 'oefenen' %}
+
+{% block content %}
+    <div class="card exam-card practice-card">
+        <div class="page-header">
+            <div>
+                <p class="eyebrow">{{ t('Oefenen') }}</p>
+                <h1>{{ t('Dynamische oefeningen') }}</h1>
+                <p>{{ t('Op deze pagina vind je dynamische oefeningen om te oefenen voor de examens.') }}</p>
+            </div>
+        </div>
+
+        <div class="choice-grid" aria-label="{{ t('Kies een onderwerp') }}">
+            <a href="{{ url_for('practice_category', category='algemeen') }}" class="choice-card option-card">
+                <span class="choice-label">{{ t('Algemeen') }}</span>
+            </a>
+            <a href="{{ url_for('practice_category', category='regelementen') }}" class="choice-card option-card">
+                <span class="choice-label">{{ t('Regelementen') }}</span>
+            </a>
+            <a href="{{ url_for('practice_category', category='meteo') }}" class="choice-card option-card">
+                <span class="choice-label">{{ t('Meteo') }}</span>
+            </a>
+            <a href="{{ url_for('practice_category', category='material') }}" class="choice-card option-card">
+                <span class="choice-label">{{ t('Materiaal') }}</span>
+            </a>
+        </div>
+    </div>
+{% endblock %}

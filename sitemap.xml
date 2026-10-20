@@ -16,17 +16,32 @@
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.skydive-theorie.nl/metar</loc>
+    <loc>https://www.skydive-theorie.nl/oefenen</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.skydive-theorie.nl/metar/ontleden</loc>
-    <changefreq>daily</changefreq>
+    <loc>https://www.skydive-theorie.nl/oefenen/algemeen</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.skydive-theorie.nl/oefenen/regelementen</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.skydive-theorie.nl/oefenen/material</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://www.skydive-theorie.nl/oefenen/meteo</loc>
+    <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://www.skydive-theorie.nl/metar/afkortingen</loc>
+    <loc>https://www.skydive-theorie.nl/oefenen/meteo/METAR-TAF</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t(title) }} - {{ t('Oefenen') }}{% endblock %}
+
+{% set page_name = 'oefenen' %}
+
+{% block content %}
+    <div class="card exam-card practice-card">
+        <div class="page-header">
+            <div>
+                <p class="eyebrow">{{ t('Oefenen') }}</p>
+                <h1>{{ t(title) }}</h1>
+                <p>{{ t('De dynamische oefeningen voor dit onderwerp worden hier verzameld.') }}</p>
+            </div>
+        </div>
+
+        {% if category == 'meteo' %}
+            <div class="choice-grid">
+                <a href="{{ url_for('metar_choice') }}" class="choice-card option-card">
+                    <span class="choice-label">{{ t('METAR-TAF oefenen') }}</span>
+                </a>
+            </div>
+        {% endif %}
+
+        <div class="button-row practice-footer">
+            <a href="{{ url_for('oefenen') }}" class="secondary-btn">{{ t('Terug naar oefenen') }}</a>
+        </div>
+    </div>
+{% endblock %}
