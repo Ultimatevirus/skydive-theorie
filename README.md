@@ -33,6 +33,11 @@ The questions on this site are created independently for educational purposes on
 - **Production Server**: Gunicorn
 - **Frontend**: Plain HTML/CSS/JavaScript with Google Fonts
 
+The Flask entry point remains `app.py`; question database access, access-gate
+throttling, and contact delivery/rate limiting live in the focused
+`question_repository.py`, `access_gate_service.py`, and `contact_service.py`
+modules.
+
 ## 📦 Installation & Setup
 
 ### Local testing with Docker Compose
@@ -84,7 +89,9 @@ SMTP_USE_SSL=0
 
 The contact form requires `SMTP_HOST` and `CONTACT_EMAIL`. SMTP authentication is
 used when `SMTP_USERNAME` is set. Use `SMTP_USE_SSL=1` for an SSL connection;
-otherwise the default is STARTTLS on port `587`.
+otherwise the default is STARTTLS on port `587`. Sending is attempted before
+the form confirms success, with a 20-second SMTP timeout; if delivery fails,
+the form displays an error so the message can be retried.
 
 `TRAEFIK_HOST` is the canonical hostname the app is served on; `TRAEFIK_APEX_HOST` is the bare domain, which Traefik redirects to `TRAEFIK_HOST`. Make sure DNS records exist for both hostnames and point at the server.
 
@@ -127,7 +134,9 @@ docker compose up --build -d
 
 The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for the notified airport on the current UTC day. METAR data is stored in the SQLite `metar` table; same-day fetch claims prevent duplicate API calls across Gunicorn processes and replicas. The `/data/data.db` volume persists this cache across deployments. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
 
-KNMI Open Data requests use a descriptive User-Agent, are limited to 900 requests per rolling hour across the shared database, and retry rate-limit/server errors with exponential backoff (respecting `Retry-After`). METAR and TAF requests share this account-level quota; notifications are used instead of timer-based polling. See KNMI's [fair use policy](https://developer.dataplatform.knmi.nl/fair-use).
+TAFs are refreshed for each Dutch airport at startup and every 30 minutes. Each scheduled refresh bypasses the in-memory and database caches so same-day amendments replace the stored report. METARs remain notification-driven rather than timer-polled.
+
+KNMI Open Data requests use a descriptive User-Agent, are limited to 900 requests per rolling hour across the shared database, and retry rate-limit/server errors with exponential backoff (respecting `Retry-After`). METAR and TAF requests share this account-level quota. See KNMI's [fair use policy](https://developer.dataplatform.knmi.nl/fair-use).
 
 ### IT systems status page
 

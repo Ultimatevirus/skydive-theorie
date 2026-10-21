@@ -1,7 +1,6 @@
 import hmac
 import logging
 import os
-import random
 import re
 import secrets
 import smtplib
@@ -9,8 +8,6 @@ import sqlite3
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from email.message import EmailMessage
-from threading import Thread
 from urllib.parse import urlsplit
 
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -26,7 +23,10 @@ from flask import (
     url_for,
 )
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
+import access_gate_service
+import contact_service
 from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed, parse_metar
+import question_repository
 from system_status import get_service_statuses
 import taf as taf_module
 from taf import TafError, get_daily_taf
@@ -35,7 +35,6 @@ from quiz import (
     build_question_groups,
     calculate_grade,
     display_answer_value,
-    distribute_question_counts,
     format_elapsed,
     is_passed,
     normalize_answer_value,
@@ -244,37 +243,26 @@ def inject_language_context():
     }
 
 
-_language_column_cache = {}
+_language_column_cache = question_repository._LANGUAGE_COLUMN_CACHE
 
 
 def _database_signature():
     """Identify the current database file so cached schema facts go stale when it is replaced."""
-    path = get_db_path()
-    try:
-        stat = os.stat(path)
-    except OSError:
-        return None
-    return path, stat.st_mtime_ns, stat.st_size
+    return _question_repository()._database_signature()
 
 
 def questions_have_language_column(conn):
     """Check whether this database has the optional question language column (cached per database file)."""
-    signature = _database_signature()
-    if signature is not None and signature in _language_column_cache:
-        return _language_column_cache[signature]
-    columns = conn.execute("PRAGMA table_info(questions)").fetchall()
-    has_column = any(column[1] == "language" for column in columns)
-    if signature is not None:
-        _language_column_cache.clear()
-        _language_column_cache[signature] = has_column
-    return has_column
+    return question_repository.QuestionRepository(
+        get_db_connection, get_db_path
+    ).questions_have_language_column(conn)
 
 
 def language_filter(conn, language, prefix=""):
     """Return a query fragment and parameter for compatible question databases."""
-    if questions_have_language_column(conn):
-        return f" AND {prefix}language = ?", [normalize_language(language)]
-    return "", []
+    return question_repository.QuestionRepository(
+        get_db_connection, get_db_path
+    ).language_filter(conn, language, prefix)
 
 
 def get_db_path():
@@ -287,165 +275,37 @@ def get_db_connection():
     return connect_db(path=get_db_path(), row_factory=sqlite3.Row)
 
 
+def _question_repository():
+    return question_repository.QuestionRepository(get_db_connection, get_db_path)
+
+
 def _question_query_schema(conn):
     """Return the question SELECT and join details supported by this database."""
-    question_columns = {
-        row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()
-    }
-    has_image_sources = (
-        "image_key" in question_columns
-        and conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'image_source'"
-        ).fetchone()
-        is not None
-    )
-    if has_image_sources:
-        return (
-            "questions.rowid AS id, questions.*, "
-            "image_source.image_local_source AS image_local_source, "
-            "image_source.image_original_source AS image_original_source",
-            "questions LEFT JOIN image_source "
-            "ON image_source.image_key = questions.image_key",
-            "questions.",
-        )
-    return "rowid AS id, *", "questions", ""
+    return question_repository.QuestionRepository.question_query_schema(conn)
 
 
 def get_available_topics(level, language="NL"):
     """Return all active topics for the selected exam level."""
-    conn = get_db_connection()
-    language_clause, language_params = language_filter(conn, language)
-    rows = conn.execute(
-        f"""
-        SELECT DISTINCT topic
-        FROM questions
-        WHERE level = ? AND is_active = 1{language_clause}
-        ORDER BY topic ASC
-        """,
-        (level, *language_params),
-    ).fetchall()
-    conn.close()
-    return [row["topic"] for row in rows]
+    return _question_repository().get_available_topics(level, language)
 
 
 def get_topic_counts_for_level(level, amount, selected_topics=None, language="NL"):
     """Return per-topic, per-subtopic counts and the total selected questions."""
-    selected_topics = normalize_selected_topics(selected_topics)
-    conn = get_db_connection()
-    language_clause, language_params = language_filter(conn, language)
-
-    if selected_topics:
-        placeholders = ", ".join("?" for _ in selected_topics)
-        topic_rows = conn.execute(
-            f"""
-            SELECT topic, subtopic, COUNT(*) AS c
-            FROM questions
-            WHERE level = ? AND topic IN ({placeholders}) AND is_active = 1{language_clause}
-            GROUP BY topic, subtopic
-            ORDER BY topic, subtopic
-            """,
-            (level, *selected_topics, *language_params),
-        ).fetchall()
-    else:
-        topic_rows = conn.execute(
-            f"""
-            SELECT topic, subtopic, COUNT(*) AS c
-            FROM questions
-            WHERE level = ? AND is_active = 1{language_clause}
-            GROUP BY topic, subtopic
-            ORDER BY topic, subtopic
-            """,
-            (level, *language_params),
-        ).fetchall()
-    conn.close()
-
-    available_by_topic = {}
-    for row in topic_rows:
-        topic = row["topic"]
-        subtopic = row["subtopic"]
-        available_by_topic.setdefault(topic, {})
-        available_by_topic[topic][subtopic] = row["c"]
-
-    return distribute_question_counts(available_by_topic, amount)
+    return _question_repository().get_topic_counts_for_level(
+        level, amount, selected_topics, language
+    )
 
 
 def fetch_questions(level, amount, selected_topics=None, language="NL"):
     """Fetch a random set of active questions for a level and optional topic filter."""
-    selected_topics = normalize_selected_topics(selected_topics)
-    topic_counts, selected_total = get_topic_counts_for_level(
-        level, amount, selected_topics, language=language
+    return _question_repository().fetch_questions(
+        level, amount, selected_topics, language
     )
-
-    if selected_total == 0:
-        return []
-
-    conn = get_db_connection()
-    language_clause, language_params = language_filter(
-        conn, language, prefix="questions."
-    )
-    select_columns, question_source, column_prefix = _question_query_schema(conn)
-    topic_names = list(topic_counts)
-    placeholders = ", ".join("?" for _ in topic_names)
-    rows = conn.execute(
-        f"""
-        SELECT {select_columns}
-        FROM {question_source}
-        WHERE {column_prefix}level = ? AND {column_prefix}topic IN ({placeholders})
-            AND {column_prefix}is_active = 1{language_clause}
-        """,
-        (level, *topic_names, *language_params),
-    ).fetchall()
-
-    conn.close()
-
-    rows_by_subtopic = {}
-    for row in rows:
-        key = (row["topic"], row["subtopic"])
-        rows_by_subtopic.setdefault(key, []).append(row)
-
-    selected_rows = []
-    for topic, subtopic_counts in topic_counts.items():
-        for subtopic, count in subtopic_counts.items():
-            if count <= 0:
-                continue
-            candidates = rows_by_subtopic.get((topic, subtopic), [])
-            selected_rows.extend(random.sample(candidates, min(count, len(candidates))))
-
-    random.shuffle(selected_rows)
-    return selected_rows
 
 
 def fetch_questions_by_ids(level, question_ids, language="NL"):
     """Fetch active questions by ID for a specific level."""
-    normalized_ids = [
-        int(question_id) for question_id in question_ids if str(question_id).strip()
-    ]
-    if not normalized_ids:
-        return []
-
-    placeholders = ", ".join("?" for _ in normalized_ids)
-    conn = get_db_connection()
-    language_clause, language_params = language_filter(
-        conn, language, prefix="questions."
-    )
-    select_columns, question_source, column_prefix = _question_query_schema(conn)
-    rows = conn.execute(
-        f"""
-        SELECT {select_columns}
-        FROM {question_source}
-        WHERE {column_prefix}level = ? AND {column_prefix}rowid IN ({placeholders})
-            AND {column_prefix}is_active = 1{language_clause}
-        """,
-        (level, *normalized_ids, *language_params),
-    ).fetchall()
-    conn.close()
-
-    row_map = {int(row["id"]): row for row in rows}
-    return [
-        row_map[question_id]
-        for question_id in normalized_ids
-        if question_id in row_map
-    ]
+    return _question_repository().fetch_questions_by_ids(level, question_ids, language)
 
 
 def get_row_value(row, key, default=None):
@@ -613,47 +473,27 @@ def set_language():
     return redirect(target)
 
 
-GATE_MAX_FAILURES = 5
-GATE_FAILURE_WINDOW = 60
-_gate_table_ready = set()
+GATE_MAX_FAILURES = access_gate_service.GATE_MAX_FAILURES
+GATE_FAILURE_WINDOW = access_gate_service.GATE_FAILURE_WINDOW
+_gate_table_ready = access_gate_service._GATE_TABLE_READY
 
 
 def _ensure_gate_failure_table(conn):
     """Create the shared failed-attempt table once per database path."""
-    path = get_db_path()
-    if path in _gate_table_ready and os.path.exists(path):
-        return
-    conn.execute("CREATE TABLE IF NOT EXISTS gate_failure (ip TEXT NOT NULL, failed_at REAL NOT NULL)")
-    conn.execute("CREATE INDEX IF NOT EXISTS gate_failure_ip ON gate_failure (ip, failed_at)")
-    conn.commit()
-    _gate_table_ready.add(path)
+    access_gate_service.ensure_gate_failure_table(conn, get_db_path)
 
 
 def _gate_attempts_exhausted(ip_address):
     """Report whether an IP made too many wrong code attempts recently, shared across all workers and replicas."""
-    cutoff = time.time() - GATE_FAILURE_WINDOW
-    conn = get_db_connection()
-    try:
-        _ensure_gate_failure_table(conn)
-        conn.execute("DELETE FROM gate_failure WHERE failed_at < ?", (cutoff,))
-        conn.commit()
-        count = conn.execute(
-            "SELECT COUNT(*) FROM gate_failure WHERE ip = ? AND failed_at >= ?",
-            (ip_address, cutoff),
-        ).fetchone()[0]
-        return count >= GATE_MAX_FAILURES
-    finally:
-        conn.close()
+    return access_gate_service.gate_attempts_exhausted(
+        get_db_connection, get_db_path, ip_address
+    )
 
 
 def _record_gate_failure(ip_address):
-    conn = get_db_connection()
-    try:
-        _ensure_gate_failure_table(conn)
-        conn.execute("INSERT INTO gate_failure (ip, failed_at) VALUES (?, ?)", (ip_address, time.time()))
-        conn.commit()
-    finally:
-        conn.close()
+    access_gate_service.record_gate_failure(
+        get_db_connection, get_db_path, ip_address
+    )
 
 
 @app.route("/access-gate", methods=["GET", "POST"])
@@ -1075,107 +915,14 @@ def taf_practice():
 
 def send_contact_message(sender_email, subject, message):
     """Send a contact message using SMTP settings supplied through the environment."""
-    smtp_host = os.getenv("SMTP_HOST")
-    recipient = os.getenv("CONTACT_EMAIL")
-    if not smtp_host or not recipient:
-        raise RuntimeError("SMTP_HOST and CONTACT_EMAIL must be configured")
-
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_username = os.getenv("SMTP_USERNAME")
-    smtp_password = os.getenv("SMTP_PASSWORD")
-    sender = os.getenv("SMTP_FROM_EMAIL") or smtp_username or recipient
-    use_ssl = os.getenv("SMTP_USE_SSL", "0").lower() in {"1", "true", "yes"}
-    use_tls = os.getenv("SMTP_USE_TLS", "1").lower() in {"1", "true", "yes"}
-
-    email = EmailMessage()
-    email["From"] = sender
-    email["To"] = recipient
-    email["Reply-To"] = sender_email
-    email["Subject"] = f"Contactformulier: {subject}"
-    email.set_content(f"Afzender: {sender_email}\nOnderwerp: {subject}\n\n{message}")
-
-    smtp_class = smtplib.SMTP_SSL if use_ssl else smtplib.SMTP
-    with smtp_class(smtp_host, smtp_port, timeout=20) as smtp:
-        if use_tls and not use_ssl:
-            smtp.starttls()
-        if smtp_username:
-            smtp.login(smtp_username, smtp_password or "")
-        smtp.send_message(email)
-
-
-def start_contact_message_delivery(sender_email, subject, message):
-    """Deliver a contact message outside the request so SMTP cannot block the page."""
-    def deliver():
-        try:
-            send_contact_message(
-                sender_email=sender_email,
-                subject=subject,
-                message=message,
-            )
-        except (OSError, smtplib.SMTPException, ValueError, RuntimeError):
-            logger.exception("Unable to send contact message")
-
-    Thread(target=deliver, name="contact-message-delivery", daemon=True).start()
-
-
-_contact_table_ready = set()
-
-
-def _ensure_contact_usage_table(conn):
-    """Create the contact usage table once per database path instead of on every request."""
-    path = get_db_path()
-    if path in _contact_table_ready and os.path.exists(path):
-        return
-    conn.execute(
-        """
-        CREATE TABLE IF NOT EXISTS contact_form_usage (
-            date TEXT,
-            ip TEXT
-        )
-        """
-    )
-    conn.execute(
-        """
-        CREATE INDEX IF NOT EXISTS contact_form_usage_ip_date
-        ON contact_form_usage (ip, date)
-        """
-    )
-    conn.commit()
-    _contact_table_ready.add(path)
+    contact_service.send_contact_message(sender_email, subject, message)
 
 
 def reserve_contact_form_usage(ip_address):
     """Reserve one contact message for an IP address within the daily limit."""
-    conn = get_db_connection()
-    try:
-        _ensure_contact_usage_table(conn)
-        conn.execute("BEGIN IMMEDIATE")
-        conn.execute(
-            "DELETE FROM contact_form_usage WHERE date < datetime('now', '-30 days')"
-        )
-        usage_count = conn.execute(
-            """
-            SELECT COUNT(*)
-            FROM contact_form_usage
-            WHERE ip = ? AND date >= datetime('now', '-24 hours')
-            """,
-            (ip_address,),
-        ).fetchone()[0]
-        if usage_count >= 3:
-            conn.commit()
-            return False
-
-        conn.execute(
-            "INSERT INTO contact_form_usage (date, ip) VALUES (datetime('now'), ?)",
-            (ip_address,),
-        )
-        conn.commit()
-        return True
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
+    return contact_service.reserve_contact_form_usage(
+        get_db_connection, get_db_path, ip_address
+    )
 
 
 @app.route("/contact", methods=["GET", "POST"])
@@ -1199,12 +946,17 @@ def contact():
         elif not reserve_contact_form_usage(request.remote_addr or ""):
             error = "Je hebt de limiet van 3 berichten per dag bereikt. Probeer het morgen opnieuw."
         else:
-            start_contact_message_delivery(
-                sender_email=form_data["email"],
-                subject=form_data["subject"],
-                message=form_data["message"],
-            )
-            return redirect(url_for("contact", sent="1"))
+            try:
+                send_contact_message(
+                    sender_email=form_data["email"],
+                    subject=form_data["subject"],
+                    message=form_data["message"],
+                )
+            except (OSError, smtplib.SMTPException, ValueError, RuntimeError):
+                logger.exception("Unable to send contact message")
+                error = "Je bericht kon niet worden verzonden. Probeer het later opnieuw."
+            else:
+                return redirect(url_for("contact", sent="1"))
 
     return render_template(
         "contact.html",

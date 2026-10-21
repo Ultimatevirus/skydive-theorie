@@ -988,8 +988,8 @@ class ContactPageTests(unittest.TestCase):
                 os.environ, environment, clear=False
             ), patch.object(app_module.smtplib, "SMTP", return_value=smtp) as smtp_factory, patch.object(
                 app_module,
-                "start_contact_message_delivery",
-                side_effect=lambda **values: app_module.send_contact_message(**values),
+                "reserve_contact_form_usage",
+                return_value=True,
             ):
                 response = client.post(
                     "/contact",
@@ -1016,6 +1016,32 @@ class ContactPageTests(unittest.TestCase):
 
         confirmation = client.get(response.headers["Location"])
         self.assertIn("Je bericht is verzonden.", confirmation.get_data(as_text=True))
+
+    def test_contact_form_reports_delivery_failure_without_success_redirect(self):
+        client = app.test_client()
+        with patch.object(
+            app_module, "reserve_contact_form_usage", return_value=True
+        ), patch.object(
+            app_module,
+            "send_contact_message",
+            side_effect=app_module.smtplib.SMTPException("delivery failed"),
+        ):
+            response = client.post(
+                "/contact",
+                data=csrf_data(
+                    client,
+                    email="visitor@example.test",
+                    subject="Suggestie",
+                    message="Een nuttige suggestie.",
+                ),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("sent=1", response.headers.get("Location", ""))
+        self.assertIn(
+            "Je bericht kon niet worden verzonden. Probeer het later opnieuw.",
+            response.get_data(as_text=True),
+        )
 
     def test_contact_usage_allows_three_messages_and_cleans_old_rows(self):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:

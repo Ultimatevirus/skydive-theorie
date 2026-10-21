@@ -271,16 +271,17 @@ def _get_cached_taf(day, code):
     return row[0] if row else None
 
 
-def _claim_taf_fetch(day, code, wait=True):
+def _claim_taf_fetch(day, code, wait=True, force_refresh=False):
     """Return True when this caller may fetch, False when a cached TAF exists, None when busy."""
     while True:
         conn = _connect_db()
         try:
             _ensure_taf_tables(conn)
             conn.execute("BEGIN IMMEDIATE")
-            if conn.execute(
+            cached = conn.execute(
                 "SELECT 1 FROM taf WHERE datetime = ? AND airport = ?", (day.isoformat(), code)
-            ).fetchone():
+            ).fetchone()
+            if cached and not force_refresh:
                 conn.commit()
                 return False
             now = time.time()
@@ -320,13 +321,20 @@ def _release_taf_fetch(day, code, report=None):
         conn.close()
 
 
-def get_daily_taf(airport, today=None, opener=urlopen, wait_for_rate_limit=True, cache_only=False):
+def get_daily_taf(
+    airport,
+    today=None,
+    opener=urlopen,
+    wait_for_rate_limit=True,
+    cache_only=False,
+    force_refresh=False,
+):
     code = str(airport or "").strip().upper()
     if code not in DUTCH_AIRPORTS:
         raise TafError("Kies een Nederlandse luchthaven uit de lijst.")
     day = today or datetime.now(timezone.utc).date()
     cache_key = (day.isoformat(), code)
-    if cache_key in _CACHE:
+    if cache_key in _CACHE and not force_refresh:
         return _CACHE[cache_key]
 
     def cached_result(report):
@@ -335,14 +343,16 @@ def get_daily_taf(airport, today=None, opener=urlopen, wait_for_rate_limit=True,
         return result
 
     report = _get_cached_taf(day, code)
-    if report is not None:
+    if report is not None and not force_refresh:
         return cached_result(report)
-    if cache_only:
+    if cache_only and not force_refresh:
         raise TafError("De TAF wordt nog opgehaald. Probeer het over een minuut opnieuw.")
-    claimed = _claim_taf_fetch(day, code, wait=wait_for_rate_limit)
+    claimed = _claim_taf_fetch(
+        day, code, wait=wait_for_rate_limit, force_refresh=force_refresh
+    )
     if claimed is not True:
         report = _get_cached_taf(day, code)
-        if report is not None:
+        if report is not None and not force_refresh:
             return cached_result(report)
         raise TafError(
             "De TAF-ophaling is onverwacht gestopt." if claimed is False
@@ -361,11 +371,11 @@ def get_daily_taf(airport, today=None, opener=urlopen, wait_for_rate_limit=True,
 
 
 def refresh_daily_tafs(day=None, opener=urlopen):
-    """Fetch each Dutch airport's TAF for the given UTC day."""
+    """Fetch fresh TAFs for each Dutch airport on the given UTC day."""
     day = day or datetime.now(timezone.utc).date()
     for code in dict.fromkeys(DUTCH_AIRPORTS):
         try:
-            get_daily_taf(code, day, opener=opener)
+            get_daily_taf(code, day, opener=opener, force_refresh=True)
         except MetarError:
             logger.exception("TAF refresh failed for %s", code)
 

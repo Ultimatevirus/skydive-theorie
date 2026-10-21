@@ -47,18 +47,18 @@
                     <a href="{{ url_for('index') }}" class="nav-link{% if page_name == 'index' %} active{% endif %}">
                         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/></svg>
                         <span>{{ t('Home') }}</span>
-                    </a>
-                    <a href="{{ url_for('practice') }}" class="nav-link{% if page_name == 'practice' %} active{% endif %}">
-                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
-                        <span>{{ t('Oefenexamen') }}</span>
+                    <a href="{{ url_for('learn') }}" class="nav-link{% if page_name == 'learn' %} active{% endif %}">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
+                        <span>{{ t('Leren voor het examen') }}</span>
                     </a>
                     <a href="{{ url_for('oefenen') }}" class="nav-link{% if page_name == 'oefenen' %} active{% endif %}">
                         <span class="nav-icon nav-icon-solid" aria-hidden="true"></span>
                         <span>{{ t('Oefenen') }}</span>
                     </a>
-                    <a href="{{ url_for('learn') }}" class="nav-link{% if page_name == 'learn' %} active{% endif %}">
-                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
-                        <span>{{ t('Leren voor het examen') }}</span>
+                    <a href="{{ url_for('practice') }}" class="nav-link{% if page_name == 'practice' %} active{% endif %}">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
+                        <span>{{ t('Oefenexamen') }}</span>
+                    </a>
                     </a>
                     <a href="{{ url_for('contact') }}" class="nav-link{% if page_name == 'contact' %} active{% endif %}">
                         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/><path d="M3 7l9 6l9 -6"/></svg>
