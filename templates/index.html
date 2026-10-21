@@ -8,6 +8,7 @@
 {% set page_name = 'index' %}
 
 {% block head_extra %}
+    <link rel="preload" as="image" href="{{ asset_url('branding/parachutist.webp') }}" fetchpriority="high">
     <script type="application/ld+json">
         {
           "@context": "https://schema.org",
@@ -25,55 +26,93 @@
 {% endblock %}
 
 {% block content %}
-    <div class="card home-card">
-        <div class="home-hero">
-            <p class="eyebrow">{{ t('Welkom') }}</p>
-            <h1>{{ t('Oefenen voor je KNVvL A/B brevet') }}</h1>
+    <section class="home-hero" aria-labelledby="home-title">
+        <div class="home-hero-copy">
+            <h1 id="home-title">{{ t('Oefenen voor je KNVvL A/B brevet') }}</h1>
+            <p class="home-lead">{{ t('Bereid je stap voor stap voor met heldere theorie, gerichte oefening en oefenexamens voor je KNVvL A- of B-brevet.') }}</p>
+            <div class="button-row home-actions">
+                <a href="{{ url_for('oefenen') }}" class="primary-btn">{{ t('Start oefenen') }}</a>
+                <a href="{{ url_for('practice') }}" class="secondary-btn">{{ t('Naar oefenexamen') }}</a>
+            </div>
+            <div class="home-hero-note">
+                <span class="home-note-icon" aria-hidden="true">i</span>
+                <p>{{ t('Gebruik deze oefeningen als aanvulling op de officiële lesstof en aanwijzingen van je instructeur.') }}</p>
+            </div>
+        </div>
+
+        <figure class="home-hero-visual">
+            <img src="{{ asset_url('branding/parachutist.webp') }}" alt="{{ t('Parachutist onder een geopende parachute') }}" fetchpriority="high">
+            <span class="home-visual-label">{{ t('LEERPLATFORM VOOR PARACHUTISTEN') }}</span>
+            <figcaption>
+                <span>{{ t('Theorie voor je volgende sprong') }}</span>
+                <strong>{{ t('Kennis groeit met elke oefening') }}</strong>
+            </figcaption>
+        </figure>
+    </section>
+
+    <section class="learning-paths" aria-labelledby="learning-paths-title">
+        <div class="section-heading">
+            <div>
+                <p class="eyebrow">{{ t('Jouw leerroute') }}</p>
+                <h2 id="learning-paths-title">{{ t('Kies je volgende stap') }}</h2>
+            </div>
+            <p>{{ t('Leer de stof, oefen gericht en test je kennis wanneer jij er klaar voor bent.') }}</p>
+        </div>
+        <div class="learning-path-grid">
+            <a class="learning-path-card" href="{{ url_for('learn') }}">
+                <span class="path-card-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
+                </span>
+                <span class="path-card-step">{{ t('STAP 1') }}</span>
+                <h3>{{ t('Focus op theorie') }}</h3>
+                <p>{{ t('Train op de onderwerpen die belangrijk zijn voor jouw KNVvL theorie-examen.') }}</p>
+                <span class="path-card-link">{{ t('Bekijk de leerstof') }} <span aria-hidden="true">→</span></span>
+            </a>
+
+            <a class="learning-path-card" href="{{ url_for('oefenen') }}">
+                <span class="path-card-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
+                </span>
+                <span class="path-card-step">{{ t('STAP 2') }}</span>
+                <h3>{{ t('Snelle oefensessies') }}</h3>
+                <p>{{ t('Op deze pagina vind je dynamische oefeningen om te oefenen voor de examens.') }}</p>
+                <span class="path-card-link">{{ t('Ontdek de oefeningen') }} <span aria-hidden="true">→</span></span>
+            </a>
+
+            <a class="learning-path-card" href="{{ url_for('practice') }}">
+                <span class="path-card-icon">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
+                </span>
+                <span class="path-card-step">{{ t('STAP 3') }}</span>
+                <h3>{{ t('Oefenexamen') }}</h3>
+                <p>{{ t('Start direct een examen en werk in een overzichtelijke, doelgerichte flow.') }}</p>
+                <span class="path-card-link">{{ t('Start een oefenexamen') }} <span aria-hidden="true">→</span></span>
+            </a>
+        </div>
+    </section>
+
+    <aside class="home-disclaimer" aria-label="{{ t('Belangrijke informatie') }}">
+        <span class="disclaimer-icon" aria-hidden="true">!</span>
+        <p><strong>{{ t('Belangrijk om te weten') }}</strong>{{ t('Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen en ze zijn tevens NIET gevalideerd!') }}</p>
+    </aside>
+
+    <details class="home-more-info">
+        <summary>{{ t('Meer over dit leerplatform') }}</summary>
+        <div class="home-more-content">
             <p>{{ t('Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.') }}</p>
-            <p><b>{{ t('Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen en ze zijn tevens NIET gevalideerd!') }}</b></p>
             <p>{{ t('De vragen op deze site zijn ontworpen om beginnende skydivers te helpen met de voorbereiding op de theorie-examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Als je vragen hebt over de inhoud van de examens, is het aan te raden om contact op te nemen met een (door de KNVvL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet. Voor algemene leertips en adviezen kan je de pagina "leren voor het examen" bezoeken') }}</p>
             <div class="roadmap-panel">
                 <h3>{{ t('Ontwikkelings roadmap') }}</h3>
                 <ul class="roadmap-list">
-                    <li>C-brevetvragen</li>
-                    <li>Circuitplanningmodus</li>
-                    <li>Meer dynamisch gegenereerde vragen</li>
+                    <li>{{ t('C-brevetvragen') }}</li>
+                    <li>{{ t('Circuitplanningmodus') }}</li>
+                    <li>{{ t('Meer dynamisch gegenereerde vragen') }}</li>
                 </ul>
             </div>
-            <p>{{ t('Deze site is nog volop in ontwikkeling. Mocht je tips of ideeën willen delen, neem dan vooral contact op via het contactformulier op de site. Ideeën die op de planning staan om geïmplementeerd te worden, kun je boven terugvinden op de ontwikkelings roadmap. Het gehele project is open-source; mocht je willen bijdragen of de technische details willen inzien, dan kan je via de GitHub Repo knop de openbare repository bezoeken.') }}</p>
-  
-            <div class="button-row">
-                <a href="{{ url_for('practice') }}" class="primary-btn">{{ t('Naar examen') }}</a>
-                <a href="{{ url_for('oefenen') }}" class="secondary-btn">{{ t('Oefenen') }}</a>
+            <div class="button-row home-secondary-actions">
                 <a href="{{ url_for('contact') }}" class="secondary-btn">{{ t('Contact') }}</a>
                 <a href="https://github.com/Ultimatevirus/skydive-theorie" target="_blank" rel="noopener noreferrer" class="secondary-btn">{{ t('GitHub Repo') }}</a>
             </div>
         </div>
-    </div>
-
-    <div class="feature-grid">
-        <article class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
-            </div>
-            <h3>{{ t('Snelle oefensessies') }}</h3>
-            <p>{{ t('Start direct een examen en werk in een overzichtelijke, doelgerichte flow.') }}</p>
-        </article>
-
-        <article class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M9 14c0 -3 1.5 -4.2 2.5 -5.6c.5 -.7 .9 -1.7 .9 -2.9a3.5 3.5 0 0 0 -7 0c0 1.2 .4 2.2 .9 2.9c1 1.4 2.5 2.6 2.5 5.6z"/><path d="M15 14c0 -3 -1.5 -4.2 -2.5 -5.6c-.5 -.7 -.9 -1.7 -.9 -2.9a3.5 3.5 0 1 1 7 0c0 1.2 -.4 2.2 -.9 2.9c-1 1.4 -2.5 2.6 -2.5 5.6z"/></svg>
-            </div>
-            <h3>{{ t('Direct resultaat') }}</h3>
-            <p>{{ t('Bekijk direct je score, voortgang en thema-overzicht om beter te verbeteren.') }}</p>
-        </article>
-
-        <article class="feature-card">
-            <div class="feature-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
-            </div>
-            <h3>{{ t('Focus op theorie') }}</h3>
-            <p>{{ t('Train op de onderwerpen die belangrijk zijn voor jouw KNVvL theorie-examen.') }}</p>
-        </article>
-    </div>
+    </details>
 {% endblock %}

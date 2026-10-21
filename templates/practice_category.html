@@ -15,11 +15,14 @@
         </div>
 
         {% if category == 'meteo' %}
-            <div class="choice-grid">
-                <a href="{{ url_for('metar_choice') }}" class="choice-card option-card">
+            <div class="choice-grid" aria-label="{{ t('Kies een oefening') }}">
+                <a href="{{ url_for('metar_choice') }}" class="choice-card option-card metar-exercise-card">
+                    <img src="{{ asset_url('branding/weather_station.webp') }}" alt="" fetchpriority="high">
                     <span class="choice-label">{{ t('METAR-TAF oefenen') }}</span>
                 </a>
             </div>
+        {% else %}
+            <p class="availability-notice">{{ t('Geen oefeningen beschikbaar') }}</p>
         {% endif %}
 
         <div class="button-row practice-footer">

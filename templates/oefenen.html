@@ -15,18 +15,22 @@
         </div>
 
         <div class="choice-grid" aria-label="{{ t('Kies een onderwerp') }}">
-            <a href="{{ url_for('practice_category', category='algemeen') }}" class="choice-card option-card category-card category-card--algemeen">
+            <div class="choice-card option-card category-card category-card--algemeen is-unavailable" aria-disabled="true">
                 <span class="choice-label">{{ t('Algemeen') }}</span>
-            </a>
-            <a href="{{ url_for('practice_category', category='regelementen') }}" class="choice-card option-card category-card category-card--regelementen">
+                <span class="availability-status">{{ t('Geen oefeningen beschikbaar') }}</span>
+            </div>
+            <div class="choice-card option-card category-card category-card--regelementen is-unavailable" aria-disabled="true">
                 <span class="choice-label">{{ t('Regelementen') }}</span>
-            </a>
+                <span class="availability-status">{{ t('Geen oefeningen beschikbaar') }}</span>
+            </div>
             <a href="{{ url_for('practice_category', category='meteo') }}" class="choice-card option-card category-card category-card--meteo">
                 <span class="choice-label">{{ t('Meteo') }}</span>
+                <span class="availability-status">{{ t('Oefeningen beschikbaar') }}</span>
             </a>
-            <a href="{{ url_for('practice_category', category='material') }}" class="choice-card option-card category-card category-card--materiaal">
+            <div class="choice-card option-card category-card category-card--materiaal is-unavailable" aria-disabled="true">
                 <span class="choice-label">{{ t('Materiaal') }}</span>
-            </a>
+                <span class="availability-status">{{ t('Geen oefeningen beschikbaar') }}</span>
+            </div>
         </div>
     </div>
 {% endblock %}

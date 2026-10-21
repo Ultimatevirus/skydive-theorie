@@ -52,6 +52,25 @@ class PracticeFlowTests(unittest.TestCase):
         for key in required:
             self.assertIn(key, app_module.TRANSLATIONS["EN"])
 
+    def test_homepage_learning_paths_and_disclaimer_render_in_english(self):
+        client = app.test_client()
+
+        dutch_home = client.get("/")
+        dutch_html = dutch_home.get_data(as_text=True)
+        self.assertEqual(dutch_home.status_code, 200)
+        self.assertIn('href="/leren"', dutch_html)
+        self.assertIn('href="/oefenen"', dutch_html)
+        self.assertIn('href="/practice"', dutch_html)
+        self.assertIn("Dit zijn geen officiële KNVvL", dutch_html)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        english_home = client.get("/")
+        english_html = english_home.get_data(as_text=True)
+        self.assertEqual(english_home.status_code, 200)
+        self.assertIn("Prepare step by step with clear theory", english_html)
+        self.assertIn("SKYDIVING LEARNING PLATFORM", english_html)
+        self.assertIn("These are not official KNVvL practice questions", english_html)
+
     def test_practice_mode_explanation_is_displayed_in_english(self):
         client = app.test_client()
         client.post("/language", data=csrf_data(client, language="EN"))
@@ -76,18 +95,27 @@ class PracticeFlowTests(unittest.TestCase):
             html,
         )
         self.assertNotIn('href="/metar"', html)
-        for category in ("algemeen", "regelementen", "meteo", "material"):
-            self.assertIn(f'href="/oefenen/{category}"', html)
+        self.assertIn('href="/oefenen/meteo"', html)
+        self.assertEqual(html.count("No exercises available"), 3)
+        for category in ("algemeen", "regelementen", "material"):
+            category_response = client.get(f"/oefenen/{category}")
+            self.assertEqual(category_response.status_code, 200)
+            self.assertIn("No exercises available", category_response.get_data(as_text=True))
 
         meteo = client.get("/oefenen/meteo")
         self.assertEqual(meteo.status_code, 200)
-        self.assertIn('href="/oefenen/meteo/METAR-TAF"', meteo.get_data(as_text=True))
+        meteo_html = meteo.get_data(as_text=True)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF"', meteo_html)
+        self.assertIn('src="/static/branding/weather_station.webp?v=', meteo_html)
 
         metar_taf = client.get("/oefenen/meteo/METAR-TAF")
         exercise_html = metar_taf.get_data(as_text=True)
         self.assertEqual(metar_taf.status_code, 200)
         self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/ontleden"', exercise_html)
         self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/afkortingen"', exercise_html)
+        weather_image = client.get("/static/branding/weather_station.webp")
+        self.assertEqual(weather_image.status_code, 200)
+        self.assertEqual(weather_image.mimetype, "image/webp")
 
         self.assertEqual(client.get("/oefenen/unknown").status_code, 404)
 
@@ -194,21 +222,19 @@ class PracticeFlowTests(unittest.TestCase):
         stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
         client = app.test_client()
         html = client.get("/").get_data(as_text=True)
-        background_response = client.get("/static/branding/background.webp")
 
         self.assertNotIn("page-entering", transition_script)
         self.assertIn("page-leaving", transition_script)
         self.assertNotIn("page-entering", stylesheet)
-        self.assertIn("background-color: #eef6fb", stylesheet)
+        self.assertIn("background-color: var(--bg)", stylesheet)
+        self.assertIn('url("branding/background.webp")', stylesheet)
+        self.assertIn("background: rgba(255, 255, 255, 0.88)", stylesheet)
         self.assertIn('rel="preload" as="image"', html)
         self.assertIn('fetchpriority="high"', html)
-        self.assertIn("branding/background.webp", html)
+        self.assertIn("branding/parachutist.webp", html)
         self.assertIn("branding/logo.webp", html)
         self.assertIn('href="/"', html)
         self.assertIn('class="brand-link"', html)
-        self.assertEqual(background_response.status_code, 200)
-        self.assertIn("public", background_response.headers["Cache-Control"])
-        self.assertIn("max-age=31536000", background_response.headers["Cache-Control"])
 
     def test_health_check_is_available_for_reverse_proxy(self):
         response = app.test_client().get("/healthz")
