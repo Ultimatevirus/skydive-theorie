@@ -2,6 +2,12 @@
 
 TRANSLATIONS = {
     "EN": {
+        "PAGINA NIET GEVONDEN": "PAGE NOT FOUND",
+        "TIJDELIJKE FOUT": "TEMPORARY ERROR",
+        "Deze pagina is buiten de dropzone beland.": "This page has drifted out of the drop zone.",
+        "Een beetje turbulentie onderweg.": "A little turbulence in the skies.",
+        "We konden de pagina niet vinden. Ga naar de startpagina of bekijk de leerstof om verder te gaan.": "We couldn't find the page you were looking for. Head home or visit the study guide to get back on course.",
+        "Deze pagina kon op dit moment niet worden geladen. Ga naar de startpagina of bekijk de leerstof om verder te gaan.": "We couldn't load this page right now. Head home or visit the study guide to continue.",
         "IT-systemen": "IT systems",
         "Systeemstatus": "System status",
         "Actuele status van de IT-systemen van Skydive-theorie.nl.": "Current status of the Skydive-theorie.nl IT systems.",

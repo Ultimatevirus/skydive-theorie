@@ -30,6 +30,41 @@ def csrf_data(client, **data):
     return {"csrf_token": token, **data}
 
 
+class ErrorPageTests(unittest.TestCase):
+    def test_not_found_page_uses_shared_layout_and_translates(self):
+        client = app.test_client()
+
+        dutch_response = client.get("/this-page-does-not-exist")
+        dutch_html = dutch_response.get_data(as_text=True)
+        self.assertEqual(dutch_response.status_code, 404)
+        self.assertIn("Deze pagina is buiten de dropzone beland.", dutch_html)
+        self.assertIn('href="/leren"', dutch_html)
+        self.assertIn("Skydive-theorie.nl", dutch_html)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        english_response = client.get("/this-page-does-not-exist")
+        english_html = english_response.get_data(as_text=True)
+        self.assertEqual(english_response.status_code, 404)
+        self.assertIn("This page has drifted out of the drop zone.", english_html)
+        self.assertIn("Explore the study guide", english_html)
+
+    def test_server_error_page_does_not_expose_exception_details(self):
+        def fail_request():
+            raise RuntimeError("private diagnostic detail")
+
+        with (
+            patch.dict(app.view_functions, {"index": fail_request}),
+            patch.dict(app.config, {"PROPAGATE_EXCEPTIONS": False}),
+        ):
+            response = app.test_client().get("/")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Een beetje turbulentie onderweg.", html)
+        self.assertNotIn("private diagnostic detail", html)
+        self.assertIn('href="/"', html)
+
+
 class PracticeFlowTests(unittest.TestCase):
     def test_recent_template_strings_are_in_english_translation_map(self):
         required = [

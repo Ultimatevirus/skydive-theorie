@@ -243,6 +243,28 @@ def inject_language_context():
     }
 
 
+@app.errorhandler(404)
+def page_not_found(_error):
+    return render_template(
+        "error.html",
+        status_code=404,
+        eyebrow="PAGINA NIET GEVONDEN",
+        heading="Deze pagina is buiten de dropzone beland.",
+        message="We konden de pagina niet vinden. Ga naar de startpagina of bekijk de leerstof om verder te gaan.",
+    ), 404
+
+
+@app.errorhandler(500)
+def internal_server_error(_error):
+    return render_template(
+        "error.html",
+        status_code=500,
+        eyebrow="TIJDELIJKE FOUT",
+        heading="Een beetje turbulentie onderweg.",
+        message="Deze pagina kon op dit moment niet worden geladen. Ga naar de startpagina of bekijk de leerstof om verder te gaan.",
+    ), 500
+
+
 _language_column_cache = question_repository._LANGUAGE_COLUMN_CACHE
 
 

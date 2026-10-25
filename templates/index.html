@@ -28,7 +28,7 @@
 {% block content %}
     <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero-copy">
-            <h1 id="home-title">{{ t('Oefenen voor je KNVvL A/B brevet') }}</h1>
+            <h1 id="home-title">{{ t('Theorie oefenen voor je KNVvL A/B brevet') }}</h1>
             <p class="home-lead">{{ t('Bereid je stap voor stap voor met heldere theorie, gerichte oefening en oefenexamens voor je KNVvL A- of B-brevet.') }}</p>
             <div class="button-row home-actions">
                 <a href="{{ url_for('oefenen') }}" class="primary-btn">{{ t('Start oefenen') }}</a>
@@ -36,7 +36,7 @@
             </div>
             <div class="home-hero-note">
                 <span class="home-note-icon" aria-hidden="true">i</span>
-                <p>{{ t('Gebruik deze oefeningen als aanvulling op de officiële lesstof en aanwijzingen van je instructeur.') }}</p>
+                <p>{{ t('Gebruik deze oefeningen als aanvulling op de officiële lesstof, instructie en aanwijzingen van je instructeur.') }}</p>
             </div>
         </div>
 
@@ -56,7 +56,6 @@
                 <p class="eyebrow">{{ t('Jouw leerroute') }}</p>
                 <h2 id="learning-paths-title">{{ t('Kies je volgende stap') }}</h2>
             </div>
-            <p>{{ t('Leer de stof, oefen gericht en test je kennis wanneer jij er klaar voor bent.') }}</p>
         </div>
         <div class="learning-path-grid">
             <a class="learning-path-card" href="{{ url_for('learn') }}">
@@ -65,7 +64,7 @@
                 </span>
                 <span class="path-card-step">{{ t('STAP 1') }}</span>
                 <h3>{{ t('Focus op theorie') }}</h3>
-                <p>{{ t('Train op de onderwerpen die belangrijk zijn voor jouw KNVvL theorie-examen.') }}</p>
+                <p>{{ t('Leer over de onderwerpen die belangrijk zijn voor jouw KNVvL theorie-examen.') }}</p>
                 <span class="path-card-link">{{ t('Bekijk de leerstof') }} <span aria-hidden="true">→</span></span>
             </a>
 
@@ -74,8 +73,8 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
                 </span>
                 <span class="path-card-step">{{ t('STAP 2') }}</span>
-                <h3>{{ t('Snelle oefensessies') }}</h3>
-                <p>{{ t('Op deze pagina vind je dynamische oefeningen om te oefenen voor de examens.') }}</p>
+                <h3>{{ t('Dynamische oefeningen') }}</h3>
+                <p>{{ t('Maak dynamische oefeningen om specifieke vaardigheden te oefenen.') }}</p>
                 <span class="path-card-link">{{ t('Ontdek de oefeningen') }} <span aria-hidden="true">→</span></span>
             </a>
 
@@ -84,8 +83,8 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
                 </span>
                 <span class="path-card-step">{{ t('STAP 3') }}</span>
-                <h3>{{ t('Oefenexamen') }}</h3>
-                <p>{{ t('Start direct een examen en werk in een overzichtelijke, doelgerichte flow.') }}</p>
+                <h3>{{ t('Oefenexamens') }}</h3>
+                <p>{{ t('Maak een oefenexamen en zie direct waar jouw aandachtspunten liggen.') }}</p>
                 <span class="path-card-link">{{ t('Start een oefenexamen') }} <span aria-hidden="true">→</span></span>
             </a>
         </div>
