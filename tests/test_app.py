@@ -253,14 +253,36 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(client.get("/metar/keuze/invalid").status_code, 404)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
-        transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()
         stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
         client = app.test_client()
         html = client.get("/").get_data(as_text=True)
+        with client.session_transaction() as session:
+            session["level"] = "A"
+            session["question_amount"] = 1
+            session["exam_question_ids"] = []
+        exam_html = client.get("/exam").get_data(as_text=True)
+        post_form_pages = [
+            exam_html,
+            client.get("/metar/afkortingen").get_data(as_text=True),
+            client.get("/taf/afkortingen").get_data(as_text=True),
+            client.get("/practice/free/A").get_data(as_text=True),
+            client.get("/contact").get_data(as_text=True),
+        ]
 
-        self.assertNotIn("page-entering", transition_script)
-        self.assertIn("page-leaving", transition_script)
         self.assertNotIn("page-entering", stylesheet)
+        self.assertNotIn("page-leaving", stylesheet)
+        self.assertIn('id="exam-form" data-turbo="false"', exam_html)
+        for page_html in post_form_pages[1:]:
+            self.assertRegex(page_html, r'<form\b[^>]*data-turbo="false"')
+        self.assertIn('src="/static/vendor/turbo.es2017-umd.js?v=', html)
+        self.assertNotIn("cdn.jsdelivr.net", html)
+        self.assertEqual(
+            client.get("/static/vendor/turbo.es2017-umd.js").status_code,
+            200,
+        )
+        self.assertFalse(
+            any(rule.rule == "/turbo-stream" for rule in app.url_map.iter_rules())
+        )
         self.assertIn("background-color: var(--bg)", stylesheet)
         self.assertIn('url("branding/background.webp")', stylesheet)
         self.assertIn("background: rgba(255, 255, 255, 0.88)", stylesheet)

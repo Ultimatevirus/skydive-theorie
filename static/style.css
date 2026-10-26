@@ -60,10 +60,6 @@
     animation-timing-function: ease-in-out;
 }
 
-html.page-leaving body {
-    opacity: 0;
-}
-
 html {
     scroll-behavior: smooth;
     min-height: 100%;

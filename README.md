@@ -1,4 +1,6 @@
 # skydive-theorie
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ultimatevirus/skydive-theorie)
+
 Containerized e-learning website for the Dutch KNVVL A &amp; B theoretical exam.
 
 ## Overview
@@ -11,21 +13,22 @@ This website helps you prepare for the KNVVL theory exams required to obtain you
 - Contact form for inquiries
 - Dynamic practice categories are available at `/oefenen`; the METAR/TAF exercises are under `/oefenen/meteo/METAR-TAF`
 
-## ⚠️ Important Disclaimer
+##  Important Disclaimer
 
 **These are NOT official KNVVL practice questions!**
 
 The questions on this site are created independently for educational purposes only. If you have questions about exam content, please contact a KNVVL-approved para-centrum for accurate and up-to-date information.
 
-## ✨ Features
+##  Features
 
-- 🚀 **Quick Practice Sessions** - Start an exam immediately with a streamlined flow
-- 📊 **Immediate Results** - View your score, progress, and topic breakdown instantly
-- 🎯 **Theory-Focused** - Train on topics relevant to your KNVVL theory exam (A or B level)
-- 🌙 **Dark/Light Mode** - Toggle between light and dark themes with theme preference saved
-- 📱 **Responsive Design** - Works on desktop and mobile devices
+-  **Practice exams** - Make relevant A/B practice exams
+-  **Dynamic METAR/TAF questions** - Train on dynamicly generated METAR/TAF questions
+-  **Immediate Results** - View your score, progress, and topic breakdown instantly after exams
+-  **Theory-Focused** - Train on any topic or subtopic you wish
+-  **Dark/Light Mode** - Toggle between light and dark themes with theme preference saved
+-  **Responsive Design** - Works on desktop and mobile devices
 
-## 🛠️ Technology Stack
+##  Technology Stack
 
 - **Backend**: Flask (Python 3.14)
 - **Database**: SQLite (`data.db`)
@@ -38,7 +41,7 @@ throttling, and contact delivery/rate limiting live in the focused
 `question_repository.py`, `access_gate_service.py`, and `contact_service.py`
 modules.
 
-## 📦 Installation & Setup
+##  Installation & Setup
 
 ### Local testing with Docker Compose
 

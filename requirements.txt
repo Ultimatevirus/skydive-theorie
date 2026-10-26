@@ -1,3 +1,4 @@
 Flask==3.1.2
 Gunicorn==23.0.0
 paho-mqtt>=2.0,<3
+Turbo-Flask==0.8.6

@@ -15,7 +15,7 @@
 
         {% if error %}<div class="error-box" role="alert">{{ t(error) }}</div>{% endif %}
 
-        <form method="post" action="{{ url_for('metar_practice') }}" class="metar-form">
+        <form method="post" action="{{ url_for('metar_practice') }}" class="metar-form" data-turbo="false">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="attempt_id" value="{{ attempt_id or '' }}">
             <div class="field-group">
@@ -124,6 +124,7 @@
 {% block scripts %}
     {% if metar and not result %}
     <script>
+        (() => {
         const metarForm = document.querySelector(".metar-form");
         const confirmModal = document.getElementById("confirm-modal");
         const confirmContinue = document.getElementById("confirm-continue");
@@ -175,7 +176,7 @@
         confirmModal.addEventListener("click", (event) => {
             if (event.target === confirmModal) closeConfirmModal();
         });
-        document.addEventListener("keydown", (event) => {
+        document.body.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && !confirmModal.hidden) closeConfirmModal();
         });
         confirmContinue.addEventListener("click", () => {
@@ -193,6 +194,7 @@
             metarForm.appendChild(action);
             metarForm.submit();
         });
+        })();
     </script>
     {% endif %}
 {% endblock %}

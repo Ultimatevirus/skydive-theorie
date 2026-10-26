@@ -26,7 +26,7 @@
                 <div class="error-box" role="alert">{{ t(error) }}</div>
             {% endif %}
 
-            <form method="POST" action="{{ url_for('contact') }}" class="contact-form">
+            <form method="POST" action="{{ url_for('contact') }}" class="contact-form" data-turbo="false">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="field-group">
                     <label for="email">{{ t('Jouw e-mailadres') }}</label>

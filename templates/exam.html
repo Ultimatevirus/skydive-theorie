@@ -28,7 +28,7 @@
             </div>
         {% endif %}
 
-        <form method="post" action="/exam" id="exam-form">
+        <form method="post" action="/exam" id="exam-form" data-turbo="false">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             {% set counter = namespace(n=0) %}
             {% for group in question_groups %}
@@ -99,6 +99,7 @@
 
 {% block scripts %}
     <script>
+        (() => {
         const totalQuestions = Number("{{ total_questions }}");
         const startedAt = Number("{{ started_at }}");
         const timerEl = document.getElementById("timer");
@@ -182,7 +183,7 @@
         confirmModal.addEventListener("click", (event) => {
             if (event.target === confirmModal) closeConfirmModal();
         });
-        document.addEventListener("keydown", (event) => {
+        document.body.addEventListener("keydown", (event) => {
             if (event.key === "Escape" && !confirmModal.hidden) closeConfirmModal();
         });
         confirmContinue.addEventListener("click", () => {
@@ -197,5 +198,6 @@
             const elapsed = Math.floor((Date.now() / 1000) - startedAt);
             timerEl.textContent = formatTime(elapsed);
         }, 1000);
+        })();
     </script>
 {% endblock %}

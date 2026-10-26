@@ -1,29 +1,34 @@
 (() => {
-    document.querySelectorAll('.site-header').forEach((header) => {
+    const setOpen = (header, isOpen) => {
         const toggle = header.querySelector('.nav-toggle');
         const nav = header.querySelector('.main-nav');
         if (!toggle || !nav) return;
+        nav.classList.toggle('is-open', isOpen);
+        toggle.setAttribute('aria-expanded', String(isOpen));
+    };
 
-        const setOpen = (isOpen) => {
-            nav.classList.toggle('is-open', isOpen);
-            toggle.setAttribute('aria-expanded', String(isOpen));
-        };
-
-        toggle.addEventListener('click', (event) => {
+    document.addEventListener('click', (event) => {
+        const toggle = event.target.closest('.nav-toggle');
+        if (toggle) {
+            const header = toggle.closest('.site-header');
             event.stopPropagation();
-            setOpen(!nav.classList.contains('is-open'));
-        });
+            const nav = header && header.querySelector('.main-nav');
+            if (nav) setOpen(header, !nav.classList.contains('is-open'));
+            return;
+        }
 
-        document.addEventListener('click', (event) => {
-            if (!header.contains(event.target)) setOpen(false);
+        document.querySelectorAll('.site-header').forEach((header) => {
+            if (!header.contains(event.target)) setOpen(header, false);
         });
+    });
 
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') setOpen(false);
-        });
+    document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        document.querySelectorAll('.site-header').forEach((header) => setOpen(header, false));
+    });
 
-        window.addEventListener('resize', () => {
-            if (window.innerWidth > 768) setOpen(false);
-        });
+    window.addEventListener('resize', () => {
+        if (window.innerWidth <= 768) return;
+        document.querySelectorAll('.site-header').forEach((header) => setOpen(header, false));
     });
 })();

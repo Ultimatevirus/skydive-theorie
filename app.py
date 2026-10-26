@@ -22,6 +22,7 @@ from flask import (
     session,
     url_for,
 )
+from turbo_flask import Turbo
 from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
 import access_gate_service
 import contact_service
@@ -46,6 +47,8 @@ from translations import TRANSLATIONS
 
 app = Flask(__name__)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 31536000
+app.config["TURBO_WEBSOCKET_ROUTE"] = None
+turbo = Turbo(app)
 logger = logging.getLogger(__name__)
 is_production = os.getenv("APP_ENV", "development").lower() == "production"
 # Behind Traefik the real client address is the last X-Forwarded-For entry; trust only that many proxy hops.
