@@ -122,9 +122,11 @@ Concurrency: production runs 2 `app` replicas (2 Gunicorn workers x 6 threads ea
 
 The SQLite `data.db` file contains versioned application content and the daily METAR cache. The image contains the latest seed database, while `/data/data.db` is stored in the persistent `app-data` volume. Both the local/test and production Compose app containers run the same `docker-entrypoint.sh`, which synchronizes the seed database before starting Gunicorn. On startup, questions and image-source metadata are synchronized from the image seed; the image-key foreign key is recreated with the updated question schema, while unrelated runtime data is preserved. Rebuild and deploy the app image with the normal Compose commands above to apply database schema/content changes; no manual volume migration is required.
 
+Background weather and status services run in a separate process per app container, so Gunicorn never forks request workers from a master with active database threads. SQLite initialization is serialized across replicas sharing the volume.
+
 ### KNMI METAR configuration
 
-The Gunicorn master starts a background MQTT listener for `dataplatform/file/v1/metar/1.0/created`. It uses the KNMI Notification Service over TLS WebSockets on port 443, with QoS 1 and a persistent client ID per app container. METARs are refreshed only when KNMI publishes a new file notification; when the event identifies an airport, only that airport is refreshed. The listener does not perform a timer-based refresh. Failed updates are logged and can be retried when a later file notification arrives.
+The per-container background process starts an MQTT listener for `dataplatform/file/v1/metar/1.0/created`. It uses the KNMI Notification Service over TLS WebSockets on port 443, with QoS 1 and a persistent client ID per app container. METARs are refreshed only when KNMI publishes a new file notification; when the event identifies an airport, only that airport is refreshed. The listener does not perform a timer-based refresh. Failed updates are logged and can be retried when a later file notification arrives.
 
 Configure both server-side credentials through deployment environment variables; neither key is sent to the browser. `KNMI_NOTIFICATION_API_KEY` must be an API key with access to the Notification Service:
 
@@ -143,7 +145,7 @@ KNMI Open Data requests use a descriptive User-Agent, are limited to 900 request
 
 ### IT systems status page
 
-The public status page is available at `/it-systemen` and is not linked in the normal site navigation. A Gunicorn master process checks SMTP, KNMI Notification Service (MQTT), and KNMI Open Data in the background and stores the latest results in the shared SQLite database, so page views do not wait for provider connections. SMTP checks the configured connection, TLS, and authentication without sending a message.
+The public status page is available at `/it-systemen` and is not linked in the normal site navigation. The per-container background process checks SMTP, KNMI Notification Service (MQTT), and KNMI Open Data and stores the latest results in the shared SQLite database, so page views do not wait for provider connections. SMTP checks the configured connection, TLS, and authentication without sending a message.
 
 The MQTT status uses a received notification as evidence of activity and only probes the broker and subscription when no notification has arrived in the last two hours. The Open Data check first looks for a METAR row dated today; when one exists, it does not call the API. If no row exists, it makes a lightweight authenticated files-list request no more than once every 15 minutes, subject to the shared KNMI API quota. Missing credentials are shown as not configured, and provider error details and credentials are not exposed on the page.
 

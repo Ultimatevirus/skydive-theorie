@@ -27,6 +27,7 @@ COPY question_repository.py ./
 COPY metar.py ./
 COPY taf.py ./
 COPY system_status.py ./
+COPY background_services.py ./
 COPY translations.py ./
 COPY gunicorn_config.py ./
 COPY docker-entrypoint.sh ./

@@ -1,9 +1,15 @@
 import os
 import sqlite3
+import subprocess
+import sys
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import db
 
@@ -33,6 +39,111 @@ class DatabaseHelperTests(unittest.TestCase):
         finally:
             if os.path.exists(db_path):
                 os.remove(db_path)
+
+    def test_journal_configuration_retries_busy_and_closes_on_failure(self):
+        busy = sqlite3.OperationalError("database is locked")
+        busy.sqlite_errorcode = sqlite3.SQLITE_BUSY
+        conn = MagicMock()
+        conn.execute.side_effect = [
+            MagicMock(), MagicMock(), busy, MagicMock(fetchone=lambda: ("wal",)),
+            MagicMock(),
+        ]
+        with patch.object(db.sqlite3, "connect", return_value=conn), patch.object(db.time, "sleep"):
+            self.assertIs(db.connect_db(path="unused", configure_journal=True), conn)
+        self.assertEqual(conn.execute.call_count, 5)
+
+        conn = MagicMock()
+        conn.execute.side_effect = sqlite3.OperationalError("disk I/O error")
+        with patch.object(db.sqlite3, "connect", return_value=conn):
+            with self.assertRaisesRegex(sqlite3.OperationalError, "disk I/O error"):
+                db.connect_db(path="unused", configure_journal=True)
+        conn.close.assert_called_once()
+
+    def test_concurrent_initialization_keeps_exercises_available(self):
+        import app as app_module
+        import metar
+
+        with tempfile.TemporaryDirectory() as directory:
+            database_path = Path(directory) / "data.db"
+            for _ in range(3):
+                barrier = threading.Barrier(2)
+
+                def initialize():
+                    barrier.wait(timeout=10)
+                    db.initialize_database(database_path=database_path)
+
+                with ThreadPoolExecutor(max_workers=2) as pool:
+                    futures = [pool.submit(initialize) for _ in range(2)]
+                    for future in futures:
+                        future.result(timeout=40)
+
+            today = datetime.now(timezone.utc).date().isoformat()
+            report = "EHAM 121250Z 24008KT 9999 SCT020 12/09 Q1013"
+            conn = db.connect_db(path=database_path)
+            try:
+                conn.execute("INSERT INTO metar (datetime, airport, metar) VALUES (?, ?, ?)",
+                             (today, "EHAM", report))
+                conn.commit()
+            finally:
+                conn.close()
+
+            with patch.dict(os.environ, {
+                "DB_PATH": str(database_path),
+                "ACCESS_GATE_ENABLED": "0",
+                "KNMI_METAR_REFRESH": "1",
+            }):
+                metar._CACHE.clear()
+                client = app_module.app.test_client()
+                self.assertEqual(client.get("/practice/free/A").status_code, 200)
+                with client.session_transaction() as session:
+                    session["level"] = "A"
+                    session["question_amount"] = 10
+                exam = client.get("/exam")
+                self.assertEqual(exam.status_code, 200)
+                self.assertIn('id="exam-form"', exam.get_data(as_text=True))
+                response = client.get("/metar/ontleden?airport=EHAM")
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(report, response.get_data(as_text=True))
+                metar._CACHE.clear()
+
+    def test_initialization_reads_schema_after_acquiring_write_lock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "data.db"
+            original = db._schema_objects
+
+            def read_schema(conn, database):
+                self.assertTrue(conn.in_transaction)
+                return original(conn, database)
+
+            with patch.object(db, "_schema_objects", side_effect=read_schema):
+                db.initialize_database(database_path=target)
+
+    def test_replica_processes_initialize_the_same_database(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "data.db"
+            start_at = str(time.time() + 1)
+            script = (
+                "import db, sys, time; "
+                "time.sleep(max(0, float(sys.argv[2]) - time.time())); "
+                "db.initialize_database(database_path=sys.argv[1])"
+            )
+            processes = [
+                subprocess.Popen(
+                    [sys.executable, "-c", script, str(target), start_at],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
+                for _ in range(2)
+            ]
+            try:
+                for process in processes:
+                    _, stderr = process.communicate(timeout=40)
+                    self.assertEqual(process.returncode, 0, stderr.decode(errors="replace"))
+            finally:
+                for process in processes:
+                    if process.poll() is None:
+                        process.terminate()
+                        process.communicate(timeout=10)
 
     def test_initialize_database_syncs_questions_and_merges_schema(self):
         with tempfile.TemporaryDirectory() as directory:

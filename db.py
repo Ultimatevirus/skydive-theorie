@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+import time
 from pathlib import Path
 
 
@@ -43,13 +44,31 @@ def get_db_path():
 def connect_db(path=None, row_factory=None, configure_journal=False):
     """Open a configured SQLite connection with consistent busy handling."""
     conn = sqlite3.connect(path or get_db_path(), timeout=30)
-    if row_factory is not None:
-        conn.row_factory = row_factory
-    conn.execute("PRAGMA busy_timeout=30000")
-    conn.execute("PRAGMA foreign_keys=ON")
-    if configure_journal:
-        conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
+    try:
+        if row_factory is not None:
+            conn.row_factory = row_factory
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA foreign_keys=ON")
+        if configure_journal:
+            deadline = time.monotonic() + 30
+            while True:
+                try:
+                    mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+                    if mode.lower() != "wal":
+                        raise sqlite3.OperationalError(f"Could not enable WAL mode: {mode}")
+                    break
+                except sqlite3.OperationalError as exc:
+                    error_code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
+                    if (
+                        error_code not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+                        or time.monotonic() >= deadline
+                    ):
+                        raise
+                    time.sleep(0.05)
+        conn.execute("PRAGMA synchronous=NORMAL")
+    except Exception:
+        conn.close()
+        raise
     return conn
 
 
@@ -121,13 +140,13 @@ def initialize_database(seed_path=None, database_path=None):
     conn = connect_db(path=target_path, configure_journal=True)
     try:
         conn.execute("ATTACH DATABASE ? AS seed", (str(seed_path),))
+        conn.execute("BEGIN IMMEDIATE")
+        conn.execute("PRAGMA defer_foreign_keys=ON")
+
         seed_objects = _schema_objects(conn, "seed")
         target_objects = _schema_objects(conn, "main")
         replaced_tables = set()
         tables_to_copy = []
-
-        conn.execute("BEGIN IMMEDIATE")
-        conn.execute("PRAGMA defer_foreign_keys=ON")
 
         preserved_views = {
             name: seed_object
