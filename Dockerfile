@@ -1,4 +1,4 @@
-FROM python:3.14-alpine3.24 AS builder
+FROM python:3.15-alpine3.24 AS builder
 
 WORKDIR /build
 
@@ -6,7 +6,7 @@ COPY requirements.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-FROM python:3.14-alpine3.24
+FROM python:3.15-alpine3.24
 
 WORKDIR /app
 
