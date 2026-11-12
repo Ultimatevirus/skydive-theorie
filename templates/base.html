@@ -3,20 +3,20 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="{% block meta_description %}Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.{% endblock %}">
+    <meta name="description" content="{% block meta_description %}{{ t('Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.') }}{% endblock %}">
     <meta name="robots" content="index,follow,max-image-preview:large">
     <meta name="author" content="Alex Brittmann">
     <meta name="theme-color" content="#0d1b2a">
     <meta property="og:site_name" content="Skydive-theorie.nl">
     <meta property="og:type" content="website">
     <meta property="og:title" content="{{ self.title() }}">
-    <meta property="og:description" content="{% block og_description %}Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.{% endblock %}">
+    <meta property="og:description" content="{% block og_description %}{{ t('Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.') }}{% endblock %}">
     <meta property="og:url" content="{{ request.url_root.rstrip('/') + request.path }}">
     <meta property="og:image" content="{{ request.url_root.rstrip('/') + url_for('static', filename='branding/logo.webp') }}">
     <meta property="og:image:alt" content="Skydive-theorie.nl logo">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ self.title() }}">
-    <meta name="twitter:description" content="{% block twitter_description %}Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.{% endblock %}">
+    <meta name="twitter:description" content="{% block twitter_description %}{{ t('Oefen voor je KNVvL A/B brevet met praktijkexamens, theorievragen en METAR-oefeningen voor skydivers in Nederland.') }}{% endblock %}">
     <meta name="twitter:image" content="{{ request.url_root.rstrip('/') + url_for('static', filename='branding/logo.webp') }}">
     <link rel="canonical" href="{{ request.url_root.rstrip('/') + request.path }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -25,10 +25,9 @@
     <link rel="icon" type="image/svg+xml" href="{{ asset_url('branding/skydive-theorie-favicon.svg') }}">
     <link rel="shortcut icon" type="image/svg+xml" href="{{ asset_url('branding/skydive-theorie-favicon.svg') }}">
     <title>{% block title %}Skydive-theorie.nl{% endblock %}</title>
-    <link rel="preload" as="image" href="{{ url_for('static', filename='branding/background.webp') }}" fetchpriority="high">
     <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.webp') }}">
+    {{ turbo(url=asset_url('vendor/turbo.es2017-umd.js')) }}
     <script src="{{ asset_url('theme.js') }}"></script>
-    <script src="{{ asset_url('page-transition.js') }}"></script>
     <link rel="stylesheet" href="{{ asset_url('style.css') }}">
     <script src="{{ asset_url('language.js') }}" defer></script>
     <script src="{{ asset_url('nav-toggle.js') }}" defer></script>
@@ -48,20 +47,23 @@
                         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l-2 0l9 -9l9 9l-2 0"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-7"/><path d="M9 21v-6a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v6"/></svg>
                         <span>{{ t('Home') }}</span>
                     </a>
-                    <a href="{{ url_for('practice') }}" class="nav-link{% if page_name == 'practice' %} active{% endif %}">
-                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
-                        <span>{{ t('Oefenexamen') }}</span>
-                    </a>
-                    <a href="{{ url_for('metar_choice') }}" class="nav-link{% if page_name in ('metar', 'taf') %} active{% endif %}"><img class="nav-icon" src="{{ url_for('static', filename='icons/plane.svg') }}" alt=""><span>{{ t('METAR/TAF oefenen') }}</span></a>
                     <a href="{{ url_for('learn') }}" class="nav-link{% if page_name == 'learn' %} active{% endif %}">
                         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"/><path d="M3 6l0 13"/><path d="M12 6l0 13"/><path d="M21 6l0 13"/></svg>
                         <span>{{ t('Leren voor het examen') }}</span>
+                    </a>
+                    <a href="{{ url_for('oefenen') }}" class="nav-link{% if page_name == 'oefenen' %} active{% endif %}">
+                        <span class="nav-icon nav-icon-solid" aria-hidden="true"></span>
+                        <span>{{ t('Oefenen') }}</span>
+                    </a>
+                    <a href="{{ url_for('practice') }}" class="nav-link{% if page_name == 'practice' %} active{% endif %}">
+                        <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"/><path d="M9 7l6 0"/><path d="M9 11l6 0"/><path d="M9 15l4 0"/></svg>
+                        <span>{{ t('Oefenexamen') }}</span>
                     </a>
                     <a href="{{ url_for('contact') }}" class="nav-link{% if page_name == 'contact' %} active{% endif %}">
                         <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-10"/><path d="M3 7l9 6l9 -6"/></svg>
                         <span>{{ t('Contact') }}</span>
                     </a>
-                    <form method="post" action="{{ url_for('set_language') }}" class="language-picker">
+                    <form method="post" action="{{ url_for('set_language') }}" class="language-picker" data-turbo="false">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="language" value="{{ language }}">
                         <button type="button" class="language-trigger" aria-expanded="false" aria-label="Language">{{ language }}</button>

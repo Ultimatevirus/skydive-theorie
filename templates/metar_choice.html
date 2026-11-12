@@ -2,7 +2,7 @@
 
 {% block title %}{{ t('METAR/TAF oefenen') }}{% endblock %}
 
-{% set page_name = 'metar' %}
+{% set page_name = 'oefenen' %}
 
 {% block content %}
     <div class="card exam-card practice-card">
@@ -39,7 +39,7 @@
                 </a>
             </div>
             <div class="button-row practice-footer">
-                <a href="{{ url_for('index') }}" class="secondary-btn">{{ t('Terug naar home') }}</a>
+                <a href="{{ url_for('oefenen') }}" class="secondary-btn">{{ t('Terug naar oefenen') }}</a>
             </div>
         {% endif %}
     </div>

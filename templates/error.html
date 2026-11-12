@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}{{ status_code }} | Skydive-theorie.nl{% endblock %}
+{% block meta_description %}{{ t(message) }}{% endblock %}
+
+{% block content %}
+<section class="error-card card" aria-labelledby="error-heading">
+    <div class="error-illustration" aria-hidden="true">
+        <svg viewBox="0 0 96 96" fill="none">
+            <path d="M12 40C14 21 27 10 48 10s34 11 36 30H12Z"></path>
+            <path d="m12 40 36-30 36 30M48 10v30M23 40l25 20 25-20"></path>
+            <circle cx="48" cy="66" r="5"></circle>
+            <path d="M48 71v12m-8-6 8-6 8 6"></path>
+        </svg>
+        <span class="error-code">{{ status_code }}</span>
+    </div>
+    <div class="error-copy">
+        <p class="eyebrow">{{ t(eyebrow) }}</p>
+        <h1 id="error-heading">{{ t(heading) }}</h1>
+        <p>{{ t(message) }}</p>
+        <div class="button-row error-actions">
+            <a class="primary-btn" href="{{ url_for('index') }}">{{ t('Terug naar home') }}</a>
+            <a class="secondary-btn" href="{{ url_for('learn') }}">{{ t('Bekijk de leerstof') }}</a>
+        </div>
+    </div>
+</section>
+{% endblock %}

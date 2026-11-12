@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('Oefenen') }}{% endblock %}
+
+{% set page_name = 'oefenen' %}
+
+{% block content %}
+    <div class="card exam-card practice-card">
+        <div class="page-header">
+            <div>
+                <p class="eyebrow">{{ t('Oefenen') }}</p>
+                <h1>{{ t('Dynamische oefeningen') }}</h1>
+                <p>{{ t('Op deze pagina vind je dynamische gegenereerde oefeningen om te specifieke onderwerpen voor te bereiden voor de examens.') }}</p>
+            </div>
+        </div>
+
+        <div class="choice-grid" aria-label="{{ t('Kies een onderwerp') }}">
+            <div class="choice-card option-card category-card category-card--algemeen is-unavailable" aria-disabled="true">
+                <span class="choice-label">{{ t('Algemeen') }}</span>
+                <span class="availability-status">{{ t('Geen oefeningen beschikbaar') }}</span>
+            </div>
+            <div class="choice-card option-card category-card category-card--regelementen is-unavailable" aria-disabled="true">
+                <span class="choice-label">{{ t('Regelementen') }}</span>
+                <span class="availability-status">{{ t('Geen oefeningen beschikbaar') }}</span>
+            </div>
+            <a href="{{ url_for('practice_category', category='meteo') }}" class="choice-card option-card category-card category-card--meteo">
+                <span class="choice-label">{{ t('Meteo') }}</span>
+                <span class="availability-status">{{ t('Oefeningen beschikbaar') }}</span>
+            </a>
+            <div class="choice-card option-card category-card category-card--materiaal is-unavailable" aria-disabled="true">
+                <span class="choice-label">{{ t('Materiaal') }}</span>
+                <span class="availability-status">{{ t('Geen oefeningen beschikbaar') }}</span>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from jinja2 import Environment, nodes
+
 import app as app_module
 import taf as taf_module
 from app import app
@@ -30,10 +32,63 @@ def csrf_data(client, **data):
     return {"csrf_token": token, **data}
 
 
+class ErrorPageTests(unittest.TestCase):
+    def test_not_found_page_uses_shared_layout_and_translates(self):
+        client = app.test_client()
+
+        dutch_response = client.get("/this-page-does-not-exist")
+        dutch_html = dutch_response.get_data(as_text=True)
+        self.assertEqual(dutch_response.status_code, 404)
+        self.assertIn("Deze pagina is buiten de dropzone beland.", dutch_html)
+        self.assertIn('href="/leren"', dutch_html)
+        self.assertIn("Skydive-theorie.nl", dutch_html)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        english_response = client.get("/this-page-does-not-exist")
+        english_html = english_response.get_data(as_text=True)
+        self.assertEqual(english_response.status_code, 404)
+        self.assertIn("This page has drifted out of the drop zone.", english_html)
+        self.assertIn("Explore the study guide", english_html)
+
+    def test_server_error_page_does_not_expose_exception_details(self):
+        def fail_request():
+            raise RuntimeError("private diagnostic detail")
+
+        with (
+            patch.dict(app.view_functions, {"index": fail_request}),
+            patch.dict(app.config, {"PROPAGATE_EXCEPTIONS": False}),
+        ):
+            response = app.test_client().get("/")
+
+        html = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("Een beetje turbulentie onderweg.", html)
+        self.assertNotIn("private diagnostic detail", html)
+        self.assertIn('href="/"', html)
+
+
 class PracticeFlowTests(unittest.TestCase):
+    def test_literal_template_translations_exist_in_english(self):
+        environment = Environment()
+        missing = []
+        for path in (Path(app_module.BASE_DIR) / "templates").glob("*.html"):
+            template = environment.parse(path.read_text(encoding="utf-8-sig"))
+            for call in template.find_all(nodes.Call):
+                if (
+                    isinstance(call.node, nodes.Name)
+                    and call.node.name == "t"
+                    and call.args
+                    and isinstance(call.args[0], nodes.Const)
+                    and call.args[0].value not in app_module.TRANSLATIONS["EN"]
+                ):
+                    missing.append(f"{path.name}:{call.lineno}: {call.args[0].value}")
+        self.assertEqual(missing, [])
+
     def test_recent_template_strings_are_in_english_translation_map(self):
         required = [
             "Oefenen voor je KNVvL A/B brevet",
+            "Op deze pagina vind je dynamische oefeningen om te oefenen voor de examens.",
+            "De dynamische oefeningen voor dit onderwerp worden hier verzameld.",
             "Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen!",
             "Op dit moment zijn de vragen nog NIET gevalideerd!",
             "METAR mode",
@@ -50,6 +105,25 @@ class PracticeFlowTests(unittest.TestCase):
         for key in required:
             self.assertIn(key, app_module.TRANSLATIONS["EN"])
 
+    def test_homepage_learning_paths_and_disclaimer_render_in_english(self):
+        client = app.test_client()
+
+        dutch_home = client.get("/")
+        dutch_html = dutch_home.get_data(as_text=True)
+        self.assertEqual(dutch_home.status_code, 200)
+        self.assertIn('href="/leren"', dutch_html)
+        self.assertIn('href="/oefenen"', dutch_html)
+        self.assertIn('href="/practice"', dutch_html)
+        self.assertIn("Dit zijn geen officiële KNVvL", dutch_html)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        english_home = client.get("/")
+        english_html = english_home.get_data(as_text=True)
+        self.assertEqual(english_home.status_code, 200)
+        self.assertIn("Prepare step by step with clear theory", english_html)
+        self.assertIn("SKYDIVING LEARNING PLATFORM", english_html)
+        self.assertIn("These are not official KNVvL exam or practice questions", english_html)
+
     def test_practice_mode_explanation_is_displayed_in_english(self):
         client = app.test_client()
         client.post("/language", data=csrf_data(client, language="EN"))
@@ -62,8 +136,44 @@ class PracticeFlowTests(unittest.TestCase):
             response.get_data(as_text=True),
         )
 
+    def test_oefenen_pages_link_to_categories_and_metar_taf_modes(self):
+        client = app.test_client()
+        client.post("/language", data=csrf_data(client, language="EN"))
+
+        home = client.get("/oefenen")
+        html = home.get_data(as_text=True)
+        self.assertEqual(home.status_code, 200)
+        self.assertIn(
+            "This page contains dynamically generated exercises to help you prepare for specific exam topics.",
+            html,
+        )
+        self.assertNotIn('href="/metar"', html)
+        self.assertIn('href="/oefenen/meteo"', html)
+        self.assertEqual(html.count("No exercises available"), 3)
+        for category in ("algemeen", "regelementen", "material"):
+            category_response = client.get(f"/oefenen/{category}")
+            self.assertEqual(category_response.status_code, 200)
+            self.assertIn("No exercises available", category_response.get_data(as_text=True))
+
+        meteo = client.get("/oefenen/meteo")
+        self.assertEqual(meteo.status_code, 200)
+        meteo_html = meteo.get_data(as_text=True)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF"', meteo_html)
+        self.assertIn('src="/static/branding/weather_station.webp?v=', meteo_html)
+
+        metar_taf = client.get("/oefenen/meteo/METAR-TAF")
+        exercise_html = metar_taf.get_data(as_text=True)
+        self.assertEqual(metar_taf.status_code, 200)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/ontleden"', exercise_html)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/afkortingen"', exercise_html)
+        weather_image = client.get("/static/branding/weather_station.webp")
+        self.assertEqual(weather_image.status_code, 200)
+        self.assertEqual(weather_image.mimetype, "image/webp")
+
+        self.assertEqual(client.get("/oefenen/unknown").status_code, 404)
+
     def test_metar_practice_shows_report_in_question_and_original_panel(self):
-        metar = MagicMock(airport="EHAM", airport_name="Amsterdam", raw="EHAM 101425Z 24012KT")
+        metar = {"airport": "EHAM", "airport_name": "Amsterdam", "raw": "EHAM 101425Z 24012KT"}
         question = {
             "question": "What is the wind direction?",
             "options": ["240 degrees", "120 degrees"],
@@ -81,7 +191,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('class="metar-question-heading"', html)
         self.assertIn('metar-question-cell metar-question-report', html)
-        self.assertGreaterEqual(html.count(metar.raw), 2)
+        self.assertGreaterEqual(html.count(metar["raw"]), 2)
 
     def test_taf_practice_shows_multiline_report(self):
         taf = taf_module.parse_taf(
@@ -141,9 +251,9 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("<mark>", page.get_data(as_text=True))
         self.assertIn("METAR/TAF oefenen", choice)
         self.assertIn("Wil je ontleden oefenen of afkortingen?", choice)
-        self.assertIn('href="/metar/keuze/ontleden"', choice)
-        self.assertIn('href="/metar/keuze/afkortingen"', choice)
-        self.assertNotIn('href="/metar/ontleden"', choice)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/ontleden"', choice)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/keuze/afkortingen"', choice)
+        self.assertNotIn('href="/oefenen/meteo/METAR-TAF/ontleden"', choice)
 
     def test_metar_type_choice_shows_only_report_types_for_selected_mode(self):
         client = app.test_client()
@@ -152,34 +262,54 @@ class PracticeFlowTests(unittest.TestCase):
         abbreviations = client.get("/metar/keuze/afkortingen").get_data(as_text=True)
 
         self.assertIn("Wil je METAR&#39;s of TAF&#39;s oefenen?", parsing)
-        self.assertIn('href="/metar/ontleden"', parsing)
-        self.assertIn('href="/taf/ontleden"', parsing)
-        self.assertNotIn('href="/metar/afkortingen"', parsing)
-        self.assertIn('href="/metar/afkortingen"', abbreviations)
-        self.assertIn('href="/taf/afkortingen"', abbreviations)
-        self.assertNotIn('href="/metar/ontleden"', abbreviations)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/ontleden"', parsing)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/taf/ontleden"', parsing)
+        self.assertNotIn('href="/oefenen/meteo/METAR-TAF/afkortingen"', parsing)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/afkortingen"', abbreviations)
+        self.assertIn('href="/oefenen/meteo/METAR-TAF/taf/afkortingen"', abbreviations)
+        self.assertNotIn('href="/oefenen/meteo/METAR-TAF/ontleden"', abbreviations)
         self.assertEqual(client.get("/metar/keuze/invalid").status_code, 404)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
-        transition_script = (Path(app_module.BASE_DIR) / "static" / "page-transition.js").read_text()
         stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
         client = app.test_client()
         html = client.get("/").get_data(as_text=True)
-        background_response = client.get("/static/branding/background.webp")
+        with client.session_transaction() as session:
+            session["level"] = "A"
+            session["question_amount"] = 1
+            session["exam_question_ids"] = []
+        exam_html = client.get("/exam").get_data(as_text=True)
+        post_form_pages = [
+            exam_html,
+            client.get("/metar/afkortingen").get_data(as_text=True),
+            client.get("/taf/afkortingen").get_data(as_text=True),
+            client.get("/practice/free/A").get_data(as_text=True),
+            client.get("/contact").get_data(as_text=True),
+        ]
 
-        self.assertNotIn("page-entering", transition_script)
-        self.assertIn("page-leaving", transition_script)
         self.assertNotIn("page-entering", stylesheet)
-        self.assertIn("background-color: #eef6fb", stylesheet)
+        self.assertNotIn("page-leaving", stylesheet)
+        self.assertIn('id="exam-form" data-turbo="false"', exam_html)
+        for page_html in post_form_pages[1:]:
+            self.assertRegex(page_html, r'<form\b[^>]*data-turbo="false"')
+        self.assertIn('src="/static/vendor/turbo.es2017-umd.js?v=', html)
+        self.assertNotIn("cdn.jsdelivr.net", html)
+        self.assertEqual(
+            client.get("/static/vendor/turbo.es2017-umd.js").status_code,
+            200,
+        )
+        self.assertFalse(
+            any(rule.rule == "/turbo-stream" for rule in app.url_map.iter_rules())
+        )
+        self.assertIn("background-color: var(--bg)", stylesheet)
+        self.assertIn('url("branding/background.webp")', stylesheet)
+        self.assertIn("background: rgba(255, 255, 255, 0.88)", stylesheet)
         self.assertIn('rel="preload" as="image"', html)
         self.assertIn('fetchpriority="high"', html)
-        self.assertIn("branding/background.webp", html)
+        self.assertIn("branding/parachutist.webp", html)
         self.assertIn("branding/logo.webp", html)
         self.assertIn('href="/"', html)
         self.assertIn('class="brand-link"', html)
-        self.assertEqual(background_response.status_code, 200)
-        self.assertIn("public", background_response.headers["Cache-Control"])
-        self.assertIn("max-age=31536000", background_response.headers["Cache-Control"])
 
     def test_health_check_is_available_for_reverse_proxy(self):
         response = app.test_client().get("/healthz")
@@ -220,7 +350,7 @@ class PracticeFlowTests(unittest.TestCase):
         ico_response = client.get("/favicon.ico")
         home_html = client.get("/").get_data(as_text=True)
         static_response = client.get(
-            "/static/branding/skydive-theorie-favicon.svg"
+            "/static/icons/book-solid-full.svg"
         )
 
         self.assertEqual(svg_response.status_code, 200)
@@ -229,7 +359,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn(b"<svg ", svg_response.data)
         self.assertEqual(ico_response.status_code, 200)
         self.assertIn(
-            'href="/static/branding/skydive-theorie-favicon.svg?v=',
+            'href="/static/icons/book-solid-full.svg?v=',
             home_html,
         )
         self.assertEqual(static_response.status_code, 200)
@@ -270,6 +400,65 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('data-language="EN"', html)
         self.assertIn('language-option is-selected', html)
         self.assertIn('<html lang="en">', html)
+
+    def test_updated_dutch_page_copy_has_english_translations(self):
+        client = app.test_client()
+        client.post("/language", data=csrf_data(client, language="EN"))
+
+        home_response = client.get("/")
+        home_html = home_response.get_data(as_text=True)
+        self.assertEqual(home_response.status_code, 200)
+        self.assertIn(
+            "Please note: These are not official KNVvL exam or practice questions, "
+            "and they have NOT been fully validated!",
+            home_html,
+        )
+
+        learn_response = client.get("/leren")
+        learn_html = learn_response.get_data(as_text=True)
+        self.assertEqual(learn_response.status_code, 200)
+        self.assertIn("general knowledge, regulations, equipment, and weather", learn_html)
+        self.assertIn("Regulations cover the safety rules and requirements that apply", learn_html)
+        self.assertNotIn("Regelementen", learn_html)
+
+    def test_home_and_study_resources_are_localized(self):
+        client = app.test_client()
+        dutch_home = client.get("/").get_data(as_text=True)
+        dutch_learn = client.get("/leren").get_data(as_text=True)
+        self.assertIn("Theorie oefenen voor je KNVvL A/B brevet", dutch_home)
+        self.assertIn("Officiële KNVvL informatie over skydiven in Nederland", dutch_learn)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        home = client.get("/").get_data(as_text=True)
+        learn = client.get("/leren").get_data(as_text=True)
+
+        self.assertIn("Practice theory for your KNVvL A/B license", home)
+        self.assertIn("Use these exercises to supplement official study materials", home)
+        self.assertIn("Use dynamic exercises to practice specific skills.", home)
+        self.assertIn("Made by Alex Brittmann", home)
+        self.assertIn('content="Prepare for your KNVvL A/B license', home)
+        self.assertIn('"description": "Online learning platform for KNVvL theory exams', home)
+        self.assertIn("Official KNVvL information about skydiving in the Netherlands", learn)
+        self.assertIn("A tool for navigating the skydiving compass rose", learn)
+        self.assertIn("obtaining a KNVvL license and theory evenings", learn)
+        self.assertIn("Light aviation weather bulletin", learn)
+        self.assertIn("KNMI extranet with detailed aviation weather information", learn)
+        self.assertIn('content="Prepare for your KNVvL A/B license', learn)
+
+    def test_metar_description_and_fetch_error_are_localized(self):
+        client = app.test_client()
+        with patch.object(
+            app_module, "get_daily_metar",
+            side_effect=app_module.MetarError("KNMI gaf geen leesbare METAR terug."),
+        ):
+            dutch = client.get("/metar/ontleden").get_data(as_text=True)
+            self.assertIn("KNMI gaf geen leesbare METAR terug.", dutch)
+            client.post("/language", data=csrf_data(client, language="EN"))
+            english = client.get("/metar/ontleden").get_data(as_text=True)
+
+        self.assertIn("METARs are updated directly from KNMI every 30 minutes.", english)
+        self.assertIn("KNMI returned an unreadable METAR.", english)
+        self.assertNotIn("KNMI gaf geen leesbare METAR terug.", english)
 
     def test_gdpr_notice_is_bilingual_and_linked_from_footer(self):
         client = app.test_client()
@@ -519,6 +708,160 @@ class PracticeFlowTests(unittest.TestCase):
         finally:
             if os.path.exists(db_path):
                 os.remove(db_path)
+
+    def test_practice_images_show_localized_original_source(self):
+        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:
+            db_path = temp_db.name
+
+        conn = sqlite3.connect(db_path)
+        conn.executescript(
+            """
+            CREATE TABLE image_source (
+                image_key TEXT PRIMARY KEY,
+                image_full_name TEXT NOT NULL,
+                image_local_source TEXT,
+                image_original_source TEXT,
+                start_date TEXT,
+                end_date TEXT
+            );
+            INSERT INTO image_source VALUES (
+                'example-image',
+                'Example image',
+                '/question_images/example.jpg',
+                'https://source.example/image',
+                NULL,
+                NULL
+            );
+            CREATE TABLE questions (
+                Key INTEGER PRIMARY KEY,
+                level TEXT,
+                topic TEXT,
+                subtopic TEXT,
+                language TEXT,
+                is_active INTEGER,
+                question TEXT,
+                true_answer TEXT,
+                false_answers TEXT,
+                image_key TEXT REFERENCES image_source(image_key)
+            );
+            INSERT INTO questions VALUES (
+                1, 'A', 'Materiaal', 'Harnas', 'NL', 1,
+                'Nederlandse vraag', 'Ja', '[]', 'example-image'
+            );
+            INSERT INTO questions VALUES (
+                2, 'A', 'Equipment', 'Harness', 'EN', 1,
+                'English question', 'Yes', '[]', 'example-image'
+            );
+            """
+        )
+        conn.commit()
+        conn.close()
+
+        try:
+            for language, expected_attribution, expected_question in (
+                ("NL", "Bron: https://source.example/image", "Nederlandse vraag"),
+                ("EN", "Source: https://source.example/image", "English question"),
+            ):
+                client = app.test_client()
+                with client.session_transaction() as session:
+                    session.update(
+                        {
+                            "language": language,
+                            "level": "A",
+                            "question_amount": 1,
+                            "selected_topics": None,
+                        }
+                    )
+
+                app_module._language_column_cache.clear()
+                with patch.object(app_module, "get_db_path", return_value=db_path):
+                    response = client.get("/exam")
+
+                html = response.get_data(as_text=True)
+                self.assertEqual(response.status_code, 200)
+                self.assertIn(expected_question, html)
+                expected_label, expected_source = expected_attribution.split(": ", 1)
+                self.assertIn(expected_label, html)
+                self.assertIn(expected_source, html)
+                self.assertIn(
+                    '<a href="https://source.example/image" target="_blank" '
+                    'rel="noopener noreferrer">https://source.example/image</a>',
+                    html,
+                )
+                self.assertIn("/static/question_images/example.jpg", html)
+
+                with client.session_transaction() as session:
+                    question_id = session["exam_question_ids"][0]
+                wrong_answer = "Nee" if language == "NL" else "No"
+                with patch.object(app_module, "get_db_path", return_value=db_path):
+                    result_response = client.post(
+                        "/exam",
+                        data=csrf_data(
+                            client, **{f"answer_{question_id}": wrong_answer}
+                        ),
+                    )
+
+                result_html = result_response.get_data(as_text=True)
+                self.assertEqual(result_response.status_code, 200)
+                self.assertIn(expected_label, result_html)
+                self.assertIn(expected_source, result_html)
+                self.assertIn(
+                    '<a href="https://source.example/image" target="_blank" '
+                    'rel="noopener noreferrer">https://source.example/image</a>',
+                    result_html,
+                )
+                self.assertIn("/static/question_images/example.jpg", result_html)
+
+            conn = sqlite3.connect(db_path)
+            conn.execute(
+                "UPDATE image_source SET image_original_source = ?",
+                ("Photographer credit",),
+            )
+            conn.commit()
+            conn.close()
+
+            client = app.test_client()
+            with client.session_transaction() as session:
+                session.update(
+                    {
+                        "language": "NL",
+                        "level": "A",
+                        "question_amount": 1,
+                        "selected_topics": None,
+                    }
+                )
+            app_module._language_column_cache.clear()
+            with patch.object(app_module, "get_db_path", return_value=db_path):
+                response = client.get("/exam")
+
+            html = response.get_data(as_text=True)
+            self.assertIn("Photographer credit", html)
+            self.assertNotIn('href="Photographer credit"', html)
+        finally:
+            if os.path.exists(db_path):
+                os.remove(db_path)
+
+    def test_b_exam_image_assets_all_load(self):
+        with app.test_request_context("/"):
+            questions = app_module.fetch_questions("B", 64, language="NL")
+            image_urls = {
+                app_module.render_question(question, "B", "NL")["image_url"]
+                for question in questions
+            }
+        image_urls.discard(None)
+
+        self.assertTrue(image_urls)
+        client = app.test_client()
+        for image_url in image_urls:
+            response = client.get(image_url)
+            try:
+                self.assertEqual(response.status_code, 200, image_url)
+                self.assertTrue(
+                    response.content_type.startswith("image/"),
+                    (image_url, response.content_type),
+                )
+            finally:
+                response.close()
 
     def test_level_selection_redirects_to_mode_selection(self):
         client = app.test_client()
@@ -805,8 +1148,8 @@ class ContactPageTests(unittest.TestCase):
                 os.environ, environment, clear=False
             ), patch.object(app_module.smtplib, "SMTP", return_value=smtp) as smtp_factory, patch.object(
                 app_module,
-                "start_contact_message_delivery",
-                side_effect=lambda **values: app_module.send_contact_message(**values),
+                "reserve_contact_form_usage",
+                return_value=True,
             ):
                 response = client.post(
                     "/contact",
@@ -833,6 +1176,32 @@ class ContactPageTests(unittest.TestCase):
 
         confirmation = client.get(response.headers["Location"])
         self.assertIn("Je bericht is verzonden.", confirmation.get_data(as_text=True))
+
+    def test_contact_form_reports_delivery_failure_without_success_redirect(self):
+        client = app.test_client()
+        with patch.object(
+            app_module, "reserve_contact_form_usage", return_value=True
+        ), patch.object(
+            app_module,
+            "send_contact_message",
+            side_effect=app_module.smtplib.SMTPException("delivery failed"),
+        ):
+            response = client.post(
+                "/contact",
+                data=csrf_data(
+                    client,
+                    email="visitor@example.test",
+                    subject="Suggestie",
+                    message="Een nuttige suggestie.",
+                ),
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("sent=1", response.headers.get("Location", ""))
+        self.assertIn(
+            "Je bericht kon niet worden verzonden. Probeer het later opnieuw.",
+            response.get_data(as_text=True),
+        )
 
     def test_contact_usage_allows_three_messages_and_cleans_old_rows(self):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:

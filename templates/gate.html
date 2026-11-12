@@ -21,7 +21,7 @@
             </div>
         {% endif %}
 
-        <form method="POST" action="{{ url_for('access_gate') }}" class="form">
+        <form method="POST" action="{{ url_for('access_gate') }}" class="form" data-turbo="false">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="next" value="{{ next }}">
             <div class="field-group">

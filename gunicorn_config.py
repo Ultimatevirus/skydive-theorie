@@ -43,13 +43,14 @@ _system_status_thread = None
 
 def when_ready(server):
 	global _metar_refresh_thread, _taf_refresh_thread, _system_status_thread
-	_system_status_thread = Thread(
-		target=system_status_monitor,
-		args=(_metar_refresh_stop,),
-		name='system-status-monitor',
-		daemon=True,
-	)
-	_system_status_thread.start()
+	if os.environ.get('SYSTEM_STATUS_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
+		_system_status_thread = Thread(
+			target=system_status_monitor,
+			args=(_metar_refresh_stop,),
+			name='system-status-monitor',
+			daemon=True,
+		)
+		_system_status_thread.start()
 	if os.environ.get('KNMI_METAR_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
 		_metar_refresh_thread = Thread(
 			target=metar_refresh_loop,

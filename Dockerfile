@@ -1,4 +1,4 @@
-FROM python:3.14-alpine3.24 AS builder
+FROM python:3.15-alpine3.24 AS builder
 
 WORKDIR /build
 
@@ -6,7 +6,7 @@ COPY requirements.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
 
-FROM python:3.14-alpine3.24
+FROM python:3.15-alpine3.24
 
 WORKDIR /app
 
@@ -19,8 +19,11 @@ RUN addgroup -S app && adduser -S -G app app && mkdir -p /data && chown app:app 
 
 COPY --from=builder /opt/venv /opt/venv
 COPY app.py ./
+COPY access_gate_service.py ./
+COPY contact_service.py ./
 COPY db.py ./
 COPY quiz.py ./
+COPY question_repository.py ./
 COPY metar.py ./
 COPY taf.py ./
 COPY system_status.py ./

@@ -172,6 +172,125 @@ class DatabaseHelperTests(unittest.TestCase):
             finally:
                 database.close()
 
+    def test_initialize_database_migrates_image_keys_and_syncs_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            seed_path = Path(directory) / "seed.db"
+            database_path = Path(directory) / "data.db"
+
+            seed = sqlite3.connect(seed_path)
+            seed.executescript(
+                """
+                CREATE TABLE image_source (
+                    image_key TEXT PRIMARY KEY,
+                    image_full_name TEXT NOT NULL,
+                    image_local_source TEXT,
+                    image_original_source TEXT,
+                    start_date TEXT,
+                    end_date TEXT
+                );
+                INSERT INTO image_source VALUES (
+                    '/question_images/example.jpg',
+                    'Example image',
+                    '/question_images/example.jpg',
+                    'https://source.example/image',
+                    '2024-01-01',
+                    NULL
+                );
+                CREATE TABLE questions (
+                    Key INTEGER PRIMARY KEY,
+                    question TEXT,
+                    image_key TEXT REFERENCES image_source(image_key)
+                );
+                INSERT INTO questions VALUES (
+                    1,
+                    'Question',
+                    '/question_images/example.jpg'
+                );
+                CREATE VIEW question_count AS
+                    SELECT COUNT(*) AS total FROM questions;
+                """
+            )
+            seed.close()
+
+            database = sqlite3.connect(database_path)
+            database.executescript(
+                """
+                CREATE TABLE image_source (
+                    image_key TEXT PRIMARY KEY,
+                    image_full_name TEXT NOT NULL,
+                    image_local_source TEXT,
+                    image_original_source TEXT,
+                    start_date TEXT,
+                    end_date TEXT
+                );
+                INSERT INTO image_source VALUES (
+                    'stale',
+                    'Stale image',
+                    NULL,
+                    NULL,
+                    NULL,
+                    NULL
+                );
+                CREATE TABLE questions (Key INTEGER PRIMARY KEY, image_link TEXT);
+                INSERT INTO questions VALUES (1, '/question_images/old.jpg');
+                CREATE VIEW question_count AS
+                    SELECT COUNT(*) AS total FROM questions;
+                """
+            )
+            database.close()
+
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+            db.initialize_database(seed_path=seed_path, database_path=database_path)
+
+            database = db.connect_db(path=database_path)
+            try:
+                question_columns = {
+                    row[1] for row in database.execute("PRAGMA table_info(questions)")
+                }
+                self.assertIn("image_key", question_columns)
+                self.assertNotIn("image_link", question_columns)
+                self.assertEqual(
+                    database.execute(
+                        "SELECT image_key FROM questions WHERE Key = 1"
+                    ).fetchone()[0],
+                    "/question_images/example.jpg",
+                )
+                self.assertEqual(
+                    database.execute(
+                        "SELECT image_key, image_full_name, image_local_source, "
+                        "image_original_source, start_date, end_date "
+                        "FROM image_source"
+                    ).fetchall(),
+                    [
+                        (
+                            "/question_images/example.jpg",
+                            "Example image",
+                            "/question_images/example.jpg",
+                            "https://source.example/image",
+                            "2024-01-01",
+                            None,
+                        )
+                    ],
+                )
+                self.assertEqual(
+                    database.execute("SELECT total FROM question_count").fetchone()[0],
+                    1,
+                )
+                foreign_key = database.execute(
+                    "PRAGMA foreign_key_list(questions)"
+                ).fetchone()
+                self.assertEqual(
+                    (foreign_key[2], foreign_key[3], foreign_key[4]),
+                    ("image_source", "image_key", "image_key"),
+                )
+                with self.assertRaises(sqlite3.IntegrityError):
+                    database.execute(
+                        "INSERT INTO questions (Key, question, image_key) "
+                        "VALUES (2, 'Invalid image', 'missing')"
+                    )
+            finally:
+                database.close()
+
 
 if __name__ == "__main__":
     unittest.main()

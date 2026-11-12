@@ -23,6 +23,7 @@ class SystemStatusTests(unittest.TestCase):
         smtp = MagicMock()
         smtp.__enter__.return_value = smtp
         smtp.__exit__.return_value = False
+        smtp.ehlo.return_value = (250, b"OK")
         environment = {
             "SMTP_HOST": "smtp.example.test",
             "SMTP_PORT": "587",
@@ -70,6 +71,8 @@ class SystemStatusTests(unittest.TestCase):
 
     def test_mqtt_probe_connects_and_waits_for_subscription_acknowledgement(self):
         client = MagicMock()
+        client.subscribe.return_value = (mqtt_client.MQTT_ERR_SUCCESS, 1)
+        client.loop_start.return_value = mqtt_client.MQTT_ERR_SUCCESS
 
         class AcceptedReason:
             is_failure = False

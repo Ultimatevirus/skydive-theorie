@@ -142,6 +142,22 @@ class TafServiceTests(TafTestCase):
         self.assertEqual(first["raw"], second["raw"])
         self.assertEqual(second["airport_name"], "Amsterdam Schiphol")
 
+    def test_force_refresh_replaces_same_day_memory_and_database_cache(self):
+        day = date(2026, 10, 12)
+        updated_report = REPORT.replace("24010G20KT", "26012KT")
+
+        with patch.dict(os.environ, {"KNMI_API_KEY": "key"}), patch.object(
+            taf_module, "_get_open_data_taf", return_value=updated_report
+        ) as fetch:
+            original = get_daily_taf("EHAM", day)
+            refreshed = get_daily_taf("EHAM", day, force_refresh=True)
+
+        self.assertNotEqual(original["raw"], refreshed["raw"])
+        self.assertEqual(refreshed["raw"], updated_report)
+        fetch.assert_called_once()
+        self.assertEqual(taf_module._get_cached_taf(day, "EHAM"), updated_report)
+        self.assertEqual(_CACHE[(day.isoformat(), "EHAM")]["raw"], updated_report)
+
     def test_invalid_airport_and_cache_only(self):
         with self.assertRaises(TafError):
             get_daily_taf("EGLL", date(2026, 10, 12))
@@ -202,8 +218,9 @@ class TafServiceTests(TafTestCase):
     def test_refresh_fetches_each_airport_once_and_continues_after_failure(self):
         seen = []
 
-        def fake_get(code, day, opener=None):
+        def fake_get(code, day, opener=None, force_refresh=False):
             seen.append(code)
+            self.assertTrue(force_refresh)
             if code == "EHRD":
                 raise TafError("down")
 

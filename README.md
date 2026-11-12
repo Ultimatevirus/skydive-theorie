@@ -1,4 +1,6 @@
 # skydive-theorie
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/ultimatevirus/skydive-theorie)
+
 Containerized e-learning website for the Dutch KNVVL A &amp; B theoretical exam.
 
 ## Overview
@@ -9,23 +11,24 @@ This website helps you prepare for the KNVVL theory exams required to obtain you
 - Instant feedback on answers and overall performance
 - Learning resources page
 - Contact form for inquiries
-- Daily METAR practice using KNMI observations (decoding METARs at `/metar/ontleden`) and multiple-choice METAR abbreviation practice (`/metar/afkortingen`), chosen at `/metar`
+- Dynamic practice categories are available at `/oefenen`; the METAR/TAF exercises are under `/oefenen/meteo/METAR-TAF`
 
-## ⚠️ Important Disclaimer
+##  Important Disclaimer
 
 **These are NOT official KNVVL practice questions!**
 
 The questions on this site are created independently for educational purposes only. If you have questions about exam content, please contact a KNVVL-approved para-centrum for accurate and up-to-date information.
 
-## ✨ Features
+##  Features
 
-- 🚀 **Quick Practice Sessions** - Start an exam immediately with a streamlined flow
-- 📊 **Immediate Results** - View your score, progress, and topic breakdown instantly
-- 🎯 **Theory-Focused** - Train on topics relevant to your KNVVL theory exam (A or B level)
-- 🌙 **Dark/Light Mode** - Toggle between light and dark themes with theme preference saved
-- 📱 **Responsive Design** - Works on desktop and mobile devices
+-  **Practice exams** - Make relevant A/B practice exams
+-  **Dynamic METAR/TAF questions** - Train on dynamicly generated METAR/TAF questions
+-  **Immediate Results** - View your score, progress, and topic breakdown instantly after exams
+-  **Theory-Focused** - Train on any topic or subtopic you wish
+-  **Dark/Light Mode** - Toggle between light and dark themes with theme preference saved
+-  **Responsive Design** - Works on desktop and mobile devices
 
-## 🛠️ Technology Stack
+##  Technology Stack
 
 - **Backend**: Flask (Python 3.14)
 - **Database**: SQLite (`data.db`)
@@ -33,7 +36,12 @@ The questions on this site are created independently for educational purposes on
 - **Production Server**: Gunicorn
 - **Frontend**: Plain HTML/CSS/JavaScript with Google Fonts
 
-## 📦 Installation & Setup
+The Flask entry point remains `app.py`; question database access, access-gate
+throttling, and contact delivery/rate limiting live in the focused
+`question_repository.py`, `access_gate_service.py`, and `contact_service.py`
+modules.
+
+##  Installation & Setup
 
 ### Local testing with Docker Compose
 
@@ -84,7 +92,9 @@ SMTP_USE_SSL=0
 
 The contact form requires `SMTP_HOST` and `CONTACT_EMAIL`. SMTP authentication is
 used when `SMTP_USERNAME` is set. Use `SMTP_USE_SSL=1` for an SSL connection;
-otherwise the default is STARTTLS on port `587`.
+otherwise the default is STARTTLS on port `587`. Sending is attempted before
+the form confirms success, with a 20-second SMTP timeout; if delivery fails,
+the form displays an error so the message can be retried.
 
 `TRAEFIK_HOST` is the canonical hostname the app is served on; `TRAEFIK_APEX_HOST` is the bare domain, which Traefik redirects to `TRAEFIK_HOST`. Make sure DNS records exist for both hostnames and point at the server.
 
@@ -110,7 +120,7 @@ Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Doc
 
 Concurrency: production runs 2 `app` replicas (2 Gunicorn workers x 6 threads each, tunable with `GUNICORN_PROCESSES`/`GUNICORN_THREADS`), sized for a 4-core host. Traefik compresses responses and routes `/static/` to a small `static` nginx container, so neither consumes Gunicorn threads. The `static` service is always built from the checked-out repository, even with `compose.production.image.yml`. Repeated wrong access-gate codes are throttled per client IP (5 per minute, tracked in the shared SQLite database so it holds across workers and replicas) instead of sleeping the request thread. The client IP comes from `X-Forwarded-For` via `ProxyFix`; in production one trusted proxy hop (Traefik) is assumed, adjustable with `TRUSTED_PROXY_COUNT`.
 
-The SQLite `data.db` file contains versioned application content and the daily METAR cache. The image contains the latest seed database, while `/data/data.db` is stored in the persistent `app-data` volume. On startup, the latest questions are synchronized from the image seed; existing runtime data is preserved and new or changed seed schema objects are applied.
+The SQLite `data.db` file contains versioned application content and the daily METAR cache. The image contains the latest seed database, while `/data/data.db` is stored in the persistent `app-data` volume. Both the local/test and production Compose app containers run the same `docker-entrypoint.sh`, which synchronizes the seed database before starting Gunicorn. On startup, questions and image-source metadata are synchronized from the image seed; the image-key foreign key is recreated with the updated question schema, while unrelated runtime data is preserved. Rebuild and deploy the app image with the normal Compose commands above to apply database schema/content changes; no manual volume migration is required.
 
 ### KNMI METAR configuration
 
@@ -127,7 +137,9 @@ docker compose up --build -d
 
 The app uses the `metar` dataset, version `1.0`, and retrieves the newest XML file for the notified airport on the current UTC day. METAR data is stored in the SQLite `metar` table; same-day fetch claims prevent duplicate API calls across Gunicorn processes and replicas. The `/data/data.db` volume persists this cache across deployments. Do not commit API keys to `.env` or source files, and rotate any key included in a public request.
 
-KNMI Open Data requests use a descriptive User-Agent, are limited to 900 requests per rolling hour across the shared database, and retry rate-limit/server errors with exponential backoff (respecting `Retry-After`). METAR and TAF requests share this account-level quota; notifications are used instead of timer-based polling. See KNMI's [fair use policy](https://developer.dataplatform.knmi.nl/fair-use).
+TAFs are refreshed for each Dutch airport at startup and every 30 minutes. Each scheduled refresh bypasses the in-memory and database caches so same-day amendments replace the stored report. METARs remain notification-driven rather than timer-polled.
+
+KNMI Open Data requests use a descriptive User-Agent, are limited to 900 requests per rolling hour across the shared database, and retry rate-limit/server errors with exponential backoff (respecting `Retry-After`). METAR and TAF requests share this account-level quota. See KNMI's [fair use policy](https://developer.dataplatform.knmi.nl/fair-use).
 
 ### IT systems status page
 
