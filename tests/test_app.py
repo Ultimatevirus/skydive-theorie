@@ -383,6 +383,26 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('language-option is-selected', html)
         self.assertIn('<html lang="en">', html)
 
+    def test_updated_dutch_page_copy_has_english_translations(self):
+        client = app.test_client()
+        client.post("/language", data=csrf_data(client, language="EN"))
+
+        home_response = client.get("/")
+        home_html = home_response.get_data(as_text=True)
+        self.assertEqual(home_response.status_code, 200)
+        self.assertIn(
+            "Please note: These are not official KNVvL exam or practice questions, "
+            "and they have NOT been fully validated!",
+            home_html,
+        )
+
+        learn_response = client.get("/leren")
+        learn_html = learn_response.get_data(as_text=True)
+        self.assertEqual(learn_response.status_code, 200)
+        self.assertIn("general knowledge, regulations, equipment, and weather", learn_html)
+        self.assertIn("Regulations cover the safety rules and requirements that apply", learn_html)
+        self.assertNotIn("Regelementen", learn_html)
+
     def test_gdpr_notice_is_bilingual_and_linked_from_footer(self):
         client = app.test_client()
 

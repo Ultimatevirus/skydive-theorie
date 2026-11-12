@@ -92,7 +92,7 @@
 
     <aside class="home-disclaimer" aria-label="{{ t('Belangrijke informatie') }}">
         <span class="disclaimer-icon" aria-hidden="true">!</span>
-        <p><strong>{{ t('Belangrijk om te weten') }}</strong>{{ t('Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen en ze zijn tevens NIET gevalideerd!') }}</p>
+        <p><strong>{{ t('Belangrijk om te weten') }}</strong>{{ t('Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen en ze zijn tevens NIET volledig gevalideerd!') }}</p>
     </aside>
 
     <details class="home-more-info">
@@ -100,14 +100,6 @@
         <div class="home-more-content">
             <p>{{ t('Deze website is ontworpen om mensen te ondersteunen bij het leren voor de KNVvL theorie-examens, voornamelijk voor het A of B brevet.') }}</p>
             <p>{{ t('De vragen op deze site zijn ontworpen om beginnende skydivers te helpen met de voorbereiding op de theorie-examens voor het A of B brevet. Ze zijn niet officieel en dienen alleen ter oefening. Als je vragen hebt over de inhoud van de examens, is het aan te raden om contact op te nemen met een (door de KNVvL) erkend paracentrum. Zij kunnen je voorzien van de meest actuele en accurate informatie over de examens en de vereisten voor het behalen van je brevet. Voor algemene leertips en adviezen kan je de pagina "leren voor het examen" bezoeken') }}</p>
-            <div class="roadmap-panel">
-                <h3>{{ t('Ontwikkelings roadmap') }}</h3>
-                <ul class="roadmap-list">
-                    <li>{{ t('C-brevetvragen') }}</li>
-                    <li>{{ t('Circuitplanningmodus') }}</li>
-                    <li>{{ t('Meer dynamisch gegenereerde vragen') }}</li>
-                </ul>
-            </div>
             <div class="button-row home-secondary-actions">
                 <a href="{{ url_for('contact') }}" class="secondary-btn">{{ t('Contact') }}</a>
                 <a href="https://github.com/Ultimatevirus/skydive-theorie" target="_blank" rel="noopener noreferrer" class="secondary-btn">{{ t('GitHub Repo') }}</a>
