@@ -1573,6 +1573,14 @@ button.topic-dropdown-trigger .topic-dropdown-caret {
     color: var(--muted);
 }
 
+.mobile-notice .modal-box {
+    max-width: 420px;
+}
+
+.mobile-notice .button-row {
+    justify-content: flex-end;
+}
+
 .question-heading {
     display: flex;
     align-items: stretch;
