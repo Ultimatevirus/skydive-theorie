@@ -5,6 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+from jinja2 import Environment, nodes
+
 import app as app_module
 import taf as taf_module
 from app import app
@@ -66,6 +68,22 @@ class ErrorPageTests(unittest.TestCase):
 
 
 class PracticeFlowTests(unittest.TestCase):
+    def test_literal_template_translations_exist_in_english(self):
+        environment = Environment()
+        missing = []
+        for path in (Path(app_module.BASE_DIR) / "templates").glob("*.html"):
+            template = environment.parse(path.read_text(encoding="utf-8-sig"))
+            for call in template.find_all(nodes.Call):
+                if (
+                    isinstance(call.node, nodes.Name)
+                    and call.node.name == "t"
+                    and call.args
+                    and isinstance(call.args[0], nodes.Const)
+                    and call.args[0].value not in app_module.TRANSLATIONS["EN"]
+                ):
+                    missing.append(f"{path.name}:{call.lineno}: {call.args[0].value}")
+        self.assertEqual(missing, [])
+
     def test_recent_template_strings_are_in_english_translation_map(self):
         required = [
             "Oefenen voor je KNVvL A/B brevet",
@@ -104,7 +122,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(english_home.status_code, 200)
         self.assertIn("Prepare step by step with clear theory", english_html)
         self.assertIn("SKYDIVING LEARNING PLATFORM", english_html)
-        self.assertIn("These are not official KNVvL practice questions", english_html)
+        self.assertIn("These are not official KNVvL exam or practice questions", english_html)
 
     def test_practice_mode_explanation_is_displayed_in_english(self):
         client = app.test_client()
@@ -126,7 +144,7 @@ class PracticeFlowTests(unittest.TestCase):
         html = home.get_data(as_text=True)
         self.assertEqual(home.status_code, 200)
         self.assertIn(
-            "This page contains dynamic exercises to help you practice for the exams.",
+            "This page contains dynamically generated exercises to help you prepare for specific exam topics.",
             html,
         )
         self.assertNotIn('href="/metar"', html)
@@ -402,6 +420,45 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("general knowledge, regulations, equipment, and weather", learn_html)
         self.assertIn("Regulations cover the safety rules and requirements that apply", learn_html)
         self.assertNotIn("Regelementen", learn_html)
+
+    def test_home_and_study_resources_are_localized(self):
+        client = app.test_client()
+        dutch_home = client.get("/").get_data(as_text=True)
+        dutch_learn = client.get("/leren").get_data(as_text=True)
+        self.assertIn("Theorie oefenen voor je KNVvL A/B brevet", dutch_home)
+        self.assertIn("Officiële KNVvL informatie over skydiven in Nederland", dutch_learn)
+
+        client.post("/language", data=csrf_data(client, language="EN"))
+        home = client.get("/").get_data(as_text=True)
+        learn = client.get("/leren").get_data(as_text=True)
+
+        self.assertIn("Practice theory for your KNVvL A/B license", home)
+        self.assertIn("Use these exercises to supplement official study materials", home)
+        self.assertIn("Use dynamic exercises to practice specific skills.", home)
+        self.assertIn("Made by Alex Brittmann", home)
+        self.assertIn('content="Prepare for your KNVvL A/B license', home)
+        self.assertIn('"description": "Online learning platform for KNVvL theory exams', home)
+        self.assertIn("Official KNVvL information about skydiving in the Netherlands", learn)
+        self.assertIn("A tool for navigating the skydiving compass rose", learn)
+        self.assertIn("obtaining a KNVvL license and theory evenings", learn)
+        self.assertIn("Light aviation weather bulletin", learn)
+        self.assertIn("KNMI extranet with detailed aviation weather information", learn)
+        self.assertIn('content="Prepare for your KNVvL A/B license', learn)
+
+    def test_metar_description_and_fetch_error_are_localized(self):
+        client = app.test_client()
+        with patch.object(
+            app_module, "get_daily_metar",
+            side_effect=app_module.MetarError("KNMI gaf geen leesbare METAR terug."),
+        ):
+            dutch = client.get("/metar/ontleden").get_data(as_text=True)
+            self.assertIn("KNMI gaf geen leesbare METAR terug.", dutch)
+            client.post("/language", data=csrf_data(client, language="EN"))
+            english = client.get("/metar/ontleden").get_data(as_text=True)
+
+        self.assertIn("METARs are updated directly from KNMI every 30 minutes.", english)
+        self.assertIn("KNMI returned an unreadable METAR.", english)
+        self.assertNotIn("KNMI gaf geen leesbare METAR terug.", english)
 
     def test_gdpr_notice_is_bilingual_and_linked_from_footer(self):
         client = app.test_client()
