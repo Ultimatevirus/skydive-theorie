@@ -1,0 +1,588 @@
+{
+  "metar_weather_codes": [
+    {
+      "METAR_abreviation": "-",
+      "NL_definition": "Licht",
+      "EN_definition": "Light"
+    },
+    {
+      "METAR_abreviation": "+",
+      "NL_definition": "Zwaar",
+      "EN_definition": "Heavy"
+    },
+    {
+      "METAR_abreviation": "MI",
+      "NL_definition": "Laag",
+      "EN_definition": "Shallow"
+    },
+    {
+      "METAR_abreviation": "BC",
+      "NL_definition": "Banken",
+      "EN_definition": "Patches"
+    },
+    {
+      "METAR_abreviation": "PR",
+      "NL_definition": "Gedeeltelijk",
+      "EN_definition": "Partial"
+    },
+    {
+      "METAR_abreviation": "DR",
+      "NL_definition": "Laag stuivend",
+      "EN_definition": "Low drifting"
+    },
+    {
+      "METAR_abreviation": "BL",
+      "NL_definition": "Hoog stuivend",
+      "EN_definition": "Blowing"
+    },
+    {
+      "METAR_abreviation": "SH",
+      "NL_definition": "Bui",
+      "EN_definition": "Shower"
+    },
+    {
+      "METAR_abreviation": "TS",
+      "NL_definition": "Onweer zonder neerslag",
+      "EN_definition": "Thunderstorm without precipitation"
+    },
+    {
+      "METAR_abreviation": "FZ",
+      "NL_definition": "Onderkoeld",
+      "EN_definition": "Freezing"
+    },
+    {
+      "METAR_abreviation": "DZ",
+      "NL_definition": "Matige motregen",
+      "EN_definition": "Moderate drizzle"
+    },
+    {
+      "METAR_abreviation": "RA",
+      "NL_definition": "Matige regen",
+      "EN_definition": "Moderate rain"
+    },
+    {
+      "METAR_abreviation": "SN",
+      "NL_definition": "Matige sneeuw",
+      "EN_definition": "Moderate snow"
+    },
+    {
+      "METAR_abreviation": "SG",
+      "NL_definition": "Korrelsneeuw",
+      "EN_definition": "Snow grains"
+    },
+    {
+      "METAR_abreviation": "IC",
+      "NL_definition": "IJskristallen",
+      "EN_definition": "Ice crystals"
+    },
+    {
+      "METAR_abreviation": "PL",
+      "NL_definition": "IJskorrels",
+      "EN_definition": "Ice pellets"
+    },
+    {
+      "METAR_abreviation": "GR",
+      "NL_definition": "Hagel",
+      "EN_definition": "Hail"
+    },
+    {
+      "METAR_abreviation": "GS",
+      "NL_definition": "Kleine hagel of korrelhagel",
+      "EN_definition": "Small hail or snow pellets"
+    },
+    {
+      "METAR_abreviation": "UP",
+      "NL_definition": "Onbekende neerslag",
+      "EN_definition": "Unknown precipitation"
+    },
+    {
+      "METAR_abreviation": "BR",
+      "NL_definition": "Nevel (zicht 1000-5000 m)",
+      "EN_definition": "Mist (visibility 1000-5000 m)"
+    },
+    {
+      "METAR_abreviation": "FG",
+      "NL_definition": "Mist (zicht onder 1000 m)",
+      "EN_definition": "Fog (visibility below 1000 m)"
+    },
+    {
+      "METAR_abreviation": "FU",
+      "NL_definition": "Rook",
+      "EN_definition": "Smoke"
+    },
+    {
+      "METAR_abreviation": "VA",
+      "NL_definition": "Vulkaanas",
+      "EN_definition": "Volcanic ash"
+    },
+    {
+      "METAR_abreviation": "DU",
+      "NL_definition": "Wijdverspreid stof",
+      "EN_definition": "Widespread dust"
+    },
+    {
+      "METAR_abreviation": "SA",
+      "NL_definition": "Zand",
+      "EN_definition": "Sand"
+    },
+    {
+      "METAR_abreviation": "HZ",
+      "NL_definition": "Waas",
+      "EN_definition": "Haze"
+    },
+    {
+      "METAR_abreviation": "PO",
+      "NL_definition": "Stof- of zandwervelingen",
+      "EN_definition": "Dust or sand whirls"
+    },
+    {
+      "METAR_abreviation": "SQ",
+      "NL_definition": "Windvlagen (squalls)",
+      "EN_definition": "Squalls"
+    },
+    {
+      "METAR_abreviation": "FC",
+      "NL_definition": "Wind- of waterhoos",
+      "EN_definition": "Funnel cloud, tornado or waterspout"
+    },
+    {
+      "METAR_abreviation": "SS",
+      "NL_definition": "Zandstorm",
+      "EN_definition": "Sandstorm"
+    },
+    {
+      "METAR_abreviation": "DS",
+      "NL_definition": "Stofstorm",
+      "EN_definition": "Duststorm"
+    },
+    {
+      "METAR_abreviation": "-RA",
+      "NL_definition": "Lichte regen",
+      "EN_definition": "Light rain"
+    },
+    {
+      "METAR_abreviation": "+RA",
+      "NL_definition": "Zware regen",
+      "EN_definition": "Heavy rain"
+    },
+    {
+      "METAR_abreviation": "-DZ",
+      "NL_definition": "Lichte motregen",
+      "EN_definition": "Light drizzle"
+    },
+    {
+      "METAR_abreviation": "+DZ",
+      "NL_definition": "Zware motregen",
+      "EN_definition": "Heavy drizzle"
+    },
+    {
+      "METAR_abreviation": "-SN",
+      "NL_definition": "Lichte sneeuw",
+      "EN_definition": "Light snow"
+    },
+    {
+      "METAR_abreviation": "+SN",
+      "NL_definition": "Zware sneeuw",
+      "EN_definition": "Heavy snow"
+    },
+    {
+      "METAR_abreviation": "-SHRA",
+      "NL_definition": "Lichte regenbui",
+      "EN_definition": "Light rain shower"
+    },
+    {
+      "METAR_abreviation": "SHRA",
+      "NL_definition": "Matige regenbui",
+      "EN_definition": "Moderate rain shower"
+    },
+    {
+      "METAR_abreviation": "+SHRA",
+      "NL_definition": "Zware regenbui",
+      "EN_definition": "Heavy rain shower"
+    },
+    {
+      "METAR_abreviation": "-SHSN",
+      "NL_definition": "Lichte sneeuwbui",
+      "EN_definition": "Light snow shower"
+    },
+    {
+      "METAR_abreviation": "SHSN",
+      "NL_definition": "Matige sneeuwbui",
+      "EN_definition": "Moderate snow shower"
+    },
+    {
+      "METAR_abreviation": "+SHSN",
+      "NL_definition": "Zware sneeuwbui",
+      "EN_definition": "Heavy snow shower"
+    },
+    {
+      "METAR_abreviation": "SHGR",
+      "NL_definition": "Hagelbui",
+      "EN_definition": "Hail shower"
+    },
+    {
+      "METAR_abreviation": "SHGS",
+      "NL_definition": "Bui met kleine hagel",
+      "EN_definition": "Shower of small hail"
+    },
+    {
+      "METAR_abreviation": "-RASN",
+      "NL_definition": "Lichte regen met sneeuw",
+      "EN_definition": "Light rain and snow"
+    },
+    {
+      "METAR_abreviation": "RASN",
+      "NL_definition": "Matige regen met sneeuw",
+      "EN_definition": "Moderate rain and snow"
+    },
+    {
+      "METAR_abreviation": "+RASN",
+      "NL_definition": "Zware regen met sneeuw",
+      "EN_definition": "Heavy rain and snow"
+    },
+    {
+      "METAR_abreviation": "-SHRASN",
+      "NL_definition": "Lichte bui van regen en sneeuw",
+      "EN_definition": "Light shower of rain and snow"
+    },
+    {
+      "METAR_abreviation": "SHRASN",
+      "NL_definition": "Matige bui van regen en sneeuw",
+      "EN_definition": "Moderate shower of rain and snow"
+    },
+    {
+      "METAR_abreviation": "TSRA",
+      "NL_definition": "Onweer met regen",
+      "EN_definition": "Thunderstorm with rain"
+    },
+    {
+      "METAR_abreviation": "-TSRA",
+      "NL_definition": "Onweer met lichte regen",
+      "EN_definition": "Thunderstorm with light rain"
+    },
+    {
+      "METAR_abreviation": "+TSRA",
+      "NL_definition": "Onweer met zware regen",
+      "EN_definition": "Thunderstorm with heavy rain"
+    },
+    {
+      "METAR_abreviation": "TSGR",
+      "NL_definition": "Onweer met hagel",
+      "EN_definition": "Thunderstorm with hail"
+    },
+    {
+      "METAR_abreviation": "TSSN",
+      "NL_definition": "Onweer met sneeuw",
+      "EN_definition": "Thunderstorm with snow"
+    },
+    {
+      "METAR_abreviation": "FZRA",
+      "NL_definition": "Onderkoelde regen",
+      "EN_definition": "Freezing rain"
+    },
+    {
+      "METAR_abreviation": "-FZRA",
+      "NL_definition": "Lichte onderkoelde regen",
+      "EN_definition": "Light freezing rain"
+    },
+    {
+      "METAR_abreviation": "+FZRA",
+      "NL_definition": "Zware onderkoelde regen",
+      "EN_definition": "Heavy freezing rain"
+    },
+    {
+      "METAR_abreviation": "FZDZ",
+      "NL_definition": "Onderkoelde motregen",
+      "EN_definition": "Freezing drizzle"
+    },
+    {
+      "METAR_abreviation": "-FZDZ",
+      "NL_definition": "Lichte onderkoelde motregen",
+      "EN_definition": "Light freezing drizzle"
+    },
+    {
+      "METAR_abreviation": "FZFG",
+      "NL_definition": "Onderkoelde mist",
+      "EN_definition": "Freezing fog"
+    },
+    {
+      "METAR_abreviation": "BCFG",
+      "NL_definition": "Mistbanken",
+      "EN_definition": "Patches of fog"
+    },
+    {
+      "METAR_abreviation": "MIFG",
+      "NL_definition": "Laaghangende mist",
+      "EN_definition": "Shallow fog"
+    },
+    {
+      "METAR_abreviation": "PRFG",
+      "NL_definition": "Gedeeltelijke mist",
+      "EN_definition": "Partial fog"
+    },
+    {
+      "METAR_abreviation": "BLSN",
+      "NL_definition": "Hoog stuivende sneeuw",
+      "EN_definition": "Blowing snow"
+    },
+    {
+      "METAR_abreviation": "DRSN",
+      "NL_definition": "Laag stuivende sneeuw",
+      "EN_definition": "Low drifting snow"
+    }
+  ],
+  "metar_abbreviations": [
+    {
+      "METAR_abreviation": "FEW",
+      "category": "cloud",
+      "NL_definition": "Weinig bewolking (1-2 achtsten)",
+      "EN_definition": "Few clouds (1-2 oktas)",
+      "example": "EHAM 121250Z 24008KT 9999 [[FEW025]] 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "SCT",
+      "category": "cloud",
+      "NL_definition": "Verspreide bewolking (3-4 achtsten)",
+      "EN_definition": "Scattered clouds (3-4 oktas)",
+      "example": "EHAM 121250Z 24008KT 9999 [[SCT025]] 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "BKN",
+      "category": "cloud",
+      "NL_definition": "Gebroken bewolking (5-7 achtsten)",
+      "EN_definition": "Broken clouds (5-7 oktas)",
+      "example": "EHAM 121250Z 24008KT 9999 [[BKN020]] 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "OVC",
+      "category": "cloud",
+      "NL_definition": "Volledig bewolkt (8 achtsten)",
+      "EN_definition": "Overcast (8 oktas)",
+      "example": "EHAM 121250Z 24008KT 9999 [[OVC008]] 11/10 Q1013"
+    },
+    {
+      "METAR_abreviation": "SKC",
+      "category": "cloud",
+      "NL_definition": "Heldere lucht",
+      "EN_definition": "Sky clear",
+      "example": "EHAM 121250Z 24005KT 9999 [[SKC]] 12/08 Q1018"
+    },
+    {
+      "METAR_abreviation": "NSC",
+      "category": "cloud",
+      "NL_definition": "Geen significante bewolking",
+      "EN_definition": "No significant cloud",
+      "example": "EHAM 121250Z 24005KT 9999 [[NSC]] 12/08 Q1018"
+    },
+    {
+      "METAR_abreviation": "NCD",
+      "category": "cloud",
+      "NL_definition": "Geen bewolking gedetecteerd",
+      "EN_definition": "No cloud detected",
+      "example": "EHAM 121250Z AUTO 24005KT 9999 [[NCD]] 12/08 Q1018"
+    },
+    {
+      "METAR_abreviation": "VV",
+      "category": "cloud",
+      "NL_definition": "Verticaal zicht",
+      "EN_definition": "Vertical visibility",
+      "example": "EHAM 121250Z 00000KT 0200 FG [[VV002]] 08/08 Q1020"
+    },
+    {
+      "METAR_abreviation": "CB",
+      "category": "cloud",
+      "NL_definition": "Cumulonimbus (onweerswolk)",
+      "EN_definition": "Cumulonimbus (thunderstorm cloud)",
+      "example": "EHAM 121250Z 25015G28KT 5000 +TSRA BKN015[[CB]] 18/16 Q1008"
+    },
+    {
+      "METAR_abreviation": "TCU",
+      "category": "cloud",
+      "NL_definition": "Torenhoge cumulus",
+      "EN_definition": "Towering cumulus",
+      "example": "EHAM 121250Z 25010KT 8000 SHRA SCT025[[TCU]] 16/12 Q1010"
+    },
+    {
+      "METAR_abreviation": "CAVOK",
+      "category": "visibility",
+      "NL_definition": "Zicht 10 km of meer, geen significante bewolking en geen significant weer",
+      "EN_definition": "Visibility 10 km or more, no significant cloud and no significant weather",
+      "example": "EHAM 121250Z 24008KT [[CAVOK]] 15/08 Q1020"
+    },
+    {
+      "METAR_abreviation": "NOSIG",
+      "category": "trend",
+      "NL_definition": "Geen significante verandering verwacht",
+      "EN_definition": "No significant change expected",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013 [[NOSIG]]"
+    },
+    {
+      "METAR_abreviation": "BECMG",
+      "category": "trend",
+      "NL_definition": "Verandert geleidelijk naar",
+      "EN_definition": "Becoming",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013 [[BECMG]] 5000 RA"
+    },
+    {
+      "METAR_abreviation": "TEMPO",
+      "category": "trend",
+      "NL_definition": "Tijdelijk (minder dan een uur per keer)",
+      "EN_definition": "Temporarily (less than an hour at a time)",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013 [[TEMPO]] 3000 SHRA"
+    },
+    {
+      "METAR_abreviation": "FM",
+      "category": "trend",
+      "NL_definition": "Vanaf (tijdstip)",
+      "EN_definition": "From (time)",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013 BECMG [[FM]]1400 27015KT"
+    },
+    {
+      "METAR_abreviation": "TL",
+      "category": "trend",
+      "NL_definition": "Tot (tijdstip)",
+      "EN_definition": "Until (time)",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013 BECMG [[TL]]1500 4000 BR"
+    },
+    {
+      "METAR_abreviation": "AT",
+      "category": "trend",
+      "NL_definition": "Op (tijdstip)",
+      "EN_definition": "At (time)",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013 BECMG [[AT]]1300 9999"
+    },
+    {
+      "METAR_abreviation": "KT",
+      "category": "wind",
+      "NL_definition": "Knopen (windsnelheid)",
+      "EN_definition": "Knots (wind speed)",
+      "example": "EHAM 121250Z 24012[[KT]] 9999 FEW025 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "MPS",
+      "category": "wind",
+      "NL_definition": "Meter per seconde (windsnelheid)",
+      "EN_definition": "Metres per second (wind speed)",
+      "example": "UUEE 121250Z 24005[[MPS]] 9999 FEW025 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "VRB",
+      "category": "wind",
+      "NL_definition": "Variabele windrichting",
+      "EN_definition": "Variable wind direction",
+      "example": "EHAM 121250Z [[VRB]]02KT 9999 FEW025 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "G",
+      "category": "wind",
+      "NL_definition": "Windstoten (gust)",
+      "EN_definition": "Gusts",
+      "example": "EHAM 121250Z 24012[[G]]25KT 9999 FEW025 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "QNH",
+      "category": "pressure",
+      "NL_definition": "Luchtdruk herleid naar zeeniveau (hPa)",
+      "EN_definition": "Altimeter setting, pressure reduced to sea level (hPa)",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 [[Q1013]]"
+    },
+    {
+      "METAR_abreviation": "RVR",
+      "category": "visibility",
+      "NL_definition": "Baanzicht",
+      "EN_definition": "Runway visual range",
+      "example": "EHAM 121250Z 18003KT 0500 [[R18R/0600N]] FG VV002 05/05 Q1020"
+    },
+    {
+      "METAR_abreviation": "NDV",
+      "category": "visibility",
+      "NL_definition": "Geen richtingsafhankelijke zichtvariatie",
+      "EN_definition": "No directional variation",
+      "example": "EHAM 121250Z AUTO 24008KT 9999[[NDV]] NCD 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "P",
+      "category": "visibility",
+      "NL_definition": "Meer dan (waarde)",
+      "EN_definition": "Greater than (value)",
+      "example": "EHAM 121250Z 18003KT 0500 R18R/[[P]]2000N FG VV002 05/05 Q1020"
+    },
+    {
+      "METAR_abreviation": "M",
+      "category": "visibility",
+      "NL_definition": "Min / onder nul (temperatuur)",
+      "EN_definition": "Minus (temperature below zero)",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 [[M]]02/M04 Q1022"
+    },
+    {
+      "METAR_abreviation": "METAR",
+      "category": "report",
+      "NL_definition": "Routinematig weerbericht",
+      "EN_definition": "Routine aerodrome weather report",
+      "example": "[[METAR]] EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "SPECI",
+      "category": "report",
+      "NL_definition": "Speciaal weerbericht na significante verandering",
+      "EN_definition": "Special report after significant change",
+      "example": "[[SPECI]] EHAM 121250Z 24008KT 4000 RA BKN010 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "AUTO",
+      "category": "report",
+      "NL_definition": "Automatisch weerbericht zonder menselijke waarnemer",
+      "EN_definition": "Automated report without human observer",
+      "example": "EHAM 121250Z [[AUTO]] 24008KT 9999 NCD 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "COR",
+      "category": "report",
+      "NL_definition": "Gecorrigeerd weerbericht",
+      "EN_definition": "Corrected report",
+      "example": "METAR [[COR]] EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013"
+    },
+    {
+      "METAR_abreviation": "RMK",
+      "category": "report",
+      "NL_definition": "Opmerkingen",
+      "EN_definition": "Remarks",
+      "example": "KJFK 121251Z 24008KT 10SM FEW025 12/08 A2992 [[RMK]] AO2 SLP132"
+    },
+    {
+      "METAR_abreviation": "RE",
+      "category": "report",
+      "NL_definition": "Recent weer (afgelopen uur)",
+      "EN_definition": "Recent weather (past hour)",
+      "example": "EHAM 121250Z 24008KT 9999 FEW025 12/08 Q1013 [[RE]]RA"
+    },
+    {
+      "METAR_abreviation": "TAF",
+      "category": "report",
+      "NL_definition": "Terminal Aerodrome Forecast (luchthavenverwachting)",
+      "EN_definition": "Terminal Aerodrome Forecast",
+      "example": "[[TAF]] EHAM 121100Z 1212/1318 24010KT 9999 SCT025"
+    },
+    {
+      "METAR_abreviation": "PROB30",
+      "category": "trend",
+      "NL_definition": "Kans van 30% op de beschreven situatie",
+      "EN_definition": "30% probability of the described conditions",
+      "example": "TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025 [[PROB30]] TEMPO 1315/1318 TSRA BKN015CB"
+    },
+    {
+      "METAR_abreviation": "PROB40",
+      "category": "trend",
+      "NL_definition": "Kans van 40% op de beschreven situatie",
+      "EN_definition": "40% probability of the described conditions",
+      "example": "TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025 [[PROB40]] 1318/1322 4000 -SHRA"
+    },
+    {
+      "METAR_abreviation": "NSW",
+      "category": "weather",
+      "NL_definition": "Geen significant weer meer",
+      "EN_definition": "No significant weather",
+      "example": "TAF EHAM 121100Z 1212/1318 24010KT 9999 SCT025 TEMPO 1214/1218 4000 RA BECMG 1218/1220 9999 [[NSW]]"
+    }
+  ]
+}

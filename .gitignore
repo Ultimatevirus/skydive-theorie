@@ -6,3 +6,6 @@ __pycache__/*
 /tests/__pycache__
 .vscode/*
 .env
+/data.db
+/data.db-shm
+/data.db-wal

@@ -103,6 +103,7 @@ If you want to publish the site immediately without the gate, set `ACCESS_GATE_E
 Start the production stack with:
 
 ```powershell
+docker compose -f compose.production.yml stop app
 docker compose -f compose.production.yml up -d --build --remove-orphans
 docker compose -f compose.production.yml ps
 ```
@@ -112,6 +113,7 @@ The production stack also runs a separate log rotation container. It rotates Tra
 If you prefer immutable image deployments instead of on-host builds, set `APP_IMAGE` and use the checked-in image override:
 
 ```powershell
+docker compose -f compose.production.yml -f compose.production.image.yml stop app
 docker compose -f compose.production.yml -f compose.production.image.yml pull
 docker compose -f compose.production.yml -f compose.production.image.yml up -d --remove-orphans
 ```
@@ -120,7 +122,48 @@ Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Doc
 
 Concurrency: production runs 2 `app` replicas (2 Gunicorn workers x 6 threads each, tunable with `GUNICORN_PROCESSES`/`GUNICORN_THREADS`), sized for a 4-core host. Traefik compresses responses and routes `/static/` to a small `static` nginx container, so neither consumes Gunicorn threads. The `static` service is always built from the checked-out repository, even with `compose.production.image.yml`. Repeated wrong access-gate codes are throttled per client IP (5 per minute, tracked in the shared SQLite database so it holds across workers and replicas) instead of sleeping the request thread. The client IP comes from `X-Forwarded-For` via `ProxyFix`; in production one trusted proxy hop (Traefik) is assumed, adjustable with `TRUSTED_PROXY_COUNT`.
 
-The SQLite `data.db` file contains versioned application content and the daily METAR cache. The image contains the latest seed database, while `/data/data.db` is stored in the persistent `app-data` volume. Both the local/test and production Compose app containers run the same `docker-entrypoint.sh`, which synchronizes the seed database before starting Gunicorn. On startup, questions and image-source metadata are synchronized from the image seed; the image-key foreign key is recreated with the updated question schema, while unrelated runtime data is preserved. Rebuild and deploy the app image with the normal Compose commands above to apply database schema/content changes; no manual volume migration is required.
+The persistent `app-data` volume contains `/data/data.db`. The app image contains
+text seeds, not a SQLite database. Before Gunicorn starts, `docker-entrypoint.sh`
+creates or updates the database from the seeds in one transaction. The running
+app reads SQLite only.
+
+`seed/questions.json` is authoritative for questions, images, and source
+material: changes and deletions are applied on startup, overwriting direct edits
+to these tables. Question IDs (`Key`) must remain stable and must never be
+renumbered or reused. Each question includes its image and source metadata;
+source metadata is also listed in the top-level `source_material` collection,
+including sources not yet used by a question. Update every occurrence of shared
+metadata consistently. Conflicting metadata or invalid seeds prevent startup.
+
+`seed/metar_reference.json` initializes the METAR reference tables. Existing
+reference entries are preserved and missing seed entries are added. METAR and
+TAF caches, rate limits, and other unrelated runtime data remain in the volume.
+For local Python development without Docker, run `python -m db` before starting
+the app; it initializes `data.db`, or the path specified by `DB_PATH`. Re-run it
+to apply seed changes.
+
+Before upgrading an existing deployment, back up SQLite using its online backup
+API (which includes committed WAL data). For example, with the old production
+app running and no existing file at the backup path:
+
+```powershell
+docker compose -f compose.production.yml exec -T app python -c "import sqlite3; src=sqlite3.connect('/data/data.db'); dst=sqlite3.connect('/data/data.db.pre-json-backup'); src.backup(dst); dst.close(); src.close()"
+```
+
+Keep a copy of that backup outside the volume. To deploy question changes, stop
+all old app replicas before starting the new image; otherwise an old image can
+reapply its older seed to the shared database. This causes a brief interruption:
+
+```powershell
+docker compose -f compose.production.yml stop app
+docker compose -f compose.production.yml up -d --build --remove-orphans
+```
+
+For immutable images, use the same stop step with both Compose files and then
+pull and start the new image using the image override. Local Compose deployments
+should similarly stop the app before rebuilding it. Existing practice sessions
+store question IDs, so changing or deleting questions during deployment may
+affect exams already in progress.
 
 ### KNMI METAR configuration
 

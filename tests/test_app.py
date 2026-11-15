@@ -8,19 +8,30 @@ from unittest.mock import MagicMock, patch
 from jinja2 import Environment, nodes
 
 import app as app_module
+import db as db_module
 import taf as taf_module
 from app import app
 
 
-_access_gate_patcher = patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "0"})
+_reference_directory = None
+_environment_patcher = None
+REFERENCE_DB = None
 
 
 def setUpModule():
-    _access_gate_patcher.start()
+    global _reference_directory, _environment_patcher, REFERENCE_DB
+    _reference_directory = tempfile.TemporaryDirectory()
+    REFERENCE_DB = Path(_reference_directory.name) / "data.db"
+    db_module.initialize_database(database_path=REFERENCE_DB)
+    _environment_patcher = patch.dict(
+        os.environ, {"ACCESS_GATE_ENABLED": "0", "DB_PATH": str(REFERENCE_DB)}
+    )
+    _environment_patcher.start()
 
 
 def tearDownModule():
-    _access_gate_patcher.stop()
+    _environment_patcher.stop()
+    _reference_directory.cleanup()
 
 
 def csrf_data(client, **data):
@@ -1273,7 +1284,9 @@ class ContactPageTests(unittest.TestCase):
 
     def test_b_practice_flow_succeeds_without_db_path_env(self):
         client = app.test_client()
-        with patch.dict(os.environ, {}, clear=False):
+        with patch.dict(os.environ, {}, clear=False), \
+                patch.object(db_module, "DEFAULT_LOCAL_DB", REFERENCE_DB), \
+                patch.object(db_module, "PRODUCTION_DB", REFERENCE_DB.parent / "missing" / "data.db"):
             if "DB_PATH" in os.environ:
                 del os.environ["DB_PATH"]
             client.post("/practice/select", data=csrf_data(client, level="B"))

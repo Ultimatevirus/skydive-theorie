@@ -12,7 +12,7 @@ from unittest.mock import patch
 import app as app_module
 import metar as metar_module
 from app import app
-from db import DEFAULT_LOCAL_DB
+from db import initialize_database
 from metar import (
     DUTCH_AIRPORTS,
     MetarError,
@@ -28,19 +28,30 @@ from metar import (
 )
 
 
-_access_gate_patcher = patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "0"})
+_reference_directory = None
+_environment_patcher = None
+REFERENCE_DB = None
+DEFINITIONS = None
 
 
 def setUpModule():
-    _access_gate_patcher.start()
+    global _reference_directory, _environment_patcher, REFERENCE_DB, DEFINITIONS
+    _reference_directory = tempfile.TemporaryDirectory()
+    REFERENCE_DB = os.path.join(_reference_directory.name, "data.db")
+    initialize_database(database_path=REFERENCE_DB)
+    _environment_patcher = patch.dict(
+        os.environ, {"ACCESS_GATE_ENABLED": "0", "DB_PATH": REFERENCE_DB}
+    )
+    _environment_patcher.start()
+    DEFINITIONS = load_weather_definitions(REFERENCE_DB)
 
 
 def tearDownModule():
-    _access_gate_patcher.stop()
+    _environment_patcher.stop()
+    _reference_directory.cleanup()
 
 
 REPORT = "EHAM 021255Z 27012G20KT 9999 -RA SCT020 BKN035 12/08 Q1013"
-DEFINITIONS = load_weather_definitions(DEFAULT_LOCAL_DB)
 
 
 def make_questions(parsed, seed, language="NL"):
@@ -370,7 +381,7 @@ class MetarServiceTests(unittest.TestCase):
         self.assertNotIn("-SHRA", " ".join(nl["options"]))
 
     def test_weather_definitions_come_from_the_database(self):
-        definitions = load_weather_definitions(DEFAULT_LOCAL_DB)
+        definitions = load_weather_definitions(REFERENCE_DB)
 
         self.assertEqual(definitions["FZFG"], ("Onderkoelde mist", "Freezing fog"))
 
@@ -603,7 +614,7 @@ class MetarAbbreviationTests(unittest.TestCase):
 
     def test_cloud_distractors_are_other_cloud_meanings(self):
         cloud_meanings = {
-            nl for cat, nl, _, _ in metar_module.load_abbreviations(DEFAULT_LOCAL_DB).values() if cat == "cloud"
+            nl for cat, nl, _, _ in metar_module.load_abbreviations(REFERENCE_DB).values() if cat == "cloud"
         }
         for seed in range(30):
             for question in build_abbreviation_questions(f"{seed:016x}", "NL", DEFINITIONS, count=200):

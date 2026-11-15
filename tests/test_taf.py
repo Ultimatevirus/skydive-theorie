@@ -6,7 +6,7 @@ from datetime import date
 from unittest.mock import patch
 
 import taf as taf_module
-from db import DEFAULT_LOCAL_DB
+from db import initialize_database
 from taf import (
     TafError,
     _CACHE,
@@ -21,15 +21,27 @@ from taf import (
 )
 
 
-_access_gate_patcher = patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "0"})
+_reference_directory = None
+_environment_patcher = None
+REFERENCE_DB = None
+DEFINITIONS = None
 
 
 def setUpModule():
-    _access_gate_patcher.start()
+    global _reference_directory, _environment_patcher, REFERENCE_DB, DEFINITIONS
+    _reference_directory = tempfile.TemporaryDirectory()
+    REFERENCE_DB = os.path.join(_reference_directory.name, "data.db")
+    initialize_database(database_path=REFERENCE_DB)
+    _environment_patcher = patch.dict(
+        os.environ, {"ACCESS_GATE_ENABLED": "0", "DB_PATH": REFERENCE_DB}
+    )
+    _environment_patcher.start()
+    DEFINITIONS = load_weather_definitions(REFERENCE_DB)
 
 
 def tearDownModule():
-    _access_gate_patcher.stop()
+    _environment_patcher.stop()
+    _reference_directory.cleanup()
 
 
 REPORT = (
@@ -37,7 +49,6 @@ REPORT = (
     "BECMG 1214/1216 27015KT TEMPO 1215/1218 4000 -SHRA BKN012CB "
     "PROB30 TEMPO 1315/1318 TSRA FM130600 30012KT 9999 NSW BKN020"
 )
-DEFINITIONS = load_weather_definitions(DEFAULT_LOCAL_DB)
 
 
 class FakeResponse:
@@ -307,7 +318,7 @@ class TafAbbreviationTests(unittest.TestCase):
     def test_taf_specific_abbreviations_are_in_the_database(self):
         from metar import load_abbreviations
 
-        abbreviations = load_abbreviations(DEFAULT_LOCAL_DB)
+        abbreviations = load_abbreviations(REFERENCE_DB)
         for code in ("TAF", "PROB30", "PROB40", "NSW"):
             self.assertIn(code, abbreviations)
 

@@ -34,9 +34,10 @@ COPY robots.txt ./
 COPY sitemap.xml ./
 COPY static ./static
 COPY templates ./templates
-COPY data.db ./data.db
+COPY seed ./seed
 
-RUN chmod +x /app/docker-entrypoint.sh && chown -R app:app /app /data
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh \
+    && chmod +x /app/docker-entrypoint.sh && chown -R app:app /app /data
 
 USER app
 
