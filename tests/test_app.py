@@ -126,13 +126,14 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('href="/oefenen"', dutch_html)
         self.assertIn('href="/practice"', dutch_html)
         self.assertIn("Dit zijn geen officiële KNVvL", dutch_html)
+        self.assertIn("--home-hero-image: url('", dutch_html)
+        self.assertNotIn('class="home-hero-visual"', dutch_html)
 
         client.post("/language", data=csrf_data(client, language="EN"))
         english_home = client.get("/")
         english_html = english_home.get_data(as_text=True)
         self.assertEqual(english_home.status_code, 200)
         self.assertIn("Prepare step by step with clear theory", english_html)
-        self.assertIn("SKYDIVING LEARNING PLATFORM", english_html)
         self.assertIn("These are not official KNVvL exam or practice questions", english_html)
 
     def test_practice_mode_explanation_is_displayed_in_english(self):

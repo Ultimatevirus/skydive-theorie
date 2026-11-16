@@ -24,13 +24,13 @@
             <div class="choice-grid" aria-label="{{ t('Kies een brevet') }}">
                 <form method="POST" action="{{ url_for('practice_select') }}" class="choice-form" data-turbo="false">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" name="level" value="A" class="choice-card option-card">
+                    <button type="submit" name="level" value="A" class="choice-card option-card category-card practice-level--a">
                         <span class="choice-label">A</span>
                     </button>
                 </form>
                 <form method="POST" action="{{ url_for('practice_select') }}" class="choice-form" data-turbo="false">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" name="level" value="B" class="choice-card option-card">
+                    <button type="submit" name="level" value="B" class="choice-card option-card category-card practice-level--b">
                         <span class="choice-label">B</span>
                     </button>
                 </form>
