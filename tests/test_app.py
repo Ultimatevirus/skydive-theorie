@@ -370,7 +370,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn(b"<svg ", svg_response.data)
         self.assertEqual(ico_response.status_code, 200)
         self.assertIn(
-            'href="/static/icons/book-solid-full.svg?v=',
+            'href="/static/branding/skydive-theorie-favicon.svg?v=',
             home_html,
         )
         self.assertEqual(static_response.status_code, 200)

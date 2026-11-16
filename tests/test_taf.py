@@ -158,14 +158,14 @@ class TafServiceTests(TafTestCase):
         updated_report = REPORT.replace("24010G20KT", "26012KT")
 
         with patch.dict(os.environ, {"KNMI_API_KEY": "key"}), patch.object(
-            taf_module, "_get_open_data_taf", return_value=updated_report
+            taf_module, "_get_open_data_taf", side_effect=(REPORT, updated_report)
         ) as fetch:
             original = get_daily_taf("EHAM", day)
             refreshed = get_daily_taf("EHAM", day, force_refresh=True)
 
         self.assertNotEqual(original["raw"], refreshed["raw"])
         self.assertEqual(refreshed["raw"], updated_report)
-        fetch.assert_called_once()
+        self.assertEqual(fetch.call_count, 2)
         self.assertEqual(taf_module._get_cached_taf(day, "EHAM"), updated_report)
         self.assertEqual(_CACHE[(day.isoformat(), "EHAM")]["raw"], updated_report)
 

@@ -15,8 +15,7 @@ DEFAULT_METAR_SEED = BASE_DIR / "seed" / "metar_reference.json"
 
 QUESTION_FIELDS = (
     "Key", "level", "topic", "subtopic", "question", "true_answer",
-    "false_answers", "question_is_expression", "false_is_expression",
-    "is_active", "language",
+    "false_answers", "is_active", "language",
 )
 IMAGE_FIELDS = (
     "image_key", "image_full_name", "image_local_source",
@@ -124,7 +123,7 @@ def _validate_seed(question_seed, metar_seed):
         values = {field: question[field] for field in QUESTION_FIELDS}
         _validate_record(
             values, QUESTION_FIELDS, "question", required=("Key",),
-            integers=("Key", "question_is_expression", "false_is_expression", "is_active"),
+            integers=("Key", "is_active"),
         )
         key = question["Key"]
         if key <= 0 or key in question_ids:
@@ -218,8 +217,7 @@ def _replace_question_tables(conn, question_seed, sources, images):
             "Key" INTEGER PRIMARY KEY AUTOINCREMENT, level TEXT, topic TEXT,
             subtopic TEXT, question TEXT, true_answer TEXT, false_answers TEXT,
             image_key TEXT REFERENCES image_source(image_key),
-            question_is_expression INTEGER DEFAULT 0,
-            false_is_expression INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1,
+            is_active INTEGER DEFAULT 1,
             language TEXT DEFAULT 'NL', source TEXT REFERENCES source_material(source)
         )
     """)

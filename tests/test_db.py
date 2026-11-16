@@ -44,6 +44,14 @@ class DatabaseHelperTests(unittest.TestCase):
         self.initialize()
         conn = db.connect_db(path=self.path, row_factory=sqlite3.Row)
         self.addCleanup(conn.close)
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(questions)")}
+        self.assertNotIn("question_is_expression", columns)
+        self.assertNotIn("false_is_expression", columns)
+        self.assertTrue(all(
+            "question_is_expression" not in question
+            and "false_is_expression" not in question
+            for question in self.seed["questions"]
+        ))
         rows = conn.execute("SELECT * FROM questions ORDER BY Key").fetchall()
         self.assertEqual(len(rows), len(self.seed["questions"]))
         for row, question in zip(rows, self.seed["questions"]):
