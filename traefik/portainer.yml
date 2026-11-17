@@ -1,21 +1,27 @@
 http:
   routers:
     portainer:
-      rule: Host(`admin.skydive-theorie.nl`)
+      rule: Host(`skydive-theorie.nl`) && (Path(`/portainer`) || PathPrefix(`/portainer/`))
+      priority: 200
       entryPoints:
         - websecure
       tls:
         certResolver: letsencrypt
       middlewares:
-        - portainer-root
+        - portainer-slash
+        - portainer-prefix
       service: portainer
 
   middlewares:
-    portainer-root:
+    portainer-slash:
       redirectRegex:
-        regex: '^https?://admin\.skydive-theorie\.nl/portainer/?(\?.*)?$'
-        replacement: 'https://admin.skydive-theorie.nl/${1}'
+        regex: '^https?://skydive-theorie\.nl/portainer(\?.*)?$'
+        replacement: 'https://skydive-theorie.nl/portainer/${1}'
         permanent: true
+    portainer-prefix:
+      stripPrefix:
+        prefixes:
+          - /portainer
 
   services:
     portainer:
