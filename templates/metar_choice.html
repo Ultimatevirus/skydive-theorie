@@ -19,10 +19,10 @@
 
         {% if practice_mode %}
             <div class="choice-grid" aria-label="{{ t('Kies een berichttype') }}">
-                <a href="{{ url_for('metar_practice') if practice_mode == 'ontleden' else url_for('metar_abbreviations') }}" class="choice-card option-card choice-form">
+                <a href="{{ url_for('metar_practice') if practice_mode == 'ontleden' else url_for('metar_abbreviations') }}" class="choice-card option-card choice-form category-card choice-image--metar">
                     <span class="choice-label">{{ t("METAR's ontleden") if practice_mode == 'ontleden' else t('METAR afkortingen oefenen') }}</span>
                 </a>
-                <a href="{{ url_for('taf_practice') if practice_mode == 'ontleden' else url_for('taf_abbreviations') }}" class="choice-card option-card choice-form">
+                <a href="{{ url_for('taf_practice') if practice_mode == 'ontleden' else url_for('taf_abbreviations') }}" class="choice-card option-card choice-form category-card choice-image--taf">
                     <span class="choice-label">{{ t("TAF's ontleden") if practice_mode == 'ontleden' else t('TAF afkortingen oefenen') }}</span>
                 </a>
             </div>
@@ -31,10 +31,10 @@
             </div>
         {% else %}
             <div class="choice-grid" aria-label="{{ t('Kies een oefenmodus') }}">
-                <a href="{{ url_for('metar_type_choice', practice_mode='ontleden') }}" class="choice-card option-card choice-form">
+                <a href="{{ url_for('metar_type_choice', practice_mode='ontleden') }}" class="choice-card option-card choice-form category-card choice-image--decode">
                     <span class="choice-label">{{ t('Ontleden oefenen') }}</span>
                 </a>
-                <a href="{{ url_for('metar_type_choice', practice_mode='afkortingen') }}" class="choice-card option-card choice-form">
+                <a href="{{ url_for('metar_type_choice', practice_mode='afkortingen') }}" class="choice-card option-card choice-form category-card choice-image--abbreviations">
                     <span class="choice-label">{{ t('Afkortingen oefenen') }}</span>
                 </a>
             </div>

@@ -126,6 +126,9 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn('href="/oefenen"', dutch_html)
         self.assertIn('href="/practice"', dutch_html)
         self.assertIn("Dit zijn geen officiële KNVvL", dutch_html)
+        self.assertIn("naar de vragen gekeken hebben kan het zijn dat niet alle vragen gevalideerd zijn.", dutch_html)
+        self.assertIn("Naar oefenexamens", dutch_html)
+        self.assertIn("Start dynamische oefeningen", dutch_html)
         self.assertIn("--home-hero-image: url('", dutch_html)
         self.assertNotIn('class="home-hero-visual"', dutch_html)
 
@@ -135,6 +138,9 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(english_home.status_code, 200)
         self.assertIn("Prepare step by step with clear theory", english_html)
         self.assertIn("These are not official KNVvL exam or practice questions", english_html)
+        self.assertIn("Although several assistant instructors and instructors have reviewed them, some questions may not have been validated.", english_html)
+        self.assertIn("Go to practice exams", english_html)
+        self.assertIn("Start dynamic exercises", english_html)
 
     def test_practice_mode_explanation_is_displayed_in_english(self):
         client = app.test_client()
@@ -421,8 +427,9 @@ class PracticeFlowTests(unittest.TestCase):
         home_html = home_response.get_data(as_text=True)
         self.assertEqual(home_response.status_code, 200)
         self.assertIn(
-            "Please note: These are not official KNVvL exam or practice questions, "
-            "and they have NOT been fully validated!",
+            "Please note: These are not official KNVvL exam or practice questions. "
+            "Although several assistant instructors and instructors have reviewed them, "
+            "some questions may not have been validated.",
             home_html,
         )
 
@@ -895,6 +902,41 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("Wil je vrij oefenen, of een oefenexamen maken?", html)
         self.assertIn("Oefenexamen maken", html)
         self.assertIn("Vrij oefenen", html)
+
+    def test_choice_pages_use_their_background_images(self):
+        client = app.test_client()
+        pages = {
+            "/practice/mode/A": ("exam", "practice"),
+            "/metar": ("decode", "abbreviations"),
+            "/metar/keuze/ontleden": ("metar", "taf"),
+            "/metar/keuze/afkortingen": ("metar", "taf"),
+        }
+        for path, choices in pages.items():
+            response = client.get(path)
+            self.assertEqual(response.status_code, 200)
+            for choice in choices:
+                self.assertIn(f"choice-image--{choice}", response.get_data(as_text=True))
+
+        stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
+        images = {
+            "exam": "exam",
+            "practice": "practice",
+            "decode": "windsock",
+            "abbreviations": "dictionary",
+            "metar": "cloud",
+            "taf": "airport",
+        }
+        for choice, image in images.items():
+            self.assertIn(
+                f'.choice-image--{choice} {{\n    --category-image: url("branding/{image}.webp");',
+                stylesheet,
+            )
+            response = client.get(f"/static/branding/{image}.webp")
+            try:
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.mimetype, "image/webp")
+            finally:
+                response.close()
 
     def test_exam_mode_sets_full_exam_question_count(self):
         client = app.test_client()

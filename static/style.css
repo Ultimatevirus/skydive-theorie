@@ -1137,6 +1137,30 @@ textarea {
     --category-image: url("branding/wingsuit.webp");
 }
 
+.choice-image--exam {
+    --category-image: url("branding/exam.webp");
+}
+
+.choice-image--practice {
+    --category-image: url("branding/practice.webp");
+}
+
+.choice-image--decode {
+    --category-image: url("branding/windsock.webp");
+}
+
+.choice-image--abbreviations {
+    --category-image: url("branding/dictionary.webp");
+}
+
+.choice-image--metar {
+    --category-image: url("branding/cloud.webp");
+}
+
+.choice-image--taf {
+    --category-image: url("branding/airport.webp");
+}
+
 .category-card.is-unavailable {
     cursor: not-allowed;
     border-color: rgba(100, 116, 139, 0.28);

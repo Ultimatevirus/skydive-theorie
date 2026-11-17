@@ -39,11 +39,11 @@
             <div class="choice-grid" aria-label="{{ t('Kies oefenmodus') }}">
                 <form method="POST" action="{{ url_for('practice_mode', level=level) }}" class="choice-form" data-turbo="false">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <button type="submit" name="practice_type" value="exam" class="choice-card option-card">
+                    <button type="submit" name="practice_type" value="exam" class="choice-card option-card category-card choice-image--exam">
                         <span class="choice-label">{{ t('Oefenexamen maken') }}</span>
                     </button>
                 </form>
-                <a href="{{ url_for('practice_free', level=level) }}" class="choice-card option-card choice-form">
+                <a href="{{ url_for('practice_free', level=level) }}" class="choice-card option-card choice-form category-card choice-image--practice">
                     <span class="choice-label">{{ t('Vrij oefenen') }}</span>
                 </a>
             </div>

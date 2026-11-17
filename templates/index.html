@@ -31,8 +31,8 @@
             <h1 id="home-title">{{ t('Theorie oefenen voor je KNVvL A/B brevet') }}</h1>
             <p class="home-lead">{{ t('Bereid je stap voor stap voor met heldere theorie, gerichte oefening en oefenexamens voor je KNVvL A- of B-brevet.') }}</p>
             <div class="button-row home-actions">
-                <a href="{{ url_for('oefenen') }}" class="primary-btn">{{ t('Start oefenen') }}</a>
-                <a href="{{ url_for('practice') }}" class="secondary-btn">{{ t('Naar oefenexamen') }}</a>
+                <a href="{{ url_for('practice') }}" class="primary-btn">{{ t('Naar oefenexamens') }}</a>
+                <a href="{{ url_for('oefenen') }}" class="secondary-btn">{{ t('Start dynamische oefeningen') }}</a>
             </div>
             <div class="home-hero-note">
                 <span class="home-note-icon" aria-hidden="true">i</span>
@@ -84,7 +84,7 @@
 
     <aside class="home-disclaimer" aria-label="{{ t('Belangrijke informatie') }}">
         <span class="disclaimer-icon" aria-hidden="true">!</span>
-        <p><strong>{{ t('Belangrijk om te weten') }}</strong>{{ t('Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen en ze zijn tevens NIET volledig gevalideerd!') }}</p>
+        <p><strong>{{ t('Belangrijk om te weten') }}</strong>{{ t("Let op!: Dit zijn geen officiële KNVvL (oefen)examenvragen. Ondanks dat er meerdere HI's en I's naar de vragen gekeken hebben kan het zijn dat niet alle vragen gevalideerd zijn.") }}</p>
     </aside>
 
     <details class="home-more-info">
