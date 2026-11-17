@@ -45,7 +45,7 @@ modules.
 
 ### Local testing with Docker Compose
 
-The default Compose file builds the application locally and starts Flask behind Traefik. The application is not exposed directly; Traefik receives the request and forwards it over the internal Docker network. Local defaults use ports `8080` and `8443` with Traefik's development certificate.
+The default Compose file builds the application locally and starts Flask behind Traefik. Local defaults use ports `8080` and `8443` with Traefik's development certificate. It also publishes Gunicorn directly on `APP_PORT` (default `5000`), bypassing Traefik and its rate limits; restrict access to this port with a firewall and do not use this Compose file as a public production deployment.
 
 ```powershell
 Copy-Item .env.example .env
@@ -121,6 +121,37 @@ docker compose -f compose.production.yml -f compose.production.image.yml up -d -
 ```
 
 Only Traefik publishes ports `80` and `443`; Gunicorn remains private to the Docker network. HTTP redirects to HTTPS, and Let's Encrypt state is stored in the named `letsencrypt` volume. Production session cookies are marked `Secure`, `HttpOnly`, and `SameSite=Lax`.
+
+Traefik applies separate per-client-IP token buckets to the app, static assets,
+and apex redirect. Defaults are 300 requests per minute with a burst of 100 for
+the app and apex, and 1200 per minute with a burst of 200 for static assets.
+Set `APP_RATE_LIMIT_AVERAGE` and `APP_RATE_LIMIT_BURST`,
+`STATIC_RATE_LIMIT_AVERAGE` and `STATIC_RATE_LIMIT_BURST`, or
+`APEX_RATE_LIMIT_AVERAGE` and `APEX_RATE_LIMIT_BURST` to positive integers to
+adjust them. The burst is the maximum bucket size, not an additional fixed
+per-minute allowance; tokens refill continuously. Excess requests receive HTTP
+429. The local Traefik router uses the app limit as well.
+
+The limits use the remote connection address, not `X-Forwarded-For`, and assume
+visitors connect directly to Traefik. IPv6 addresses are grouped by /64. Users
+sharing an IP or IPv6 subnet share a budget, so monitor 429s in Traefik's access
+log and tune the limits against normal usage. Counters are in memory per Traefik
+instance and reset on restart; multiple Traefik instances require shared rate
+limit storage or upstream enforcement. If a CDN or proxy is added, configure
+trusted proxy addresses and client-IP selection at both Traefik and the app
+before relying on IP-based quotas; never trust arbitrary forwarded headers.
+Keep the app's Docker network inaccessible to untrusted clients because
+`ProxyFix` assumes requests come through the trusted proxy.
+
+These limits reduce per-source HTTP abuse but cannot stop distributed attacks
+or saturation of the server's network link. Use upstream DDoS protection, such
+as a hosting provider or CDN, for volumetric attacks. Monitor disk usage as well
+as request rates: daily log rotation does not cap growth within a day.
+
+Run `python tests/traefik_rate_limit_check.py` to check the production router
+labels against an isolated Traefik instance. The check requires Docker and the
+`traefik:v3.7.18` and `python:3.15-alpine3.24` images; it creates and removes its
+own temporary containers and network without modifying the running stack.
 
 Concurrency: production runs 2 `app` replicas (2 Gunicorn workers x 6 threads each, tunable with `GUNICORN_PROCESSES`/`GUNICORN_THREADS`), sized for a 4-core host. Traefik compresses responses and routes `/static/` to a small `static` nginx container, so neither consumes Gunicorn threads. The `static` service is always built from the checked-out repository, even with `compose.production.image.yml`. Repeated wrong access-gate codes are throttled per client IP (5 per minute, tracked in the shared SQLite database so it holds across workers and replicas) instead of sleeping the request thread. The client IP comes from `X-Forwarded-For` via `ProxyFix`; in production one trusted proxy hop (Traefik) is assumed, adjustable with `TRUSTED_PROXY_COUNT`.
 

@@ -44,7 +44,11 @@ services:
       - traefik.http.services.skydive.loadbalancer.healthcheck.interval=15s
       - traefik.http.services.skydive.loadbalancer.healthcheck.timeout=15s
       - traefik.http.middlewares.skydive-compress.compress=true
-      - traefik.http.routers.skydive.middlewares=skydive-compress
+      - traefik.http.middlewares.skydive-app-limit.ratelimit.average=${APP_RATE_LIMIT_AVERAGE:-300}
+      - traefik.http.middlewares.skydive-app-limit.ratelimit.period=1m
+      - traefik.http.middlewares.skydive-app-limit.ratelimit.burst=${APP_RATE_LIMIT_BURST:-100}
+      - traefik.http.middlewares.skydive-app-limit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64
+      - traefik.http.routers.skydive.middlewares=skydive-app-limit,skydive-compress
       # Redirect the bare/apex domain to the canonical TRAEFIK_HOST (e.g. apex -> www)
       - traefik.http.middlewares.skydive-www-redirect.redirectregex.regex=^https?://${TRAEFIK_APEX_HOST:?TRAEFIK_APEX_HOST must be set}/(.*)
       - traefik.http.middlewares.skydive-www-redirect.redirectregex.replacement=https://${TRAEFIK_HOST:?TRAEFIK_HOST must be set}/$${1}
@@ -53,7 +57,11 @@ services:
       - traefik.http.routers.skydive-apex.entrypoints=websecure
       - traefik.http.routers.skydive-apex.tls=true
       - traefik.http.routers.skydive-apex.tls.certresolver=letsencrypt
-      - traefik.http.routers.skydive-apex.middlewares=skydive-www-redirect
+      - traefik.http.middlewares.skydive-apex-limit.ratelimit.average=${APEX_RATE_LIMIT_AVERAGE:-300}
+      - traefik.http.middlewares.skydive-apex-limit.ratelimit.period=1m
+      - traefik.http.middlewares.skydive-apex-limit.ratelimit.burst=${APEX_RATE_LIMIT_BURST:-100}
+      - traefik.http.middlewares.skydive-apex-limit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64
+      - traefik.http.routers.skydive-apex.middlewares=skydive-apex-limit,skydive-www-redirect
       - traefik.http.routers.skydive-apex.service=skydive
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=12)"]
@@ -81,6 +89,11 @@ services:
       - traefik.http.routers.skydive-static.tls.certresolver=letsencrypt
       - traefik.http.routers.skydive-static.service=skydive-static
       - traefik.http.services.skydive-static.loadbalancer.server.port=80
+      - traefik.http.middlewares.skydive-static-limit.ratelimit.average=${STATIC_RATE_LIMIT_AVERAGE:-1200}
+      - traefik.http.middlewares.skydive-static-limit.ratelimit.period=1m
+      - traefik.http.middlewares.skydive-static-limit.ratelimit.burst=${STATIC_RATE_LIMIT_BURST:-200}
+      - traefik.http.middlewares.skydive-static-limit.ratelimit.sourcecriterion.ipstrategy.ipv6subnet=64
+      - traefik.http.routers.skydive-static.middlewares=skydive-static-limit
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/healthz"]
       interval: 30s
