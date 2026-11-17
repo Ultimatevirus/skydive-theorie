@@ -437,6 +437,19 @@ class MetarServiceTests(unittest.TestCase):
 
 
 class MetarRouteTests(unittest.TestCase):
+    def test_page_fetches_a_metar_when_the_notification_cache_is_empty(self):
+        parsed = parse_metar(REPORT)
+        parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})
+
+        with patch.object(app_module, "get_daily_metar", return_value=parsed) as get_metar, patch.object(
+            app_module, "load_weather_definitions", return_value=DEFINITIONS
+        ):
+            response = app.test_client().get("/metar/ontleden?airport=EHAM")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(REPORT, response.get_data(as_text=True))
+        get_metar.assert_called_once_with("EHAM", wait_for_rate_limit=False)
+
     def test_get_and_post_metar_page(self):
         parsed = parse_metar(REPORT)
         parsed.update({"airport": "EHAM", "airport_name": DUTCH_AIRPORTS["EHAM"], "date": "2026-09-02"})

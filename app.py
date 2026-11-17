@@ -691,11 +691,6 @@ def learn():
     return render_template("learn.html")
 
 
-def metar_refresh_enabled():
-    """Request threads only read cached METARs when the KNMI listener fills the cache."""
-    return os.getenv("KNMI_METAR_REFRESH", "1").lower() not in {"0", "false", "no"}
-
-
 @app.route("/metar")
 @app.route("/oefenen/meteo/METAR-TAF")
 def metar_choice():
@@ -783,7 +778,6 @@ def metar_practice():
             metar = get_daily_metar(
                 selected_airport,
                 wait_for_rate_limit=False,
-                cache_only=metar_refresh_enabled(),
             )
             session["metar_airport"] = selected_airport
         except MetarError as exc:

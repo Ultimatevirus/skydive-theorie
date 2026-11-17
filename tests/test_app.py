@@ -475,7 +475,7 @@ class PracticeFlowTests(unittest.TestCase):
             client.post("/language", data=csrf_data(client, language="EN"))
             english = client.get("/metar/ontleden").get_data(as_text=True)
 
-        self.assertIn("METARs are updated directly from KNMI every 30 minutes.", english)
+        self.assertIn("METARs are updated when KNMI makes a new METAR file available.", english)
         self.assertIn("KNMI returned an unreadable METAR.", english)
         self.assertNotIn("KNMI gaf geen leesbare METAR terug.", english)
 
