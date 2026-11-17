@@ -1,9 +1,6 @@
 import os
-from threading import Event, Thread
-
-from metar import metar_refresh_loop
-from system_status import system_status_monitor
-from taf import taf_refresh_loop
+import subprocess
+import sys
 
 
 # Sized for a 4-core host; override per deployment (production compose runs several replicas).
@@ -35,42 +32,23 @@ forwarded_allow_ips = os.environ.get('FORWARDED_ALLOW_IPS', '127.0.0.1')
 secure_scheme_headers = { 'X-Forwarded-Proto': 'https' }
 
 
-_metar_refresh_stop = Event()
-_metar_refresh_thread = None
-_taf_refresh_thread = None
-_system_status_thread = None
+_background_process = None
 
 
 def when_ready(server):
-	global _metar_refresh_thread, _taf_refresh_thread, _system_status_thread
-	if os.environ.get('SYSTEM_STATUS_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
-		_system_status_thread = Thread(
-			target=system_status_monitor,
-			args=(_metar_refresh_stop,),
-			name='system-status-monitor',
-			daemon=True,
-		)
-		_system_status_thread.start()
-	if os.environ.get('KNMI_METAR_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
-		_metar_refresh_thread = Thread(
-			target=metar_refresh_loop,
-			args=(_metar_refresh_stop,),
-			name='metar-notifications',
-			daemon=True,
-		)
-		_metar_refresh_thread.start()
-	if os.environ.get('KNMI_TAF_REFRESH', '1').lower() not in {'0', 'false', 'no'}:
-		_taf_refresh_thread = Thread(
-			target=taf_refresh_loop,
-			args=(_metar_refresh_stop,),
-			name='taf-refresh',
-			daemon=True,
-		)
-		_taf_refresh_thread.start()
+	global _background_process
+	if any(os.environ.get(flag, '1').lower() not in {'0', 'false', 'no'} for flag in (
+		'SYSTEM_STATUS_REFRESH', 'KNMI_METAR_REFRESH', 'KNMI_TAF_REFRESH',
+	)):
+		_background_process = subprocess.Popen([sys.executable, '-m', 'background_services'])
 
 
 def on_exit(server):
-	_metar_refresh_stop.set()
-	for thread in (_metar_refresh_thread, _taf_refresh_thread, _system_status_thread):
-		if thread is not None:
-			thread.join(timeout=5)
+	if _background_process is not None and _background_process.poll() is None:
+		_background_process.terminate()
+		try:
+			_background_process.wait(timeout=20)
+		except subprocess.TimeoutExpired:
+			server.log.warning('Background services did not stop; killing process')
+			_background_process.kill()
+			_background_process.wait()
