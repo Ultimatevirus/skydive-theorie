@@ -1,0 +1,29 @@
+http:
+  routers:
+    portainer:
+      rule: Host(`admin.skydive-theorie.nl`)
+      entryPoints:
+        - websecure
+      tls:
+        certResolver: letsencrypt
+      middlewares:
+        - portainer-root
+      service: portainer
+
+  middlewares:
+    portainer-root:
+      redirectRegex:
+        regex: '^https?://admin\.skydive-theorie\.nl/portainer/?(\?.*)?$'
+        replacement: 'https://admin.skydive-theorie.nl/${1}'
+        permanent: true
+
+  services:
+    portainer:
+      loadBalancer:
+        serversTransport: portainer
+        servers:
+          - url: https://host.docker.internal:9443
+
+  serversTransports:
+    portainer:
+      insecureSkipVerify: true

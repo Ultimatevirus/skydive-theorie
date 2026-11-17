@@ -94,6 +94,7 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=skydive-proxy
+      - --providers.file.filename=/etc/traefik/portainer.yml
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https
@@ -109,8 +110,11 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/portainer.yml:/etc/traefik/portainer.yml:ro
       - letsencrypt:/letsencrypt
       - traefik-logs:/logs
     networks:

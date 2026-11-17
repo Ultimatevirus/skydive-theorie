@@ -98,6 +98,8 @@ the form displays an error so the message can be retried.
 
 `TRAEFIK_HOST` is the canonical hostname the app is served on; `TRAEFIK_APEX_HOST` is the bare domain, which Traefik redirects to `TRAEFIK_HOST`. Make sure DNS records exist for both hostnames and point at the server.
 
+Point `admin.skydive-theorie.nl` at the same server to enable HTTPS access to the existing Portainer instance. `https://admin.skydive-theorie.nl/portainer` redirects to the hostname root, where Portainer is served. Traefik connects to the host's published port `9443` using Docker's host gateway, so Portainer must listen on an address reachable from the Docker network, not only host loopback. The upstream uses HTTPS but skips certificate verification for Portainer's default self-signed certificate; configure a trusted certificate and remove `insecureSkipVerify` to authenticate the upstream. Restrict direct access to port `9443` with the host firewall and protect the admin hostname appropriately. The `traefik/portainer.yml` file must be present next to the production Compose file on the deployment host.
+
 If you want to publish the site immediately without the gate, set `ACCESS_GATE_ENABLED=0` and leave `ACCESS_CODE` empty.
 
 Start the production stack with:
