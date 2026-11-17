@@ -129,8 +129,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("naar de vragen gekeken hebben kan het zijn dat niet alle vragen gevalideerd zijn.", dutch_html)
         self.assertIn("Naar oefenexamens", dutch_html)
         self.assertIn("Start dynamische oefeningen", dutch_html)
-        self.assertIn("--home-hero-image: url('", dutch_html)
-        self.assertNotIn('class="home-hero-visual"', dutch_html)
+        self.assertIn('class="home-hero-visual"', dutch_html)
 
         client.post("/language", data=csrf_data(client, language="EN"))
         english_home = client.get("/")
@@ -141,6 +140,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("Although several assistant instructors and instructors have reviewed them, some questions may not have been validated.", english_html)
         self.assertIn("Go to practice exams", english_html)
         self.assertIn("Start dynamic exercises", english_html)
+        self.assertIn("SKYDIVING LEARNING PLATFORM", english_html)
 
     def test_practice_mode_explanation_is_displayed_in_english(self):
         client = app.test_client()
@@ -308,6 +308,8 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertNotIn("page-entering", stylesheet)
         self.assertNotIn("page-leaving", stylesheet)
         self.assertIn('id="exam-form" data-turbo="false"', exam_html)
+        self.assertIn('id="timer" data-started-at="', exam_html)
+        self.assertIn('document.addEventListener("turbo:before-cache"', exam_html)
         for page_html in post_form_pages[1:]:
             self.assertRegex(page_html, r'<form\b[^>]*data-turbo="false"')
         self.assertIn('src="/static/vendor/turbo.es2017-umd.js?v=', html)

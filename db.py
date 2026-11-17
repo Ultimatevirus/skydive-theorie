@@ -56,11 +56,16 @@ def connect_db(path=None, row_factory=None, configure_journal=False):
             deadline = time.monotonic() + 30
             while True:
                 try:
-                    conn.execute("PRAGMA journal_mode=WAL")
+                    mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+                    if mode.lower() != "wal":
+                        raise sqlite3.OperationalError(f"Could not enable WAL mode: {mode}")
                     break
                 except sqlite3.OperationalError as exc:
-                    code = getattr(exc, "sqlite_errorcode", None)
-                    if code not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED) or time.monotonic() >= deadline:
+                    error_code = getattr(exc, "sqlite_errorcode", 0) & 0xFF
+                    if (
+                        error_code not in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED)
+                        or time.monotonic() >= deadline
+                    ):
                         raise
                     time.sleep(0.05)
         conn.execute("PRAGMA synchronous=NORMAL")

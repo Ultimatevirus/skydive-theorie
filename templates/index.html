@@ -26,7 +26,7 @@
 {% endblock %}
 
 {% block content %}
-    <section class="home-hero" aria-labelledby="home-title" style="--home-hero-image: url('{{ asset_url('branding/parachutist.webp') }}')">
+    <section class="home-hero" aria-labelledby="home-title">
         <div class="home-hero-copy">
             <h1 id="home-title">{{ t('Theorie oefenen voor je KNVvL A/B brevet') }}</h1>
             <p class="home-lead">{{ t('Bereid je stap voor stap voor met heldere theorie, gerichte oefening en oefenexamens voor je KNVvL A- of B-brevet.') }}</p>
@@ -40,6 +40,14 @@
             </div>
         </div>
 
+        <figure class="home-hero-visual">
+            <img src="{{ asset_url('branding/parachutist.webp') }}" alt="{{ t('Parachutist onder een geopende parachute') }}" fetchpriority="high">
+            <span class="home-visual-label">{{ t('LEERPLATFORM VOOR PARACHUTISTEN') }}</span>
+            <figcaption>
+                <span>{{ t('Theorie voor je volgende sprong') }}</span>
+                <strong>{{ t('Kennis groeit met elke oefening') }}</strong>
+            </figcaption>
+        </figure>
     </section>
 
     <section class="learning-paths" aria-labelledby="learning-paths-title">

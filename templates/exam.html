@@ -14,7 +14,7 @@
 
             <div class="timer-box">
                 <span>{{ t('Verstreken tijd') }}</span>
-                <strong id="timer">00:00</strong>
+                <strong id="timer" data-started-at="{{ started_at }}">00:00</strong>
             </div>
         </div>
 
@@ -101,8 +101,6 @@
     <script>
         (() => {
         const totalQuestions = Number("{{ total_questions }}");
-        const startedAt = Number("{{ started_at }}");
-        const timerEl = document.getElementById("timer");
         const progressFill = document.getElementById("progress-fill");
         const progressText = document.getElementById("progress-text");
 
@@ -194,10 +192,31 @@
             examForm.submit();
         });
 
-        setInterval(() => {
-            const elapsed = Math.floor((Date.now() / 1000) - startedAt);
-            timerEl.textContent = formatTime(elapsed);
-        }, 1000);
+        const timerManager = window.examTimerManager || (window.examTimerManager = {
+            intervalId: null,
+            stop() {
+                if (this.intervalId !== null) clearInterval(this.intervalId);
+                this.intervalId = null;
+            },
+            update() {
+                const currentTimer = document.getElementById("timer");
+                if (!currentTimer) return;
+                const elapsed = Math.floor((Date.now() / 1000) - Number(currentTimer.dataset.startedAt));
+                currentTimer.textContent = formatTime(elapsed);
+            },
+            start() {
+                this.stop();
+                if (!document.getElementById("timer")) return;
+                this.update();
+                this.intervalId = setInterval(() => this.update(), 1000);
+            }
+        });
+        if (!window.examTimerLifecycleRegistered) {
+            document.addEventListener("turbo:before-cache", () => timerManager.stop());
+            document.addEventListener("turbo:load", () => timerManager.start());
+            window.examTimerLifecycleRegistered = true;
+        }
+        timerManager.start();
         })();
     </script>
 {% endblock %}

@@ -334,8 +334,6 @@ def get_daily_taf(
         raise TafError("Kies een Nederlandse luchthaven uit de lijst.")
     day = today or datetime.now(timezone.utc).date()
     cache_key = (day.isoformat(), code)
-    if cache_key in _CACHE and not force_refresh:
-        return _CACHE[cache_key]
 
     def cached_result(report):
         result = _build_result(report, code, day)
@@ -344,6 +342,9 @@ def get_daily_taf(
 
     report = _get_cached_taf(day, code)
     if report is not None and not force_refresh:
+        cached = _CACHE.get(cache_key)
+        if cached is not None and cached["raw"] == report:
+            return cached
         return cached_result(report)
     if cache_only and not force_refresh:
         raise TafError("De TAF wordt nog opgehaald. Probeer het over een minuut opnieuw.")

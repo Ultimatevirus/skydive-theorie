@@ -340,7 +340,7 @@ def refresh_system_status():
 
 
 def system_status_monitor(stop_event=None):
-    """Keep status checks fresh from the Gunicorn master process."""
+    """Keep status checks fresh from the background services process."""
     stop_event = stop_event or Event()
     while not stop_event.is_set():
         try:

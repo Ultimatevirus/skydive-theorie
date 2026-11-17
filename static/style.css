@@ -2443,7 +2443,9 @@ body {
 
 .home-hero {
     display: grid;
-    place-items: center;
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 0.88fr);
+    align-items: center;
+    gap: clamp(28px, 5vw, 72px);
     width: 100%;
     max-width: none;
     min-height: 420px;
@@ -2451,14 +2453,13 @@ body {
     padding: clamp(28px, 4vw, 60px);
     border: 1px solid var(--border);
     border-radius: 28px;
-    background: linear-gradient(rgba(255, 255, 255, 0.85), rgba(232, 239, 247, 0.85)), var(--home-hero-image) center / cover;
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0.87), rgba(232, 239, 247, 0.82));
     backdrop-filter: blur(12px);
     box-shadow: var(--shadow);
-    text-align: center;
 }
 
 .home-hero-copy {
-    width: 100%;
+    max-width: 620px;
 }
 
 .home-hero .eyebrow {
@@ -2484,8 +2485,8 @@ body {
 }
 
 .home-hero h1 {
-    max-width: 100%;
-    margin: 0 auto;
+    max-width: 15ch;
+    margin: 0;
     color: var(--text);
     font-size: clamp(2.5rem, 4.5vw, 4rem);
     font-weight: 800;
@@ -2495,31 +2496,30 @@ body {
 }
 
 .home-lead {
-    margin: 22px auto 0;
+    max-width: 56ch;
+    margin: 22px 0 0;
     color: var(--muted);
     font-size: clamp(1.05rem, 1.6vw, 1.2rem);
     line-height: 1.65;
 }
 
 .home-actions {
-    justify-content: center;
+    justify-content: flex-start;
     margin-top: 28px;
 }
 
 .home-actions .primary-btn,
 .home-actions .secondary-btn {
-    min-width: min(210px, 100%);
-    min-height: 60px;
-    padding: 16px 28px;
-    font-size: 1.08rem;
+    min-height: 50px;
+    padding: 14px 22px;
 }
 
 .home-hero-note {
     display: flex;
     align-items: flex-start;
-    justify-content: center;
     gap: 11px;
-    margin: 28px auto 0;
+    max-width: 520px;
+    margin-top: 28px;
 }
 
 .home-note-icon,
@@ -2542,6 +2542,72 @@ body {
     color: var(--muted);
     font-size: 0.9rem;
     line-height: 1.5;
+}
+
+.home-hero-visual {
+    position: relative;
+    isolation: isolate;
+    min-height: 350px;
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 22px;
+    background: #71859a;
+    box-shadow: 0 22px 46px rgba(20, 39, 62, 0.18);
+}
+
+.home-hero-visual::after {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(13, 27, 42, 0.12) 20%, rgba(13, 27, 42, 0.72) 100%);
+    content: "";
+}
+
+.home-hero-visual img {
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 67% center;
+}
+
+.home-visual-label {
+    position: absolute;
+    z-index: 1;
+    top: 18px;
+    left: 18px;
+    padding: 9px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    color: #183452;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+}
+
+.home-hero-visual figcaption {
+    position: absolute;
+    z-index: 1;
+    right: 24px;
+    bottom: 24px;
+    left: 24px;
+    display: grid;
+    gap: 4px;
+    color: #fff;
+}
+
+.home-hero-visual figcaption span {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.home-hero-visual figcaption strong {
+    font-size: clamp(1.25rem, 2vw, 1.65rem);
+    line-height: 1.2;
 }
 
 .learning-paths {
@@ -2731,12 +2797,13 @@ body {
 }
 
 .home-secondary-actions {
+    justify-content: flex-start;
     margin-top: 24px;
 }
 
 :root[data-theme="dark"] .home-hero {
     border-color: var(--border);
-    background: linear-gradient(rgba(17, 28, 45, 0.84), rgba(20, 34, 56, 0.84)), var(--home-hero-image) center / cover;
+    background: linear-gradient(120deg, rgba(17, 28, 45, 0.98), rgba(20, 34, 56, 0.98));
 }
 
 :root[data-theme="dark"] .card,
@@ -2776,7 +2843,13 @@ body {
 
 @media (max-width: 900px) {
     .home-hero {
+        grid-template-columns: minmax(0, 1fr) minmax(270px, 0.82fr);
+        gap: 28px;
         padding: 32px;
+    }
+
+    .home-hero-visual {
+        min-height: 320px;
     }
 
     .learning-path-grid {
@@ -2795,6 +2868,8 @@ body {
     }
 
     .home-hero {
+        grid-template-columns: 1fr;
+        gap: 26px;
         padding: 26px 20px 20px;
         border-radius: 22px;
     }
@@ -2805,6 +2880,10 @@ body {
 
     .home-actions {
         align-items: stretch;
+    }
+
+    .home-hero-visual {
+        min-height: 270px;
     }
 
     .learning-paths {
