@@ -1395,7 +1395,7 @@ textarea {
 }
 
 :root[data-theme="dark"] .image-source a {
-    color: var(--primary);
+    color: var(--primary-dark);
 }
 
 .topic-group {

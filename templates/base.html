@@ -26,6 +26,7 @@
     <link rel="shortcut icon" type="image/svg+xml" href="{{ asset_url('branding/skydive-theorie-favicon.svg') }}">
     <title>{% block title %}Skydive-theorie.nl{% endblock %}</title>
     <link rel="preload" as="image" href="{{ url_for('static', filename='branding/logo.webp') }}">
+    <meta name="turbo-prefetch" content="false">
     {{ turbo(url=asset_url('vendor/turbo.es2017-umd.js')) }}
     <script src="{{ asset_url('theme.js') }}"></script>
     <link rel="stylesheet" href="{{ asset_url('style.css') }}">
