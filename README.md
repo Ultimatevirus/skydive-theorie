@@ -202,7 +202,6 @@ pull and start the new image using the image override. Local Compose deployments
 should similarly stop the app before rebuilding it. Existing practice sessions
 store question IDs, so changing or deleting questions during deployment may
 affect exams already in progress.
-
 ### KNMI METAR configuration
 
 The per-container background process starts an MQTT listener for `dataplatform/file/v1/metar/1.0/created`. It uses the KNMI Notification Service over TLS WebSockets on port 443, with QoS 1 and a persistent client ID per app container. METARs are refreshed only when KNMI publishes a new file notification; when the event identifies an airport, only that airport is refreshed. The listener does not perform a timer-based refresh. Failed updates are logged and can be retried when a later file notification arrives.

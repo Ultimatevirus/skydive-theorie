@@ -40,7 +40,10 @@ def get_db_path():
     else:
         db_path = DEFAULT_LOCAL_DB
 
-    db_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
     return str(db_path)
 
 
