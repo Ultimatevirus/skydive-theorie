@@ -1,35 +1,4 @@
 http:
-  routers:
-    portainer:
-      rule: Host(`skydive-theorie.nl`) && (Path(`/portainer`) || PathPrefix(`/portainer/`))
-      priority: 200
-      entryPoints:
-        - websecure
-      tls:
-        certResolver: letsencrypt
-      middlewares:
-        - portainer-slash
-        - portainer-prefix
-      service: portainer
-
-  middlewares:
-    portainer-slash:
-      redirectRegex:
-        regex: '^https?://skydive-theorie\.nl/portainer(\?.*)?$'
-        replacement: 'https://skydive-theorie.nl/portainer/${1}'
-        permanent: true
-    portainer-prefix:
-      stripPrefix:
-        prefixes:
-          - /portainer
-
-  services:
-    portainer:
-      loadBalancer:
-        serversTransport: portainer
-        servers:
-          - url: https://host.docker.internal:9443
-
   serversTransports:
-    portainer:
+    portainer-insecure:
       insecureSkipVerify: true
