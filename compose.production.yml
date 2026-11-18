@@ -101,7 +101,10 @@ services:
       retries: 3
 
   traefik:
-    image: traefik:v3.7.18
+    # Built locally so portainer.yml is baked in; bind-mounting repo files breaks Portainer Git stacks.
+    build:
+      context: ./traefik
+    image: skydive-traefik:v3.7.18
     restart: unless-stopped
     command:
       - --providers.docker=true
@@ -127,12 +130,6 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - type: bind
-        source: ./traefik/portainer.yml
-        target: /etc/traefik/portainer.yml
-        read_only: true
-        bind:
-          create_host_path: false
       - letsencrypt:/letsencrypt
       - traefik-logs:/logs
     networks:
