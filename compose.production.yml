@@ -127,11 +127,41 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/portainer.yml:/etc/traefik/portainer.yml:ro
+      - type: bind
+        source: ./traefik/portainer.yml
+        target: /etc/traefik/portainer.yml
+        read_only: true
+        bind:
+          create_host_path: false
       - letsencrypt:/letsencrypt
       - traefik-logs:/logs
     networks:
       - proxy
+
+  portainer:
+    image: portainer/portainer-ee:lts
+    restart: unless-stopped
+    command:
+      - --base-url
+      - /portainer
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=skydive-proxy
+      - traefik.http.routers.portainer.rule=Host(`${TRAEFIK_HOST:?TRAEFIK_HOST must be set}`) && PathPrefix(`/portainer`)
+      - traefik.http.routers.portainer.entrypoints=websecure
+      - traefik.http.routers.portainer.tls=true
+      - traefik.http.routers.portainer.priority=10000
+      - traefik.http.routers.portainer.middlewares=portainer-stripprefix
+      - traefik.http.middlewares.portainer-stripprefix.stripprefix.prefixes=/portainer
+      - traefik.http.services.portainer.loadbalancer.server.port=9443
+      - traefik.http.services.portainer.loadbalancer.server.scheme=https
+      # The transport lives in traefik/portainer.yml (file provider), not Docker labels.
+      - traefik.http.services.portainer.loadbalancer.serversTransport=portainer-insecure@file
 
   logrotate:
     build:
@@ -148,3 +178,5 @@ volumes:
   app-data:
   letsencrypt:
   traefik-logs:
+  portainer_data:
+    external: true
