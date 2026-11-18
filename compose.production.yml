@@ -104,7 +104,6 @@ services:
     # Built locally so portainer.yml is baked in; bind-mounting repo files breaks Portainer Git stacks.
     build:
       context: ./traefik
-    image: skydive-traefik:v3.7.18
     restart: unless-stopped
     command:
       - --providers.docker=true
