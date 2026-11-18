@@ -64,7 +64,13 @@ docker compose down
 
 ### Production deployment with Docker Compose, Portainer, and Traefik
 
-Point DNS at the server and deploy `/home/runner/work/skydive-theorie/skydive-theorie/compose.production.yml` as the production stack. The file is standalone: it includes the app, Traefik, network, and volume definitions, and it does not expose Gunicorn directly on port `5000`.
+Point DNS at the server and deploy `/home/runner/work/skydive-theorie/skydive-theorie/compose.production.yml` as the production stack. It contains only the app and static services (Gunicorn is not exposed on port `5000`). Traefik, Portainer and log rotation live in `compose.infra.yml`, which must be deployed first because it creates the `skydive-proxy` network:
+
+```bash
+docker compose -p skydive-theorie-infra -f compose.infra.yml up -d --build
+```
+
+Deploy the infra stack over SSH, not from Portainer, and rarely. Portainer is reached through Traefik, so redeploying either from Portainer would cut off its own route. `compose.infra.yml` reuses the existing `skydive-theorie-prod_letsencrypt`, `skydive-theorie-prod_traefik-logs` and `portainer_data` volumes (all declared external). It needs `TRAEFIK_HOST` and `ACME_EMAIL` in the environment or a `.env` file.
 
 When Portainer builds from the checked-out repository on the VPS, `APP_IMAGE` is not used. The standalone production stack builds from source by default.
 
@@ -98,7 +104,7 @@ the form displays an error so the message can be retried.
 
 `TRAEFIK_HOST` is the canonical hostname the app is served on; `TRAEFIK_APEX_HOST` is the bare domain, which Traefik redirects to `TRAEFIK_HOST`. Make sure DNS records exist for both hostnames and point at the server.
 
-Portainer Business Edition (`portainer/portainer-ee:lts`) is part of the production stack and is available at `https://$TRAEFIK_HOST/portainer/`. It runs with `--base-url /portainer`, and its router (priority `10000`, Docker labels) strips the prefix and connects to `https://portainer:9443`. The `portainer-insecure@file` transport in `traefik/portainer.yml` skips backend certificate verification for Portainer's self-signed certificate; it must be referenced as `@file`, not `@docker`. `traefik/portainer.yml` is baked into a locally built Traefik image (`traefik/Dockerfile`) instead of bind-mounted, so the stack also deploys from Portainer Git stacks, where host bind paths to repo files don't exist. The existing `portainer_data` volume is declared `external`, so Compose never creates or removes it.
+Portainer Business Edition (`portainer/portainer-ee:lts`) is part of the infra stack and is available at `https://$TRAEFIK_HOST/portainer/`. It runs with `--base-url /portainer`, and its router (priority `10000`, Docker labels) strips the prefix and connects to `https://portainer:9443`. The `portainer-insecure@file` transport in `traefik/portainer.yml` skips backend certificate verification for Portainer's self-signed certificate; it must be referenced as `@file`, not `@docker`. `traefik/portainer.yml` is baked into a locally built Traefik image (`traefik/Dockerfile`) instead of bind-mounted, so the stack also deploys from Portainer Git stacks, where host bind paths to repo files don't exist. The existing `portainer_data` volume is declared `external`, so Compose never creates or removes it.
 
 Run `python tests/traefik_portainer_check.py` with Docker available to check routing against isolated Traefik and Portainer containers. If Google Chrome is installed, the check also verifies browser-side base-path initialization.
 
