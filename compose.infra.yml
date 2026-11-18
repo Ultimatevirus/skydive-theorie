@@ -62,6 +62,8 @@ services:
       - traefik.http.services.portainer.loadbalancer.serversTransport=portainer-insecure@file
 
   logrotate:
+    # Only touches the logs volume; no network avoids a stray <project>_default network.
+    network_mode: none
     build:
       context: ./logrotate
     restart: unless-stopped
@@ -70,7 +72,9 @@ services:
 
 networks:
   proxy:
+    # Pre-existing network shared with the app stack; create once with: docker network create skydive-proxy
     name: skydive-proxy
+    external: true
 
 volumes:
   letsencrypt:
