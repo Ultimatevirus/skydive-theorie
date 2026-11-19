@@ -20,6 +20,7 @@ STATUS_CHECK_INTERVAL = 300
 OPENDATA_PROBE_INTERVAL = 900
 STATUS_MONITOR_INTERVAL = 60
 STATUS_PROBE_TIMEOUT = 10
+STATUS_READ_TIMEOUT = 1
 MQTT_ACTIVITY_WINDOW = 2 * 60 * 60
 logger = logging.getLogger(__name__)
 
@@ -117,9 +118,12 @@ def record_notification_received(received_at=None):
 
 def get_service_statuses():
     """Return persisted provider states, defaulting missing checks to unknown."""
-    conn = _connect_db()
+    conn = connect_db(path=get_db_path(), timeout=STATUS_READ_TIMEOUT)
     try:
-        _ensure_status_table(conn)
+        if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'system_status'"
+        ).fetchone():
+            return {}
         rows = conn.execute(
             "SELECT name, status, checked_at, last_activity_at FROM system_status"
         ).fetchall()

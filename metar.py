@@ -1,6 +1,6 @@
 """KNMI METAR retrieval, parsing, and answer grading."""
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 import json

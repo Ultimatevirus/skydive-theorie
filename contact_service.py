@@ -87,3 +87,17 @@ def reserve_contact_form_usage(connection_factory, database_path, ip_address):
         except Exception:
             conn.rollback()
             raise
+
+
+def release_contact_form_usage(connection_factory, ip_address):
+    """Give back the most recent reservation for an IP after a failed send."""
+    with closing(connection_factory()) as conn:
+        conn.execute(
+            """
+            DELETE FROM contact_form_usage WHERE rowid = (
+                SELECT MAX(rowid) FROM contact_form_usage WHERE ip = ?
+            )
+            """,
+            (ip_address,),
+        )
+        conn.commit()

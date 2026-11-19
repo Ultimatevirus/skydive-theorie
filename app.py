@@ -23,7 +23,7 @@ from flask import (
     url_for,
 )
 from turbo_flask import Turbo
-from db import BASE_DIR, connect_db, get_db_path as shared_get_db_path
+from db import connect_db, get_db_path as shared_get_db_path
 import access_gate_service
 import contact_service
 from metar import DUTCH_AIRPORTS, MetarError, build_abbreviation_questions, build_questions, get_daily_metar, grade_answers, load_weather_definitions, new_question_seed, parse_metar
@@ -113,6 +113,11 @@ def _remember_practice_attempt(attempts, attempt_id, state):
     _prune_practice_attempts(attempts)
 
 
+def _constant_time_equals(left, right):
+    """Compare strings in constant time; encoding avoids TypeError on non-ASCII input."""
+    return hmac.compare_digest(left.encode("utf-8"), right.encode("utf-8"))
+
+
 def ensure_csrf_token():
     """Return the current session CSRF token, creating one when absent."""
     token = session.get("csrf_token")
@@ -131,7 +136,7 @@ def validate_csrf():
     """Check whether the submitted CSRF token matches the session token."""
     expected = session.get("csrf_token")
     provided = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token")
-    return bool(expected and provided) and hmac.compare_digest(provided, expected)
+    return bool(expected and provided) and _constant_time_equals(provided, expected)
 
 
 @app.template_global()
@@ -271,24 +276,6 @@ def internal_server_error(_error):
 _language_column_cache = question_repository._LANGUAGE_COLUMN_CACHE
 
 
-def _database_signature():
-    """Identify the current database file so cached schema facts go stale when it is replaced."""
-    return _question_repository()._database_signature()
-
-
-def questions_have_language_column(conn):
-    """Check whether this database has the optional question language column (cached per database file)."""
-    return question_repository.QuestionRepository(
-        get_db_connection, get_db_path
-    ).questions_have_language_column(conn)
-
-
-def language_filter(conn, language, prefix=""):
-    """Return a query fragment and parameter for compatible question databases."""
-    return question_repository.QuestionRepository(
-        get_db_connection, get_db_path
-    ).language_filter(conn, language, prefix)
-
 
 def get_db_path():
     """Expose the shared database path resolver for tests and callers."""
@@ -300,13 +287,17 @@ def get_db_connection():
     return connect_db(path=get_db_path(), row_factory=sqlite3.Row)
 
 
+_QUESTION_REPOSITORY = None
+
+
 def _question_repository():
-    return question_repository.QuestionRepository(get_db_connection, get_db_path)
-
-
-def _question_query_schema(conn):
-    """Return the question SELECT and join details supported by this database."""
-    return question_repository.QuestionRepository.question_query_schema(conn)
+    """Return the shared repository; late-bound lookups keep patched path/connection hooks effective."""
+    global _QUESTION_REPOSITORY
+    if _QUESTION_REPOSITORY is None:
+        _QUESTION_REPOSITORY = question_repository.QuestionRepository(
+            lambda: get_db_connection(), lambda: get_db_path()
+        )
+    return _QUESTION_REPOSITORY
 
 
 def get_available_topics(level, language="NL"):
@@ -343,20 +334,24 @@ def get_row_value(row, key, default=None):
         return default
 
 
+def _image_fields(row):
+    """Return the original-source text and local image reference for a question row."""
+    original = get_row_value(row, "image_original_source")
+    if original is not None:
+        original = str(original).strip() or None
+    local = get_row_value(row, "image_local_source") or get_row_value(
+        row, "image_key", get_row_value(row, "image_link")
+    )
+    return original, local
+
+
 def render_question(row, level, language="NL"):
     """Build the data structure used by the exam templates."""
     option_map = build_option_list(
         row["false_answers"], row["true_answer"], level=level, language=language
     )
 
-    image_source = get_row_value(row, "image_original_source")
-    if image_source is not None:
-        image_source = str(image_source).strip() or None
-    local_image_source = get_row_value(row, "image_local_source")
-    if not local_image_source:
-        local_image_source = get_row_value(
-            row, "image_key", get_row_value(row, "image_link")
-        )
+    image_source, local_image_source = _image_fields(row)
 
     return {
         "id": row["id"],
@@ -402,9 +397,23 @@ def healthz():
     return {"status": "ok"}, 200
 
 
+def _format_timestamp(timestamp):
+    """Return ISO and display strings for a UTC epoch timestamp, or (None, None)."""
+    if timestamp is None:
+        return None, None
+    moment = datetime.fromtimestamp(timestamp, timezone.utc)
+    return moment.isoformat(timespec="minutes"), moment.strftime("%d-%m-%Y %H:%M UTC")
+
+
 @app.route("/it-systemen")
 def it_systems_status():
-    states = get_service_statuses()
+    try:
+        states = get_service_statuses()
+        status_unavailable = False
+    except (OSError, sqlite3.Error):
+        logger.exception("Could not read external service statuses.")
+        states = {}
+        status_unavailable = True
     services = [
         {
             "name": "SMTP",
@@ -423,31 +432,16 @@ def it_systems_status():
         },
     ]
     for service in services:
-        checked_at = service["checked_at"]
-        service["checked_at_iso"] = (
-            datetime.fromtimestamp(checked_at, timezone.utc).isoformat(timespec="minutes")
-            if checked_at is not None
-            else None
-        )
-        service["checked_at_display"] = (
-            datetime.fromtimestamp(checked_at, timezone.utc).strftime("%d-%m-%Y %H:%M UTC")
-            if checked_at is not None
-            else None
-        )
-        activity_at = service.get("last_activity_at")
-        service["last_activity_iso"] = (
-            datetime.fromtimestamp(activity_at, timezone.utc).isoformat(timespec="minutes")
-            if activity_at is not None
-            else None
-        )
-        service["last_activity_display"] = (
-            datetime.fromtimestamp(activity_at, timezone.utc).strftime("%d-%m-%Y %H:%M UTC")
-            if activity_at is not None
-            else None
+        service["checked_at_iso"], service["checked_at_display"] = _format_timestamp(service["checked_at"])
+        service["last_activity_iso"], service["last_activity_display"] = _format_timestamp(
+            service.get("last_activity_at")
         )
 
     statuses = {service["status"] for service in services}
-    if statuses == {"operational"}:
+    if status_unavailable:
+        overall_status = "unknown"
+        overall_label = "Systeemstatus tijdelijk niet beschikbaar"
+    elif statuses == {"operational"}:
         overall_status = "operational"
         overall_label = "Alle systemen operationeel"
     elif "outage" in statuses:
@@ -469,6 +463,8 @@ def it_systems_status():
         )
     )
     response.headers["Cache-Control"] = "no-store"
+    if status_unavailable:
+        response.status_code = 503
     return response
 
 
@@ -499,26 +495,6 @@ def set_language():
 
 
 GATE_MAX_FAILURES = access_gate_service.GATE_MAX_FAILURES
-GATE_FAILURE_WINDOW = access_gate_service.GATE_FAILURE_WINDOW
-_gate_table_ready = access_gate_service._GATE_TABLE_READY
-
-
-def _ensure_gate_failure_table(conn):
-    """Create the shared failed-attempt table once per database path."""
-    access_gate_service.ensure_gate_failure_table(conn, get_db_path)
-
-
-def _gate_attempts_exhausted(ip_address):
-    """Report whether an IP made too many wrong code attempts recently, shared across all workers and replicas."""
-    return access_gate_service.gate_attempts_exhausted(
-        get_db_connection, get_db_path, ip_address
-    )
-
-
-def _record_gate_failure(ip_address):
-    access_gate_service.record_gate_failure(
-        get_db_connection, get_db_path, ip_address
-    )
 
 
 @app.route("/access-gate", methods=["GET", "POST"])
@@ -530,7 +506,9 @@ def access_gate():
 
     if request.method == "POST":
         client_ip = request.remote_addr or ""
-        if _gate_attempts_exhausted(client_ip):
+        if access_gate_service.gate_attempts_exhausted(
+            get_db_connection, get_db_path, client_ip
+        ):
             return render_template(
                 "gate.html",
                 next=next_target,
@@ -539,13 +517,15 @@ def access_gate():
 
         submitted_code = request.form.get("code", "")
         expected_code = os.getenv("ACCESS_CODE") or ""
-        if expected_code and hmac.compare_digest(submitted_code, expected_code):
+        if expected_code and _constant_time_equals(submitted_code, expected_code):
             session["access_granted_at"] = time.time()
             session.permanent = True
             return redirect(next_target)
 
         logger.warning("Rejected access gate code attempt from %s", request.remote_addr)
-        _record_gate_failure(client_ip)
+        access_gate_service.record_gate_failure(
+            get_db_connection, get_db_path, client_ip
+        )
         return render_template(
             "gate.html",
             next=next_target,
@@ -707,10 +687,8 @@ def metar_type_choice(practice_mode):
     return render_template("metar_choice.html", practice_mode=practice_mode)
 
 
-@app.route("/metar/afkortingen", methods=["GET", "POST"])
-@app.route("/oefenen/meteo/METAR-TAF/afkortingen", methods=["GET", "POST"])
-def metar_abbreviations():
-    """Multiple-choice practice for METAR abbreviations."""
+def _abbreviation_practice(build_fn, template):
+    """Render or grade a seeded multiple-choice abbreviation quiz."""
     checking = request.method == "POST" and request.form.get("action") == "check"
     seed = str(request.form.get("seed", "")).strip()
     if not (checking and re.fullmatch(r"[0-9a-f]{16}", seed)):
@@ -718,14 +696,16 @@ def metar_abbreviations():
         checking = False
 
     language = normalize_language(session.get("language", "NL"))
-    questions = build_abbreviation_questions(seed, language, load_weather_definitions())
+    questions = build_fn(seed, language, load_weather_definitions())
     result = grade_answers(questions, request.form) if checking else None
-    return render_template(
-        "metar_abbreviations.html",
-        questions=questions,
-        result=result,
-        seed=seed,
-    )
+    return render_template(template, questions=questions, result=result, seed=seed)
+
+
+@app.route("/metar/afkortingen", methods=["GET", "POST"])
+@app.route("/oefenen/meteo/METAR-TAF/afkortingen", methods=["GET", "POST"])
+def metar_abbreviations():
+    """Multiple-choice practice for METAR abbreviations."""
+    return _abbreviation_practice(build_abbreviation_questions, "metar_abbreviations.html")
 
 
 @app.route("/metar/ontleden", methods=["GET", "POST"])
@@ -829,21 +809,7 @@ def taf_refresh_enabled():
 @app.route("/oefenen/meteo/METAR-TAF/taf/afkortingen", methods=["GET", "POST"])
 def taf_abbreviations():
     """Multiple-choice practice for TAF abbreviations."""
-    checking = request.method == "POST" and request.form.get("action") == "check"
-    seed = str(request.form.get("seed", "")).strip()
-    if not (checking and re.fullmatch(r"[0-9a-f]{16}", seed)):
-        seed = new_question_seed()
-        checking = False
-
-    language = normalize_language(session.get("language", "NL"))
-    questions = taf_module.build_abbreviation_questions(seed, language, load_weather_definitions())
-    result = grade_answers(questions, request.form) if checking else None
-    return render_template(
-        "taf_abbreviations.html",
-        questions=questions,
-        result=result,
-        seed=seed,
-    )
+    return _abbreviation_practice(taf_module.build_abbreviation_questions, "taf_abbreviations.html")
 
 
 @app.route("/taf/ontleden", methods=["GET", "POST"])
@@ -973,6 +939,12 @@ def contact():
                 )
             except (OSError, smtplib.SMTPException, ValueError, RuntimeError):
                 logger.exception("Unable to send contact message")
+                try:
+                    contact_service.release_contact_form_usage(
+                        get_db_connection, request.remote_addr or ""
+                    )
+                except sqlite3.Error:
+                    logger.exception("Unable to release contact form reservation")
                 error = "Je bericht kon niet worden verzonden. Probeer het later opnieuw."
             else:
                 return redirect(url_for("contact", sent="1"))
@@ -1024,13 +996,10 @@ def exam():
 
     if request.method == "POST":
         stored_ids = session.get("exam_question_ids", [])
-        questions = (
-            fetch_questions_by_ids(level, stored_ids, language=language)
-            if stored_ids
-            else fetch_questions(
-                level, amount, selected_topics=selected_topics, language=language
-            )
-        )
+        if not stored_ids:
+            # Never grade answers against a freshly drawn set the user did not see.
+            return redirect(url_for("exam"))
+        questions = fetch_questions_by_ids(level, stored_ids, language=language)
     else:
         questions = fetch_questions(
             level, amount, selected_topics=selected_topics, language=language
@@ -1064,15 +1033,7 @@ def exam():
                 topic_scores[topic]["correct"] += 1
 
             topic_scores[topic]["total"] += 1
-            image_original_source = get_row_value(
-                row, "image_original_source"
-            )
-            if image_original_source is not None:
-                image_original_source = str(image_original_source).strip() or None
-            image_local_source = (
-                get_row_value(row, "image_local_source")
-                or get_row_value(row, "image_key", get_row_value(row, "image_link"))
-            )
+            image_original_source, image_local_source = _image_fields(row)
 
             results.append(
                 {
@@ -1160,7 +1121,7 @@ def get_question_image_url(image_link):
         return asset_url(normalized.replace("static/", "", 1))
 
     if normalized.startswith("./"):
-        return asset_url(normalized.lstrip("./"))
+        return asset_url(normalized[2:])
 
     if normalized.startswith("images/") or normalized.startswith("question_images/"):
         return asset_url(normalized)

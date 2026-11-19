@@ -226,6 +226,15 @@ class AccessGateTests(unittest.TestCase):
         finally:
             importlib.reload(app_module)
 
+    def test_non_ascii_access_code_is_rejected_not_an_error(self):
+        client = app.test_client()
+        with patch.dict(os.environ, {"ACCESS_GATE_ENABLED": "1", "ACCESS_CODE": "geheim"}):
+            token = client.get("/access-gate").get_data(as_text=True)
+            with client.session_transaction() as session:
+                token = session["csrf_token"]
+            response = client.post("/access-gate", data={"csrf_token": token, "code": "gëheim"})
+        self.assertEqual(response.status_code, 401)
+
     def test_missing_csrf_token_rejects_gate_submission(self):
         with patch.dict(os.environ, GATE_ENV):
             response = app.test_client().post(

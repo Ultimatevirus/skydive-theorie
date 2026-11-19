@@ -16,6 +16,7 @@ TRANSLATIONS = {
         "Er is een storing bij een of meer diensten": "One or more services are experiencing an outage",
         "Niet alle diensten zijn geconfigureerd": "Not all services are configured",
         "Status wordt gecontroleerd": "Status is being checked",
+        "Systeemstatus tijdelijk niet beschikbaar": "System status temporarily unavailable",
         "Operationeel": "Operational",
         "Storing": "Outage",
         "Niet geconfigureerd": "Not configured",

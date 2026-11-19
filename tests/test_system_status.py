@@ -19,6 +19,13 @@ class SystemStatusTests(unittest.TestCase):
         self.addCleanup(self.environment.stop)
         self.addCleanup(self.temp_dir.cleanup)
 
+    def test_status_read_does_not_create_table_when_no_checks_have_run(self):
+        self.assertEqual(system_status.get_service_statuses(), {})
+        with sqlite3.connect(self.db_path) as conn:
+            self.assertIsNone(conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE name = 'system_status'"
+            ).fetchone())
+
     def test_smtp_checks_tls_and_authentication_without_sending_email(self):
         smtp = MagicMock()
         smtp.__enter__.return_value = smtp

@@ -1,6 +1,7 @@
 ﻿import os
 import sqlite3
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -82,7 +83,7 @@ class PracticeFlowTests(unittest.TestCase):
     def test_literal_template_translations_exist_in_english(self):
         environment = Environment()
         missing = []
-        for path in (Path(app_module.BASE_DIR) / "templates").glob("*.html"):
+        for path in (db_module.BASE_DIR / "templates").glob("*.html"):
             template = environment.parse(path.read_text(encoding="utf-8-sig"))
             for call in template.find_all(nodes.Call):
                 if (
@@ -289,7 +290,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(client.get("/metar/keuze/invalid").status_code, 404)
 
     def test_page_load_does_not_hide_content_before_assets_finish_loading(self):
-        stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
+        stylesheet = (db_module.BASE_DIR / "static" / "style.css").read_text()
         client = app.test_client()
         html = client.get("/").get_data(as_text=True)
         with client.session_transaction() as session:
@@ -362,6 +363,41 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertIn("Last checked:", html)
         self.assertIn("Last KNMI notification:", html)
 
+    def test_it_systems_status_page_reports_locked_database(self):
+        client = app.test_client()
+        client.post("/language", data=csrf_data(client, language="EN"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status.db"
+            conn = sqlite3.connect(path)
+            conn.execute("CREATE TABLE system_status (name TEXT)")
+            conn.commit()
+            conn.execute("BEGIN EXCLUSIVE")
+            try:
+                with patch.dict(os.environ, {"DB_PATH": str(path)}), self.assertLogs(
+                    app_module.logger, level="ERROR"
+                ):
+                    started = time.monotonic()
+                    response = client.get("/it-systemen")
+                    elapsed = time.monotonic() - started
+            finally:
+                conn.rollback()
+                conn.close()
+
+        self.assertEqual(response.status_code, 503)
+        self.assertLess(elapsed, 5)
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertIn("System status temporarily unavailable", response.get_data(as_text=True))
+        self.assertNotIn("database is locked", response.get_data(as_text=True))
+
+    def test_it_systems_status_page_loads_before_first_check(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "status.db"
+            with patch.dict(os.environ, {"DB_PATH": str(path)}):
+                response = app.test_client().get("/it-systemen")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Status wordt gecontroleerd", response.get_data(as_text=True))
+
     def test_favicon_keeps_compatibility_urls_and_is_small(self):
         client = app.test_client()
         svg_response = client.get("/favicon.svg")
@@ -394,7 +430,7 @@ class PracticeFlowTests(unittest.TestCase):
         self.assertEqual(response.headers["X-Frame-Options"], "DENY")
 
     def test_production_compose_keeps_knmi_metar_configuration(self):
-        compose_path = Path(app_module.BASE_DIR) / "compose.production.yml"
+        compose_path = db_module.BASE_DIR / "compose.production.yml"
         compose_text = compose_path.read_text(encoding="utf-8")
 
         self.assertIn("KNMI_API_KEY:", compose_text)
@@ -917,7 +953,7 @@ class PracticeFlowTests(unittest.TestCase):
             for choice in choices:
                 self.assertIn(f"choice-image--{choice}", response.get_data(as_text=True))
 
-        stylesheet = (Path(app_module.BASE_DIR) / "static" / "style.css").read_text()
+        stylesheet = (db_module.BASE_DIR / "static" / "style.css").read_text()
         images = {
             "exam": "exam",
             "practice": "practice",
@@ -1256,6 +1292,46 @@ class ContactPageTests(unittest.TestCase):
             "Je bericht kon niet worden verzonden. Probeer het later opnieuw.",
             response.get_data(as_text=True),
         )
+
+    def test_failed_delivery_releases_contact_quota(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db_path = os.path.join(tmp, "contact.db")
+            client = app.test_client()
+            with patch.object(app_module, "get_db_path", return_value=db_path), patch.object(
+                app_module,
+                "send_contact_message",
+                side_effect=app_module.smtplib.SMTPException("delivery failed"),
+            ):
+                for _ in range(4):
+                    client.post(
+                        "/contact",
+                        data=csrf_data(
+                            client,
+                            email="visitor@example.test",
+                            subject="Suggestie",
+                            message="Hallo",
+                        ),
+                    )
+                self.assertTrue(app_module.reserve_contact_form_usage("127.0.0.1"))
+
+    def test_non_ascii_csrf_token_is_rejected_without_error(self):
+        client = app.test_client()
+        response = client.post("/contact", data={"csrf_token": "tökén"})
+        self.assertEqual(response.status_code, 400)
+
+    def test_exam_post_without_stored_questions_redirects(self):
+        client = app.test_client()
+        with client.session_transaction() as session:
+            session.update({"level": "A", "question_amount": 3, "exam_question_ids": []})
+        response = client.post("/exam", data=csrf_data(client))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response.headers["Location"].endswith("/exam"))
+
+    def test_relative_image_path_only_strips_leading_dot_slash(self):
+        with app.test_request_context():
+            self.assertTrue(app_module.get_question_image_url("./question_images/a.jpg"))
+            self.assertIn("..%2Fsecret.jpg", app_module.get_question_image_url("./../secret.jpg").replace("../", "..%2F"))
+            self.assertNotIn("static/secret.jpg", app_module.get_question_image_url("./../secret.jpg"))
 
     def test_contact_usage_allows_three_messages_and_cleans_old_rows(self):
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as temp_db:

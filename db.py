@@ -44,13 +44,13 @@ def get_db_path():
     return str(db_path)
 
 
-def connect_db(path=None, row_factory=None, configure_journal=False):
+def connect_db(path=None, row_factory=None, configure_journal=False, timeout=30):
     """Open a configured SQLite connection with consistent busy handling."""
-    conn = sqlite3.connect(path or get_db_path(), timeout=30)
+    conn = sqlite3.connect(path or get_db_path(), timeout=timeout)
     try:
         if row_factory is not None:
             conn.row_factory = row_factory
-        conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute(f"PRAGMA busy_timeout={int(timeout * 1000)}")
         conn.execute("PRAGMA foreign_keys=ON")
         if configure_journal:
             deadline = time.monotonic() + 30

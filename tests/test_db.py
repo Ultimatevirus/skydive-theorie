@@ -40,6 +40,11 @@ class DatabaseHelperTests(unittest.TestCase):
         self.assertEqual(conn.execute("PRAGMA journal_mode").fetchone()[0].lower(), "wal")
         self.assertEqual(conn.execute("PRAGMA synchronous").fetchone()[0], 1)
 
+    def test_connect_db_honors_custom_busy_timeout(self):
+        conn = db.connect_db(path=self.path, timeout=1)
+        self.addCleanup(conn.close)
+        self.assertEqual(conn.execute("PRAGMA busy_timeout").fetchone()[0], 1000)
+
     def test_fresh_database_matches_all_seed_fields_and_relationships(self):
         self.initialize()
         conn = db.connect_db(path=self.path, row_factory=sqlite3.Row)

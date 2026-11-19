@@ -2,7 +2,6 @@
 
 import os
 import random
-import sqlite3
 from contextlib import closing
 
 from quiz import distribute_question_counts, normalize_language, normalize_selected_topics
